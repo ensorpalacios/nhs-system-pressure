@@ -1,15 +1,12 @@
-#' Preprocess data
-#'
-#' Load, clean and recode data.
+#' Plot bed occupancy
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
-#' @date 2025-01-07
+#' @date 2025-01-08
 
 # Shebang ---------------------------------------------------------------------
 # !/usr/loca/bin/Rscript
 
-
-# Install and import libraries ------------------------------------------------
+# Import libraries ------------------------------------------------
 library(data.table)
 library(tidyverse)
 library(here)
@@ -17,56 +14,11 @@ library(readxl)
 library(patchwork)
 library(plotly)
 
+# Load occupancy data ---------------------------------------------------------
+data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
+bed_occ <- readRDS(file = data_path)
 
-# Load data -------------------------------------------------------------------
-data_path <- paste0(here(), "/data/raw/")
-
-# Admissions/discharges - 2023
-df1 <- readRDS(file = paste0(data_path, "dat.RDS"))
-
-# Admissions/discharges, acute bed occupancy, escalation beds - 2024
-df2 <- read_excel(
-                  paste0(
-                         data_path,
-                         "2024-09-01-to-2024-11-24-acute-occupancy.xlsx"
-                         ),
-                  sheet = 2
-)
-
-# Compute bed occupancy -------------------------------------------------------
-# Set up time series to evaluate occupancy at
-tseq <- seq.POSIXt(
-  from = as.POSIXct("2023-01-01"),
-  to = as.POSIXct("2023-12-13"), 
-  by = "day"
-)
-
-# Use only BRI and Southmead hospitals
-# sites <- unique(df1_r[["site"]]) |> set_names() 
-sites <- c("BRI" = "RA701", "Southmead" = "RVJ01")
-bed_occ <- do.call("bind_rows", map(tseq, function(x) {
-  map_int(sites, function(y) {
-    df1 |>
-      filter(site == y) |>
-      filter(arr <= x & dep >= x) |>
-      nrow()
-  })
-}))
-
-# As df
-bed_occ <- data.frame(dates = tseq, bed_occ)
-
-# Save df ---------------------------------------------------------------------
-save_path <- here(str_glue('data/processed/'))
-here()
-if (!file.exists(save_path)) {
-    dir.create(save_path, recursive = TRUE)
-}
-
-saveRDS(bed_occ, file = paste0(save_path, 'bed_occupancy.rds'))
-
-
-
+# Generate plots --------------------------------------------------------------
 plot1 <- bed_occ |>
   pivot_longer(cols=-dates,names_to="Hospital",values_to="val") %>%
   mutate(dates=as.POSIXct(dates)) %>%
@@ -89,7 +41,16 @@ plot2 <- bed_occ %>%
         axis.title.y=element_blank())
 
 
-# ggplotly(plot1 + plot2)
+multiplot <- plot1 + plot2 + plot_layout(nrow = 2)
+
+# Save plot -------------------------------------------------------------------
+save_path <- here("output/plots/")
+if (!file.exists(save_path)) {
+  dir.create(save_path, recursive = TRUE)
+}
+ggsave(paste0(save_path, "bed-occupancy.png"))
+
+# Create interactive web-based plots ------------------------------------------
 options(browser = '/usr/bin/google-chrome')
 subplot(plot1, plot2, nrows = 2, shareX = TRUE) |>
   layout(annotations = list(
