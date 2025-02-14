@@ -13,8 +13,7 @@ library(data.table)
 library(tidyverse)
 library(here)
 library(readxl)
-library(patchwork)
-library(plotly)
+library(tsibble)
 
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/raw/")
@@ -31,16 +30,17 @@ df2 <- read_excel(
                   sheet = 2
 )
 
-# Compute bed occupancy -------------------------------------------------------
+# Compute bed occupancy from df1 ----------------------------------------------
 # Set up time series to evaluate occupancy at
 tseq <- seq.POSIXt(
   from = as.POSIXct("2023-01-01"),
   to = as.POSIXct("2023-12-13"), 
   by = "day"
 )
+# |>
+#   trunc(units = "days")
 
 # Use only BRI and Southmead hospitals
-# sites <- unique(df1_r[["site"]]) |> set_names() 
 sites <- c("BRI" = "RA701", "Southmead" = "RVJ01")
 bed_occ <- do.call("bind_rows", map(tseq, function(x) {
   map_int(sites, function(y) {
@@ -51,13 +51,73 @@ bed_occ <- do.call("bind_rows", map(tseq, function(x) {
   })
 }))
 
-# As df
-bed_occ <- data.frame(dates = tseq, bed_occ)
+# Prepare data from df2 -------------------------------------------------------
+# Reorganise tibble
+bed_occ2 <- df2 |> 
+  filter(
+    org_name == "Bristol Royal Infirmary" | 
+      org_name == "North Bristol NHS Trust") |> 
+  pivot_wider(names_from = metric_name, values_from = value) |>
+  mutate(
+    index = as.Date(date, tz = "GMT"),
+    site = case_match(
+      org_name, 
+      "Bristol Royal Infirmary" ~ "BRI", 
+      "North Bristol NHS Trust" ~ "Southmead"),
+    bed_escal = `BNSSG Escalation beds`,
+    bed_occ= `Bed Occupancy`,
+    date = NULL,
+    org_name = NULL,
+    `BNSSG Escalation beds` = NULL,
+    `Bed Occupancy` = NULL
+  ) |>
+  relocate(c(index, site))
 
-# Save df ---------------------------------------------------------------------
+
+# Data as timeseries (tsibble object) -----------------------------------------
+# Convert tsibble object - weekly seasonality
+sites <- sites |> names()
+ts_occ <- data.frame(index = as.Date(tseq, tz = "GMT"), bed_occ) |> 
+  pivot_longer(!index, names_to = "site", values_to = "bed_occ") |> 
+  as_tsibble(index = index, key = site)
+
+ts_occ2 <- bed_occ2 |> as_tsibble(index = index, key = site)
+
+# Add z-scored value
+ls_occ <- map(list(ts_occ, ts_occ2), \(x) {
+  x |>
+    group_by_key() |>
+    mutate(
+      bed_occ_z = bed_occ |> {\(x) (x - mean(x)) / sd(x)}()
+    ) |>
+    ungroup()
+})
+
+# Add day and time index
+ls_occ <- map(ls_occ, \(x) {
+  x |>  
+    mutate(
+      days_ = format(index, "%a") |> 
+        factor(levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")),
+      t_ax = rep(1:(length(days_)/2), 2)
+    )
+})
+
+# Name datasets based on data provider
+names(ls_occ) <- c("provider_level", "frontier")
+
+# Rename admissions and discharges
+ls_occ$frontier <- ls_occ$frontier |>
+  rename(
+    adm = Admissions,
+    dis = Discharges
+      )
+
+
+# Save ts ---------------------------------------------------------------------
 save_path <- here("data/processed/")
 if (!file.exists(save_path)) {
     dir.create(save_path, recursive = TRUE)
 }
 
-saveRDS(bed_occ, file = paste0(save_path, 'bed_occupancy.RDS'))
+saveRDS(ls_occ, file = paste0(save_path, 'bed_occupancy.RDS'))
