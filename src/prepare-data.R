@@ -19,9 +19,11 @@ library(tsibble)
 data_path <- paste0(here(), "/data/raw/")
 
 # Admissions/discharges - 2023
+# Provider-level data
 df1 <- readRDS(file = paste0(data_path, "dat.RDS"))
 
 # Admissions/discharges, acute bed occupancy, escalation beds - 2024
+# Frontier data
 df2 <- read_excel(
                   paste0(
                          data_path,
@@ -30,7 +32,17 @@ df2 <- read_excel(
                   sheet = 2
 )
 
-# Compute bed occupancy from df1 ----------------------------------------------
+# Admissions/discharges, acute bed occupancy, escalation beds - 2024
+# Urgent care data
+df3 <- read_excel(
+                  paste0(
+                         data_path,
+                         "2022-01-01-to-2025-01-31-acute-occupancy.xlsx"
+                         ),
+                  sheet = 2
+)
+
+# Compute bed occupancy from provider-level data ------------------------------
 # Set up time series to evaluate occupancy at
 tseq <- seq.POSIXt(
   from = as.POSIXct("2023-01-01"),
@@ -51,7 +63,7 @@ bed_occ <- do.call("bind_rows", map(tseq, function(x) {
   })
 }))
 
-# Prepare data from df2 -------------------------------------------------------
+# Prepare Frontier data -------------------------------------------------------
 # Reorganise tibble
 bed_occ2 <- df2 |> 
   filter(
@@ -73,6 +85,33 @@ bed_occ2 <- df2 |>
   ) |>
   relocate(c(index, site))
 
+# Prepare urgent care data ----------------------------------------------------
+bed_occ3 <-
+  df3 |>
+    filter(
+      provider == "BRI" | provider == "NBT") |>
+    select(-metric_id) |> 
+    pivot_wider(names_from = metric_name, values_from = value) |>
+    mutate(
+      index = as.Date(report_date, tz = "GMT"),
+      site = case_match(
+        provider,
+        "BRI" ~ "BRI", 
+        "NBT" ~ "Southmead"),
+      Admissions = `Number of Admissions`,
+      Discharges = `Number of Discharges`,
+      bed_escal = `Escalation beds open`,
+      bed_occ = `Bed occupancy`,
+      provider = NULL,
+      `Number of Admissions` = NULL,
+      `Number of Discharges` = NULL,
+      `Escalation beds open` = NULL,
+      `Bed occupancy` = NULL,
+      report_date = NULL
+    ) |>
+    relocate(c(index, site)) |>
+    arrange(index, site)
+
 
 # Data as timeseries (tsibble object) -----------------------------------------
 # Convert tsibble object - weekly seasonality
@@ -82,9 +121,10 @@ ts_occ <- data.frame(index = as.Date(tseq, tz = "GMT"), bed_occ) |>
   as_tsibble(index = index, key = site)
 
 ts_occ2 <- bed_occ2 |> as_tsibble(index = index, key = site)
+ts_occ3 <- bed_occ3 |> as_tsibble(index = index, key = site)
 
 # Add z-scored value
-ls_occ <- map(list(ts_occ, ts_occ2), \(x) {
+ls_occ <- map(list(ts_occ, ts_occ2, ts_occ3), \(x) {
   x |>
     group_by_key() |>
     mutate(
@@ -104,7 +144,7 @@ ls_occ <- map(ls_occ, \(x) {
 })
 
 # Name datasets based on data provider
-names(ls_occ) <- c("provider_level", "frontier")
+names(ls_occ) <- c("provider_level", "frontier", "urgent_care")
 
 # Rename admissions and discharges
 ls_occ$frontier <- ls_occ$frontier |>
