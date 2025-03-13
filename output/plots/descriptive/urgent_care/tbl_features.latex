@@ -1,0 +1,66 @@
+% latex table generated in R 4.4.2 by xtable 1.8-4 package
+% Thu Mar 13 12:56:27 2025
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlrr}
+  \hline
+ & var & BRI & Southmead \\ 
+  \hline
+1 & mean & 663.43 & 894.36 \\ 
+  2 & sd & 26.34 & 25.51 \\ 
+  3 & quantile\_0\% & 488.00 & 768.00 \\ 
+  4 & quantile\_25\% & 650.00 & 881.00 \\ 
+  5 & quantile\_50\% & 666.00 & 896.00 \\ 
+  6 & quantile\_75\% & 681.00 & 911.00 \\ 
+  7 & quantile\_100\% & 718.00 & 962.00 \\ 
+  8 & trend\_strength & 0.85 & 0.81 \\ 
+  9 & seasonal\_strength\_week & 0.62 & 0.48 \\ 
+  10 & seasonal\_peak\_week & 5.00 & 5.00 \\ 
+  11 & seasonal\_trough\_week & 1.00 & 1.00 \\ 
+  12 & spikiness & 0.04 & 0.31 \\ 
+  13 & linearity & 186.88 & 148.24 \\ 
+  14 & curvature & 23.67 & 119.54 \\ 
+  15 & stl\_e\_acf1 & 0.25 & 0.22 \\ 
+  16 & stl\_e\_acf10 & 0.25 & 0.34 \\ 
+  17 & acf1 & 0.79 & 0.71 \\ 
+  18 & acf10 & 1.93 & 2.00 \\ 
+  19 & diff1\_acf1 & 0.07 & -0.26 \\ 
+  20 & diff1\_acf10 & 0.41 & 0.13 \\ 
+  21 & diff2\_acf1 & -0.38 & -0.59 \\ 
+  22 & diff2\_acf10 & 0.23 & 0.38 \\ 
+  23 & season\_acf1 & 0.48 & 0.44 \\ 
+  24 & pacf5 & 0.74 &  \\ 
+  25 & diff1\_pacf5 & 0.27 &  \\ 
+  26 & diff2\_pacf5 & 0.69 &  \\ 
+  27 & season\_pacf & -0.03 &  \\ 
+  28 & zero\_run\_mean & 0.00 & 0.00 \\ 
+  29 & nonzero\_squared\_cv & 0.00 & 0.00 \\ 
+  30 & zero\_start\_prop & 0.00 & 0.00 \\ 
+  31 & zero\_end\_prop & 0.00 & 0.00 \\ 
+  32 & lambda\_guerrero & 2.00 & 2.00 \\ 
+  33 & kpss\_stat & 1.16 & 3.75 \\ 
+  34 & kpss\_pvalue & 0.01 & 0.01 \\ 
+  35 & pp\_stat & -10.78 & -14.12 \\ 
+  36 & pp\_pvalue & 0.01 & 0.01 \\ 
+  37 & ndiffs & 1.00 & 1.00 \\ 
+  38 & nsdiffs & 0.00 & 0.00 \\ 
+  39 & bp\_stat & 708.44 & 556.94 \\ 
+  40 & bp\_pvalue & 0.00 & 0.00 \\ 
+  41 & lb\_stat & 710.33 & 558.47 \\ 
+  42 & lb\_pvalue & 0.00 & 0.00 \\ 
+  43 & var\_tiled\_var & 0.23 & 0.19 \\ 
+  44 & var\_tiled\_mean & 0.60 & 0.59 \\ 
+  45 & shift\_level\_max & 124.71 & 79.71 \\ 
+  46 & shift\_level\_index & 720.00 & 1096.00 \\ 
+  47 & shift\_var\_max & 5411.67 & 2808.42 \\ 
+  48 & shift\_var\_index & 717.00 & 1084.00 \\ 
+  49 & shift\_kl\_max & 47.03 & 43.94 \\ 
+  50 & shift\_kl\_index & 725.00 & 1093.00 \\ 
+  51 & spectral\_entropy & 0.80 & 0.85 \\ 
+  52 & n\_crossing\_points & 261.00 & 238.00 \\ 
+  53 & longest\_flat\_spot & 9.00 & 9.00 \\ 
+  54 & coef\_hurst & 1.00 & 0.99 \\ 
+  55 & stat\_arch\_lm & 0.59 & 0.46 \\ 
+   \hline
+\end{tabular}
+\end{table}

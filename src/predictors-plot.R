@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 #' Plot predictors data
 #'
 #' Generate plot to describe predictors data and their relationship with bed occupancy

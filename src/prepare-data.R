@@ -1,12 +1,11 @@
+#!/usr/bin/env Rscript
+
 #' Preprocess data
 #'
 #' Load, clean and recode data.
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-07
-
-# Shebang ---------------------------------------------------------------------
-# !/usr/loca/bin/Rscript
 
 # import libraries ------------------------------------------------------------
 library(data.table)
@@ -123,12 +122,20 @@ ts_occ <- data.frame(index = as.Date(tseq, tz = "GMT"), bed_occ) |>
 ts_occ2 <- bed_occ2 |> as_tsibble(index = index, key = site)
 ts_occ3 <- bed_occ3 |> as_tsibble(index = index, key = site)
 
+# Convert implicit gaps into explicit missing values ----------------------------
+# Checked: only 21 missing data from Urgent Care Southmead
+# + 2 NA already existing
+ts_occ3 <- 
+  ts_occ3 |>
+    fill_gaps(.full = TRUE) # fully balanced data
+
 # Add z-scored value
 ls_occ <- map(list(ts_occ, ts_occ2, ts_occ3), \(x) {
   x |>
     group_by_key() |>
     mutate(
-      bed_occ_z = bed_occ |> {\(x) (x - mean(x)) / sd(x)}()
+      bed_occ_z = bed_occ |> 
+        {\(x) (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)}()
     ) |>
     ungroup()
 })
@@ -152,7 +159,11 @@ ls_occ$frontier <- ls_occ$frontier |>
     adm = Admissions,
     dis = Discharges
       )
-
+ls_occ$urgent_care <- ls_occ$urgent_care |>
+  rename(
+    adm = Admissions,
+    dis = Discharges
+      )
 
 # Save ts ---------------------------------------------------------------------
 save_path <- here("data/processed/")

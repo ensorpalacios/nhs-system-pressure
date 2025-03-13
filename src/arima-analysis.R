@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 #' Run ARIMA model
 #'
 #' Run different ARIMA model, inlcuding automatic search, (d=1, D=1), arima
@@ -6,9 +8,6 @@
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-10
-
-# Shebang ---------------------------------------------------------------------
-# !/usr/loca/bin/Rscript
 
 # Import libraries ------------------------------------------------------------
 library(data.table)

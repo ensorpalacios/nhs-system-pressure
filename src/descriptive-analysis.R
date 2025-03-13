@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 #' Descriptive analysis
 #'
 #' Descriptive analysis of bed occupancy time series, useful as preliminary 
@@ -14,9 +16,6 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-10
 
-# Shebang ---------------------------------------------------------------------
-# !/usr/loca/bin/Rscript
-
 # Import libraries ------------------------------------------------------------
 library(data.table)
 library(tidyverse)
@@ -25,6 +24,7 @@ library(fable)
 library(feasts)
 library(tsibble)
 library(slider)
+library(lm)
 
 # Load occupancy data ---------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
@@ -32,18 +32,43 @@ ls_occ <- readRDS(file = data_path)
 sites <- ls_occ[[1]]$site |> unique()
 
 
-# Feature of time series ---------------------------------------------------------
+# Helper function -------------------------------------------------------------
+# Replace NA with mean (only 22 urgent_care Southmead items):
+# useful for some functions
+na2mean <- function(bed_occ_data) {
+  bed_occ_data |>
+    group_by_key() |>
+    mutate(
+      bed_occ =
+      if_else(
+        is.na(bed_occ),
+        mean(bed_occ, na.rm = TRUE),
+        bed_occ
+      )
+    ) |>
+    ungroup()
+}
+
+
+# Feature of time series ------------------------------------------------------
 ts_features <- map(ls_occ, \(ts_occ) {
   ts_occ |> features(
     bed_occ, 
-    features = list(mean = mean, 
-      sd = sd, 
-      qunatile = quantile, 
-      feature_set(pkgs = "feasts")))
+    features = list(
+      mean = ~ mean(., na.rm = TRUE),
+      sd = ~ sd(., na.rm = TRUE),
+      quantile = ~ quantile(., na.rm = TRUE),
+      feature_set(pkgs = "feasts")
+    )
+  )
 })
 
 # STL decomposition -----------------------------------------------------------
 stl_occ <- map(ls_occ, \(ts_occ) {
+  # replace NA with mean
+  ts_occ = na2mean(ts_occ)
+
+  # STL
   ts_occ |> 
     model(stl = STL(bed_occ)) |>
     components() |>
@@ -66,7 +91,8 @@ trend_ma <- map(ls_occ, \(ts_occ) {
         .after = 3, 
         .complete = TRUE),
       residuals = bed_occ - `7-ma`
-    )
+    ) |>
+    ungroup()
 })
 
 # Lowess
@@ -76,20 +102,27 @@ trend_lowess <- map(ls_occ, \(ts_occ) {
     mutate(
       lowess = lowess(bed_occ, f = 0.175)$y,
       residuals = bed_occ - lowess
-    )
+    ) |>
+    ungroup()
 })
 
 # Polynomial (2nd order)
 trend_poly <- map(ls_occ, \(ts_occ) {
+  # Replace NA with mean
+  ts_occ = na2mean(ts_occ)
+
+  # Linear regression
   tmp_poly <- ts_occ |>  
     group_by_key() %>%
-    do(model = lm(data = ., bed_occ~ t_ax + I(t_ax^2)))
+    do(model = lm(data = ., bed_occ~ t_ax + I(t_ax^2), na.action = na.exclude))
 
+  # Extract fitted values and residuals
+  # Note: sites is a var defined globally
   tmp_fit <- do.call(cbind, map(sites, \(x) {
-    tpm_polyfit = tmp_poly[sites == x, "model", drop = TRUE][[1]]$fitted.values
+    tmp_polyfit = tmp_poly[sites == x, "model", drop = TRUE][[1]]$fitted.values
   })) 
   tmp_res <- do.call(cbind, map(sites, \(x) {
-    tpm_polyres = tmp_poly[sites == x, "model", drop = TRUE][[1]]$residuals
+    tmp_polyres = tmp_poly[sites == x, "model", drop = TRUE][[1]]$residuals
   })) 
   tmp_poly <- ts_occ
   tmp_poly["fit"] <- tmp_fit |> as.vector()
@@ -101,16 +134,22 @@ trend_poly <- map(ls_occ, \(ts_occ) {
 # Decompose seasonality -------------------------------------------------------
 # Weekly linear regression
 season_week <- map(ls_occ, \(ts_occ) {
+  # Replace NA with mean
+  ts_occ = na2mean(ts_occ)
+
+  # Linear regression
   tmp_week <- ts_occ |>  
     group_by_key() %>%
     do(model = lm(data = ., bed_occ ~ days_))
   # do(model = lm(data = ., bed_occ ~ t_ax + I(t_ax^2) + days_))
 
+  # Extract fitted values and residuals
+  # Note: sites is a var defined globally
   tmp_fit <- do.call(cbind, map(sites, \(x) {
-    tpm_weekfit = tmp_week[sites == x, "model", drop = TRUE][[1]]$fitted.values
+    tmp_weekfit = tmp_week[sites == x, "model", drop = TRUE][[1]]$fitted.values
   })) 
   tmp_res <- do.call(cbind, map(sites, \(x) {
-    tpm_weekres = tmp_week[sites == x, "model", drop = TRUE][[1]]$residuals
+    tmp_weekres = tmp_week[sites == x, "model", drop = TRUE][[1]]$residuals
   })) 
   tmp_week <- ts_occ
   tmp_week["fit"] <- tmp_fit |> as.vector()
@@ -126,7 +165,8 @@ trend_diff <- map(ls_occ, \(ts_occ) {
     group_by_key() |> 
     mutate(
       diff= difference(bed_occ),
-    )
+    ) |> 
+    ungroup()
 })
 
 # Season (lag = week)
@@ -135,7 +175,8 @@ season_diff <- map(ls_occ, \(ts_occ) {
     group_by_key() |> 
     mutate(
       diff = difference(bed_occ, lag = 7)
-    )
+    ) |>
+    ungroup()
 })
 
 # Seasonal + 1st order differencing
@@ -144,7 +185,8 @@ second_diff <- map(ls_occ, \(ts_occ) {
     group_by_key() |> 
     mutate(
       diff = difference(difference(bed_occ, lag = 7))
-    )
+    ) |> 
+    ungroup()
 })
 
 

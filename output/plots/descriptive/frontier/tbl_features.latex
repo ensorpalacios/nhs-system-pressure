@@ -1,5 +1,5 @@
 % latex table generated in R 4.4.2 by xtable 1.8-4 package
-% Thu Jan 23 17:33:50 2025
+% Thu Mar 13 12:56:27 2025
 \begin{table}[ht]
 \centering
 \begin{tabular}{rlrr}
@@ -8,11 +8,11 @@
   \hline
 1 & mean & 0.97 & 1.05 \\ 
   2 & sd & 0.03 & 0.02 \\ 
-  3 & qunatile\_0\% & 0.89 & 1.00 \\ 
-  4 & qunatile\_25\% & 0.95 & 1.04 \\ 
-  5 & qunatile\_50\% & 0.98 & 1.05 \\ 
-  6 & qunatile\_75\% & 0.99 & 1.06 \\ 
-  7 & qunatile\_100\% & 1.03 & 1.10 \\ 
+  3 & quantile\_0\% & 0.89 & 1.00 \\ 
+  4 & quantile\_25\% & 0.95 & 1.04 \\ 
+  5 & quantile\_50\% & 0.98 & 1.05 \\ 
+  6 & quantile\_75\% & 0.99 & 1.06 \\ 
+  7 & quantile\_100\% & 1.03 & 1.10 \\ 
   8 & trend\_strength & 0.84 & 0.51 \\ 
   9 & seasonal\_strength\_week & 0.73 & 0.61 \\ 
   10 & seasonal\_peak\_week & 2.00 & 3.00 \\ 

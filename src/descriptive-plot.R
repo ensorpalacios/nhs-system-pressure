@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 #' Plot descriptive data
 #'
 #' Generate plot to describe bed occupancy: data, trend, seasonality,
@@ -22,6 +24,7 @@ library(feasts)
 library(knitr)
 library(magick)
 library(kableExtra)
+library(xtable)
 
 
 # Load data -------------------------------------------------------------------
@@ -126,7 +129,7 @@ plot_occ_acf = plot_wrapper(ts_occ, plot_acf, label = "bed_occ")
 plot_occ_ccf = plot_wrapper(ts_occ, plot_ccf, label = "bed_occ")
 
 # Scatterplot matrix of lagged values
-provider <- c("provider_level", "frontier")
+provider <- c("provider_level", "frontier", "urgent_care")
 sites <- c("BRI", "Southmead")
 
 plot_lag <- map(provider, \(prov) {
@@ -407,7 +410,7 @@ plot_2diff_ccf <- plot_wrapper(second_diff, plot_ccf, label = "diff")
 # Save plots ------------------------------------------------------------------
 save_path <- here("output/plots/descriptive/")
 
-for (prov in c("provider_level", "frontier")) {
+for (prov in c("provider_level", "frontier", "urgent_care")) {
   tmp_path = paste0(save_path, prov)
   if (!file.exists(tmp_path)) {
     dir.create(tmp_path, recursive = TRUE)
@@ -456,7 +459,7 @@ ls_plot <- list(
 )
 
 iwalk(ls_plot, \(x, y) {
-  for (prov in c("provider_level", "frontier")) {
+  for (prov in c("provider_level", "frontier", "urgent_care")) {
     if (grepl("plot_lag", y)) {
       walk(sites, \(site_) {
         tmp_path = paste0(save_path, prov, "/", y, "_", site_, ".eps")
@@ -486,7 +489,7 @@ iwalk(ls_plot, \(x, y) {
 # Save table of features ------------------------------------------------------
 loop_over <- expand.grid(
   tbl_format = c("html","latex"), 
-  prov = c("provider_level","frontier"), 
+  prov = c("provider_level", "frontier", "urgent_care"), 
   stringsAsFactors = FALSE)
 
 pwalk(loop_over, \(tbl_format, prov) {
