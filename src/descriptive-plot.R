@@ -5,6 +5,8 @@
 #' Generate plot to describe bed occupancy: data, trend, seasonality,
 #' stationary process, correlation function.
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles and Practice
+#' CI auto-/cross-corraltion is 1−α/2 quantile * standard deviation of 
+#' autocorrelation (sqrt(var)=1/sqrt(n))
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-08
