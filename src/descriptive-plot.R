@@ -19,20 +19,18 @@ library(data.table)
 library(tidyverse)
 library(here)
 library(patchwork)
-# library(ggrain)
 library(fable)
 library(feasts)
-# library(kable)
 library(knitr)
-library(magick)
 library(kableExtra)
 library(xtable)
+library(imputeTS)
 
 
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/descriptive_analysis.RDS")
-ls_des <- readRDS(file = data_path)
-list2env(ls_des, env = .GlobalEnv)
+ls_descriptive <- readRDS(file = data_path)
+list2env(ls_descriptive, env = .GlobalEnv)
 
 # Helper functions ------------------------------------------------------------
 # ACF/PCF plot function
@@ -108,9 +106,25 @@ plot_wrapper <- function(list_data, plot_fun, ...) {
 
 
 # Plot bed occupancy ----------------------------------------------------------
-# Raw data
-plot_occ_fun <- function(data_occ, ...) {
-  data_occ |> 
+# With missing values
+plot_occ_miss <- 
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "BRI") %>%  .$bed_occ_m,
+    title = "Bed occupancy",
+    subtitle = "BRI"
+    ) +
+  ggplot_na_imputations(
+    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ_m,
+    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ,
+    size_imputations = 5,
+    title = NULL,
+    subtitle = "Southmead"
+    ) +
+  plot_layout(ncol = 1, axis = "collect_x")
+
+# Full data
+plot_occ <-
+  ts_occ |> 
     ggplot(aes( x = index, y = bed_occ, colour=site)) +
     geom_line() +
     facet_wrap(
@@ -122,21 +136,18 @@ plot_occ_fun <- function(data_occ, ...) {
       legend.position="none",
       axis.title.x = element_blank()
     )
-}
-plot_occ <- plot_wrapper(ts_occ, plot_occ_fun)
 
 # ACF/CCF
-plot_occ_acf_200 = plot_wrapper(ts_occ, plot_acf, label = "bed_occ", lag_ = 200)
-plot_occ_acf = plot_wrapper(ts_occ, plot_acf, label = "bed_occ")
-plot_occ_ccf = plot_wrapper(ts_occ, plot_ccf, label = "bed_occ")
+plot_occ_acf_200 = plot_acf(ts_occ, list("label" = "bed_occ", "lag_" = 200))
+plot_occ_acf = plot_acf(ts_occ, list("label" = "bed_occ"))
+plot_occ_ccf = plot_ccf(ts_occ, list("label" = "bed_occ"))
 
 # Scatterplot matrix of lagged values
-provider <- c("provider_level", "frontier", "urgent_care")
 sites <- c("BRI", "Southmead")
 
-plot_lag <- map(provider, \(prov) {
+plot_lag <- 
   map(sites, \(x) {
-    tmp_plot = ts_occ[[prov]] |>
+    tmp_plot = ts_occ |>
       filter(site == x) |>
       gg_lag(
         bed_occ,
@@ -144,11 +155,10 @@ plot_lag <- map(provider, \(prov) {
         size = 2
       )
   }) |> set_names(sites)
-}) |> set_names(provider)
 
-plot_lag7 <- map(provider, \(prov) {
+plot_lag7 <- 
   map(sites, \(site_) {
-    tmp_plot = ts_occ[[prov]] |>
+    tmp_plot = ts_occ |>
       filter(site == site_) |>
       gg_lag(
         bed_occ,
@@ -157,7 +167,6 @@ plot_lag7 <- map(provider, \(prov) {
         size = 2
       )
   }) |> set_names(sites)
-}) |> set_names(provider)
 
 
 # Weekly seasonality (z-scored data)
@@ -166,7 +175,8 @@ plot_seasonality_fun <- function(data_occ, ...) {
     data_occ |> gg_subseries(y=bed_occ_z, period = 7) + 
     plot_layout(axis_titles = "collect")
 }
-plot_seasonality <- plot_wrapper(ts_occ, plot_seasonality_fun)
+plot_seasonality <- plot_seasonality_fun(ts_occ)
+
 
 # Plot STL decomposition ------------------------------------------------------
 # STL decomposition (trend, seasonality, stationary process)
@@ -192,15 +202,15 @@ plot_stl_fun <- function(data_stl, ...) {
     tmp_plot[[3]] + 
     plot_layout(ncol = 1, axis_title="collect")
 }
-plot_stl <- plot_wrapper(stl_occ, plot_stl_fun)
+plot_stl <- plot_stl_fun(stl_occ)
 
 # ACF-CCF (BRI-Southmead)
-plot_stl_res_acf = plot_wrapper(stl_occ, plot_acf, label = "remainder")
-plot_stl_res_ccf = plot_wrapper(stl_occ, plot_ccf, label = "remainder")
-plot_stl_deseasoned_acf = plot_wrapper(stl_occ, plot_acf, label = "season_adjust")
-plot_stl_deseasoned_ccf = plot_wrapper(stl_occ, plot_ccf, label = "season_adjust")
-plot_stl_detrended_acf = plot_wrapper(stl_occ, plot_acf, label = "trend_adjust")
-plot_stl_detrended_ccf = plot_wrapper(stl_occ, plot_ccf, label = "trend_adjust")
+plot_stl_res_acf = plot_acf(stl_occ, list("label" = "remainder"))
+plot_stl_res_ccf = plot_ccf(stl_occ, list("label" = "remainder"))
+plot_stl_deseasoned_acf = plot_acf(stl_occ, list("label" = "season_adjust"))
+plot_stl_deseasoned_ccf = plot_ccf(stl_occ, list("label" = "season_adjust"))
+plot_stl_detrended_acf = plot_acf(stl_occ, list("label" = "trend_adjust"))
+plot_stl_detrended_ccf = plot_ccf(stl_occ, list("label" = "trend_adjust"))
 
 
 # Plot trends -----------------------------------------------------------------
@@ -220,8 +230,8 @@ plot_ma_fun <- function(data_ma, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_ma <- plot_wrapper(trend_ma, plot_ma_fun)
-plot_ma_acf = plot_wrapper(trend_ma, plot_acf, label = "7-ma")
+plot_ma <- plot_ma_fun(trend_ma)
+plot_ma_acf = plot_acf(trend_ma, list("label" = "7-ma"))
 
 # Weekly mooving average - residuals
 plot_ma_res_fun <- function(data_ma, ...) {
@@ -238,8 +248,8 @@ plot_ma_res_fun <- function(data_ma, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_ma_res <- plot_wrapper(trend_ma, plot_ma_res_fun)
-plot_ma_res_acf = plot_wrapper(trend_ma, plot_acf, label = "residuals")
+plot_ma_res <- plot_ma_res_fun(trend_ma)
+plot_ma_res_acf = plot_acf(trend_ma, list("label" = "residuals"))
 
 # Lowess fit
 plot_lowess_fun <- function(data_lowess, ...) {
@@ -255,8 +265,8 @@ plot_lowess_fun <- function(data_lowess, ...) {
       legend.position="none",
       axis.title.x = element_blank())
 }
-plot_lowess <- plot_wrapper(trend_lowess, plot_lowess_fun)
-plot_lowess_acf = plot_wrapper(trend_lowess, plot_acf, label = "lowess")
+plot_lowess <- plot_lowess_fun(trend_lowess)
+plot_lowess_acf = plot_acf(trend_lowess, list("label" = "lowess"))
 
 # Lowess fit - residuals
 plot_lowess_res_fun <- function(data_lowess, ...) {
@@ -271,45 +281,8 @@ plot_lowess_res_fun <- function(data_lowess, ...) {
       legend.position="none",
       axis.title.x = element_blank())
 }
-plot_lowess_res <- plot_wrapper(trend_lowess, plot_lowess_res_fun)
-plot_lowess_res_acf = plot_wrapper(trend_lowess, plot_acf, label = "residuals")
-
-# Polynomial fit (2nd order)
-plot_tpolyfit_fun <- function(data_poly, ...) {
-  data_poly |> 
-    ggplot(aes(x = index, y = bed_occ, colour=site)) +
-    geom_line() +
-    geom_line(aes(y = fit)) +
-    facet_wrap(
-      ~site,
-      nrow = 2, 
-      scales = "free_y") +
-    labs(y = "bed occupancy") +
-    theme(
-      legend.position="none",
-      axis.title.x = element_blank()
-    )
-}
-plot_tpolyfit <- plot_wrapper(trend_poly, plot_tpolyfit_fun)
-plot_tpolyfit_acf = plot_wrapper(trend_poly, plot_acf, label = "fit")
-
-# Polynomial fit (2nd order) - residuals
-plot_tpoly_res_fun <- function(data_poly, ...) {
-  data_poly |> 
-    ggplot(aes(x = index, y = res, colour=site)) +
-    geom_line() +
-    facet_wrap(
-      ~site,
-      nrow = 2, 
-      scales = "free_y") +
-    labs(y = "bed occupancy") +
-    theme(
-      legend.position="none",
-      axis.title.x = element_blank()
-    )
-}
-plot_tpoly_res <- plot_wrapper(trend_poly, plot_tpoly_res_fun)
-plot_tpoly_res_acf = plot_wrapper(trend_poly, plot_acf, label = "res")
+plot_lowess_res <- plot_lowess_res_fun(trend_lowess)
+plot_lowess_res_acf = plot_acf(trend_lowess, list("label" = "residuals"))
 
 
 # Plot seasonality ------------------------------------------------------------
@@ -329,8 +302,8 @@ plot_week_fit_fun <- function(data_week, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_week_fit <- plot_wrapper(season_week, plot_week_fit_fun)
-plot_week_fit_acf = plot_wrapper(season_week, plot_acf, label = "fit")
+plot_week_fit <- plot_week_fit_fun(season_week)
+plot_week_fit_acf = plot_acf(season_week, list(label = "fit"))
 
 # Weekly linear regression - residuals
 plot_week_res_fun <- function(data_week, ...) {
@@ -347,9 +320,9 @@ plot_week_res_fun <- function(data_week, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_week_res <- plot_wrapper(season_week, plot_week_res_fun)
-plot_week_res_acf = plot_wrapper(season_week, plot_acf, label = "res")
-plot_week_res_ccf = plot_wrapper(season_week, plot_ccf, label = "res")
+plot_week_res <- plot_week_res_fun(season_week)
+plot_week_res_acf = plot_acf(season_week, list("label" = "res"))
+plot_week_res_ccf = plot_ccf(season_week, list("label" = "res"))
 
 
 # Plot differencing -----------------------------------------------------------
@@ -368,8 +341,8 @@ plot_tdiff_fun <- function(data_diff, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_tdiff  <- plot_wrapper(trend_diff, plot_tdiff_fun)
-plot_tdiff_acf = plot_wrapper(trend_diff, plot_acf, label = "diff")
+plot_tdiff  <- plot_tdiff_fun(trend_diff)
+plot_tdiff_acf = plot_acf(trend_diff, list("label" = "diff"))
 
 # Seasonal difference - 1st order
 plot_sdiff_fun <- function(data_diff, ...) {
@@ -386,9 +359,9 @@ plot_sdiff_fun <- function(data_diff, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_sdiff <- plot_wrapper(season_diff, plot_sdiff_fun)
-plot_sdiff_acf <- plot_wrapper(season_diff, plot_acf, label = "diff")
-plot_sdiff_ccf <- plot_wrapper(season_diff, plot_ccf, label = "diff")
+plot_sdiff <-  plot_sdiff_fun(season_diff)
+plot_sdiff_acf <- plot_acf(season_diff, list("label" = "diff"))
+plot_sdiff_ccf <- plot_ccf(season_diff, list("label" = "diff"))
 
 # Twice-differenced data (first and seasonal)
 plot_2diff_fun <- function(data_diff, ...) {
@@ -404,22 +377,16 @@ plot_2diff_fun <- function(data_diff, ...) {
       axis.title.x = element_blank()
     )
 }
-plot_2diff <- plot_wrapper(second_diff, plot_2diff_fun)
-plot_2diff_acf <- plot_wrapper(second_diff, plot_acf, label = "diff")
-plot_2diff_ccf <- plot_wrapper(second_diff, plot_ccf, label = "diff")
+plot_2diff <- plot_2diff_fun(second_diff)
+plot_2diff_acf <- plot_acf(second_diff, list("label" = "diff"))
+plot_2diff_ccf <- plot_ccf(second_diff, list("label" = "diff"))
 
 
 # Save plots ------------------------------------------------------------------
 save_path <- here("output/plots/descriptive/")
 
-for (prov in c("provider_level", "frontier", "urgent_care")) {
-  tmp_path = paste0(save_path, prov)
-  if (!file.exists(tmp_path)) {
-    dir.create(tmp_path, recursive = TRUE)
-  }
-}
-
 ls_plot <- list(
+  "plot_occ_miss" = plot_occ_miss,
   "plot_occ" = plot_occ,
   "plot_occ_acf" = plot_occ_acf,
   "plot_occ_acf_200" = plot_occ_acf_200,
@@ -442,10 +409,6 @@ ls_plot <- list(
   "plot_lowess_acf" = plot_lowess_acf,
   "plot_lowess_res" = plot_lowess_res,
   "plot_lowess_res_acf" = plot_lowess_res_acf,
-  "plot_tpolyfit" = plot_tpolyfit,
-  "plot_tpolyfit_acf" = plot_tpolyfit_acf,
-  "plot_tpoly_res" = plot_tpoly_res,
-  "plot_tpoly_res_acf" = plot_tpoly_res_acf,
   "plot_week_fit" = plot_week_fit,
   "plot_week_fit_acf" = plot_week_fit_acf,
   "plot_week_res" = plot_week_res,
@@ -461,12 +424,11 @@ ls_plot <- list(
 )
 
 iwalk(ls_plot, \(x, y) {
-  for (prov in c("provider_level", "frontier", "urgent_care")) {
-    if (grepl("plot_lag", y)) {
-      walk(sites, \(site_) {
-        tmp_path = paste0(save_path, prov, "/", y, "_", site_, ".eps")
+  if (grepl("plot_lag", y)) {
+    walk(sites, \(site_) {
+        tmp_path = paste0(save_path, y, "_", site_, ".eps")
         ggsave(
-          x[[prov]][[site_]], 
+          x[[site_]], 
           file = tmp_path, 
           width = 35, 
           height = 20, 
@@ -474,29 +436,25 @@ iwalk(ls_plot, \(x, y) {
           device = "eps")
       })
     }
-    else {
-      tmp_path = paste0(save_path, prov, "/", y, ".eps")
-      ggsave(
-        x[[prov]], 
-        file = tmp_path, 
-        width = 35, 
-        height = 20, 
-        units = "cm", 
-        device = "eps")
-    }
+  else {
+    tmp_path = paste0(save_path, y, ".eps")
+    ggsave(
+      x, 
+      file = tmp_path, 
+      width = 35, 
+      height = 20, 
+      units = "cm", 
+      device = "eps")
   }
 })
 
 
 # Save table of features ------------------------------------------------------
-loop_over <- expand.grid(
-  tbl_format = c("html","latex"), 
-  prov = c("provider_level", "frontier", "urgent_care"), 
-  stringsAsFactors = FALSE)
+ls_format = c("html","latex")
 
-pwalk(loop_over, \(tbl_format, prov) {
+walk(ls_format, \(tbl_format) {
   tmp_tbl = data.table::transpose(
-    ts_features[[prov]], keep.names="var", make.names = "site"
+    ts_features, keep.names="var", make.names = "site"
   ) |>
     mutate(across(where(is.numeric), ~ round(.x, 2)))
 
@@ -504,12 +462,12 @@ pwalk(loop_over, \(tbl_format, prov) {
     tmp_tbl |> 
       kable(tbl_format) |>
       save_kable(
-        file = paste0(save_path, prov, "/tbl_features.", tbl_format))
+        file = paste0(save_path, "/tbl_features.", tbl_format))
   } else {
     tmp_tbl |> 
       xtable() |>
       print(
-        file = paste0( save_path, prov, "/tbl_features.", tbl_format)
+        file = paste0( save_path, "/tbl_features.", tbl_format)
       )
   }
 })

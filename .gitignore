@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+resources/
+*.eps
+*.png
+*.html
+*.latex
