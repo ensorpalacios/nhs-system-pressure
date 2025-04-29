@@ -126,7 +126,7 @@ plot_occ_miss <-
 plot_occ <-
   ts_occ |> 
     ggplot(aes( x = index, y = bed_occ, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -190,6 +190,7 @@ plot_stl_fun <- function(data_stl, ...) {
         ggplot(aes(x = index, colour = site)) +
         geom_line(
           aes(y = !!as.symbol(x)),
+          linewidth = 1,
           show.legend = FALSE) +
         facet_wrap(~site, nrow = 2, scales = "free_y") +
         theme(
@@ -237,7 +238,7 @@ plot_ma_acf = plot_acf(trend_ma, list("label" = "7-ma"))
 plot_ma_res_fun <- function(data_ma, ...) {
   data_ma |> 
     ggplot(aes(x = index, y = residuals, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -272,7 +273,7 @@ plot_lowess_acf = plot_acf(trend_lowess, list("label" = "lowess"))
 plot_lowess_res_fun <- function(data_lowess, ...) {
   data_lowess |> 
     ggplot(aes(x = index, y = residuals, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -291,7 +292,7 @@ plot_week_fit_fun <- function(data_week, ...) {
   data_week |> 
     ggplot(aes(x = index, y = bed_occ, colour=site)) +
     geom_line() +
-    geom_line(aes(y = fit)) +
+    geom_line(aes(y = fit), linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -309,7 +310,7 @@ plot_week_fit_acf = plot_acf(season_week, list(label = "fit"))
 plot_week_res_fun <- function(data_week, ...) {
   data_week |> 
     ggplot(aes(x = index, y = res, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -330,7 +331,7 @@ plot_week_res_ccf = plot_ccf(season_week, list("label" = "res"))
 plot_tdiff_fun <- function(data_diff, ...) {
   data_diff |> 
     ggplot(aes(x = index, y = diff, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -348,7 +349,7 @@ plot_tdiff_acf = plot_acf(trend_diff, list("label" = "diff"))
 plot_sdiff_fun <- function(data_diff, ...) {
   data_diff |> 
     ggplot(aes(x = index, y = diff, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -367,7 +368,7 @@ plot_sdiff_ccf <- plot_ccf(season_diff, list("label" = "diff"))
 plot_2diff_fun <- function(data_diff, ...) {
   data_diff |> 
     ggplot(aes(x = index, y = diff, colour=site)) +
-    geom_line() +
+    geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, scales = "free_y") +
@@ -430,20 +431,18 @@ iwalk(ls_plot, \(x, y) {
         ggsave(
           x[[site_]], 
           file = tmp_path, 
-          width = 35, 
-          height = 20, 
-          units = "cm", 
+          width = 20, 
+          height = 11.85,
           device = "eps")
-      })
+    })
     }
   else {
     tmp_path = paste0(save_path, y, ".eps")
     ggsave(
       x, 
       file = tmp_path, 
-      width = 35, 
-      height = 20, 
-      units = "cm", 
+      width = 20, 
+      height = 11.85,
       device = "eps")
   }
 })

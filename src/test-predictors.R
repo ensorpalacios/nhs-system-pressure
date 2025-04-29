@@ -166,7 +166,7 @@ stderr_plot_e <-
 # Fits if not exist
 if (!file.exists(fit_path)) {
   dir.create(fit_path, recursive = TRUE)
-  saveRDS(fit_arima, file = fit_path)
+  saverds(fit_arima, file = fit_path)
 }
 
 # Plots
@@ -174,23 +174,24 @@ plot_path <- here("output/plots/test_predictors/")
 if (!file.exists(plot_path)) {
     dir.create(plot_path, recursive = TRUE)
 }
+
 estimate_plot_d %>% 
     ggsave(
-      file = paste0(plot_path, "estimate_days.png"),
-      width = 7, height = 4
+      file = paste0(plot_path, "estimate_days.eps"),
+      width = 20, height = 11.85
     )
 stderr_plot_d %>% 
     ggsave(
-      file = paste0(plot_path, "stderr_d.png"),
-      width = 7, height = 4
+      file = paste0(plot_path, "stderr_d.eps"),
+      width = 20, height = 11.85
     )
 estimate_plot_e %>% 
     ggsave(
-      file = paste0(plot_path, "estimate_bedescal.png"),
-      width = 7, height = 4
+      file = paste0(plot_path, "estimate_bedescal.eps"),
+      width = 20, height = 11.85
     )
 stderr_plot_e %>% 
     ggsave(
-      file = paste0(plot_path, "stderr_bedescal.png"),
-      width = 7, height = 4
+      file = paste0(plot_path, "stderr_bedescal.eps"),
+      width = 20, height = 11.85
     )
