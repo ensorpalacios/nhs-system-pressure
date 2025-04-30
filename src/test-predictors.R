@@ -10,7 +10,7 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-04-23
 
-# Import libraries -------------------------------------------------------------
+# Import packages --------------------------------------------------------------
 library(conflicted)
 library(data.table)
 library(tidyverse)
