@@ -1,9 +1,9 @@
-#' model colours
+#' Model colours
 #' 
 #' Define colour mapping for different models.
 #' 
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
-#' @date 2025-04-24
+#' @date 2025-05-01
 
 # Import packages --------------------------------------------------------------
 library(scales)
