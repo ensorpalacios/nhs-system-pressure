@@ -12,31 +12,16 @@
 #' centred around the observed value).
 
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles 
-#' and Practice;https: //www.lokad.com/continuous-ranked-probability-score/ 
+#' and Practice; https: //www.lokad.com/continuous-ranked-probability-score/ 
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
-#' @date 2025-05-01
+#' @date 2025-05-14
 
 
 # Import packages --------------------------------------------------------------
-library(conflicted)
-library(tibble)
-library(dplyr)
-library(purrr)
-library(fable)
-library(distributional)
+source("src/packages.R")
+source("src/split-data.R")
 
-import::from(here, here)
-import::from(magrittr, "%>%")
-import::from(tidyr, pivot_longer, pivot_wider)
-import::from(forcats, fct_rev)
-import::from(tsibble, tsibble)
-
-source(here("src/split-data.R"))
-
-conflicts_prefer(
-  dplyr::filter,
-)
 
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
@@ -51,15 +36,39 @@ crps_func <-  # Compute crps
     # .obs: observed value
     # .fc: forecast distribution
     # .penalty: 
-    tmp_domain = seq(0, 2000, 1) # ATTENTION: ad hoc domain common to BRI/Southmead
+    tmp_alpha = seq(0.01, 0.99, 0.01) # alpha level ([0, 1])
+    tmp_weight =
+      .penalty %>% 
+      case_match(
+        "upper" ~ expr("tmp_alpha ** 2"),
+        "none" ~ expr("1"),
+        "lower" ~ expr("(1 - tmp_alpha) ** 2")
+      )
+    
     map2(.fc, .obs, \(.dist, .obs_) {
+      tmp_qf = # quantile forecast
+        quantile(.dist, tmp_alpha)[[1]]
       case_when(
-        tmp_domain < .obs_ ~  cdf(.dist, tmp_domain)[[1]] ** 2,
-        tmp_domain >= .obs_  ~ (cdf(.dist, tmp_domain)[[1]] - 1) ** 2
+        .obs_ > tmp_qf ~ 
+          -tmp_alpha * (tmp_qf - .obs_) * eval(parse(text = tmp_weight)),
+        .obs_ <= tmp_qf ~ 
+          (1 - tmp_alpha) * (tmp_qf - .obs_) * eval(parse(text = tmp_weight))
       ) %>% 
-        sum() / length(.obs)
+        sum() * 2 / (length(tmp_alpha) - 1)
     }) %>% 
       list_c()
+    # tmp_domain = seq(0, 2000, 1) # ATTENTION: ad hoc domain common to BRI/Southmead
+    # crps_p =
+    #   map2(.fc, .obs, \(.dist, .obs_) {
+    #   case_when(
+    #     tmp_domain < .obs_ ~  cdf(.dist, tmp_domain)[[1]] ** 2,
+    #     tmp_domain >= .obs_  ~ (cdf(.dist, tmp_domain)[[1]] - 1) ** 2
+    #   ) %>% 
+    #     sum() * 
+    #        ((tail(tmp_domain, 1) - head(tmp_domain, 1)) /
+    #           (length(tmp_domain) - 1))
+    # }) %>% 
+    #   list_c()
   }
 
 wilker_func <- # compute Wilker score - used in wilker_wrap()
@@ -69,8 +78,8 @@ wilker_func <- # compute Wilker score - used in wilker_wrap()
     # .penalty: penalise more observations above or below prediction interval
     ci_width = seq(0.05, 0.95, 0.05) # width of the confidence interval
     map(ci_width, \(.width) {
-      upper = .fc %>% quantile(0.5 + .width/ 2) # (upper interval)
-      lower = .fc %>% quantile(0.5 - .width/ 2) # (lower interval)
+      upper = .fc %>% quantile(0.5 + .width / 2) # (upper interval)
+      lower = .fc %>% quantile(0.5 - .width / 2) # (lower interval)
       ci_width = upper - lower # width confidence interval
       .penalty =
         case_when(
@@ -182,9 +191,9 @@ metrics <- # scale by wilker from mean model
   ) %>% 
   ungroup()
 
-metrics <- # discard upper/lower for crps (for now not implemented)
-  metrics %>%
-  filter(metric == "crps", ! penalty %in% c("upper", "lower"))
+# metrics <- # discard upper/lower for crps (for now not implemented)
+#   metrics %>%
+#   filter(metric == "crps", ! penalty %in% c("upper", "lower"))
 
 # Summarise
 metrics_summary <-
