@@ -82,12 +82,38 @@ split_cv <-
       relocate(site, .before = 3)
   }
 
+#' extract site-, split- and model-specific forecast set from cross-validated
+#' train-validation sets (split_data_cv)
+#' @param .data_sel Data 
+#' @param .site List of hospitals
+#' @param .split List of cv splits
+#' @param .vars List of y/x variables in the model
+#' @param .type Character indicating whether to include all or only train data
+#' @export
+select_training <- # select training set (by site and split)
+  function(.data_sel, .site, .split, .vars = NULL, .type = "train") {
+    # .data_sel is list (site) of list (split) of training sets 
+    # .vrs is list of outcome (..1) and predictors
+    # .type specifies filter (only training or training/test data)
+    if (is.null(.vars)) stop(".vars is null; must match exact colnames")
+    
+    if (.type == "all") {
+    .data_sel %>% 
+      filter(site == .site, split == .split) %>% 
+      select(all_of(.vars))
+    } else if (.type == "train") {
+    .data_sel %>% 
+      filter(type == "train", site == .site, split == .split) %>% 
+      select(all_of(.vars))
+    }
+  }
 
 #' extract site-, split- and model-specific forecast set from cross-validated
 #' train-validation sets (split_data_cv)
-#' @param .data Data organised by site and splits
-#' @param .select Function to select data to pass to .function
-#' @param .function Function to apply to subset of data
+#' @param .data Data 
+#' @param .site List of hospitals
+#' @param .split List of cv splits
+#' @param .models List of models from which to generate forecasts
 #' @export
 select_fc <- # select forecast (by site and split) - used in cv_wrap()
   function(.data, .site, .split, .models) {
@@ -110,15 +136,19 @@ select_fc <- # select forecast (by site and split) - used in cv_wrap()
 #' @param .data Data organised by site and splits
 #' @param .select Function to select data to pass to .function
 #' @param .function Function to apply to subset of data
+#' @param ... Parameters for .select function
 #' @export
 cv_wrap <-
   function(.data, .select, .function, ...) { 
-    if (is_tibble(.data)) {
+    if (tibble::is_tibble(.data)) {
       sites = .data$site %>% unique()
       splits = .data$split %>% unique()
-    } else if (is.list(.data)) {
+    } else if ("fc" %in% names(.data)) {
       sites = flatten(.data) %>% .$site %>% unique()
       splits = flatten(.data) %>% .$split %>% unique()
+    } else if (is.list(.data)) {
+      sites = .data %>% names()
+      splits = .data[[1]] %>% names()
     } else stop(".data not a tibble or list")
     
     map(sites, \(.site) {

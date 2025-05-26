@@ -72,17 +72,10 @@ fit_fable <-
   )
 
 # Exponential smoothing with predictors (bed escalation)
-select_training <- # select training set (by site and split)
-  function(.data, .site, .split, .vars) { 
-    # .data is list (site) of list (split) of training sets 
-    # .vrs is list of outcome (..1) and predictors
-    split_data_cv %>% 
-      filter(type == "train", site == .site, split == .split) %>% 
-      select(all_of(.vars))
-  }
-
 es_model <- # define esx fit
-  function(.data)  .data %>% as.ts() %>% es(model = "ZXZ",  lags = c(1, 1, 7))
+  function(.data_es) {
+    .data_es %>% as.ts() %>% es(model = "ZXZ",  lags = c(1, 1, 7))
+  }
 
 list_var <- c("bed_occ", "bed_escal")
 
