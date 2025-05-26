@@ -16,15 +16,10 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-10
 
-# Import libraries ------------------------------------------------------------
-library(data.table)
-library(tidyverse)
-library(here)
-library(fable)
-library(feasts)
-library(tsibble)
-library(slider)
-# library(lm)
+# Import packages --------------------------------------------------------------
+source("src/packages.R")
+source("src/split-data.R")
+
 
 # Load occupancy data ---------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")

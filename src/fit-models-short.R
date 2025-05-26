@@ -11,24 +11,8 @@
 #' @date 2025-05-01
 
 # Import packages --------------------------------------------------------------
-library(conflicted)
-library(here)
-library(data.table)
-library(dplyr)
-library(purrr)
-library(fable)
-library(smooth)
-library(distributional)
+source("src/packages.R")
 source("src/split-data.R")
-import::from(here, here)
-import::from(stringr, str_sub)
-import::from(tsibble, tsibble)
-
-# Manage conflicts
-conflicts_prefer(
-  dplyr::filter,
-  fabletools::accuracy, # used in computing metrics for fable fc
-)
 
 
 # Load data --------------------------------------------------------------------

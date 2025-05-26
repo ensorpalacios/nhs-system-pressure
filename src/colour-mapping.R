@@ -6,7 +6,7 @@
 #' @date 2025-05-01
 
 # Import packages --------------------------------------------------------------
-library(scales)
+source(here("src/packages.R"))
 
 
 # Define colour mapping --------------------------------------------------------

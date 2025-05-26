@@ -11,20 +11,10 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-08
 
-# Shebang ---------------------------------------------------------------------
-# !/usr/loca/bin/Rscript
 
-# Import libraries ------------------------------------------------------------
-library(data.table)
-library(tidyverse)
-library(here)
-library(patchwork)
-library(fable)
-library(feasts)
-library(knitr)
-library(kableExtra)
-library(xtable)
-library(imputeTS)
+# Import packages --------------------------------------------------------------
+source("src/packages.R")
+source("src/split-data.R")
 
 
 # Load data -------------------------------------------------------------------

@@ -12,18 +12,9 @@
 # !/usr/loca/bin/Rscript
 
 # Import libraries ------------------------------------------------------------
-library(conflicted)
-library(data.table)
-library(tidyverse)
-library(here)
-library(patchwork)
-library(feasts)
-library(dplyr)
-library(knitr)
-library(kableExtra)
-library(imputeTS)
+source("src/packages.R")
+source("src/split-data.R")
 
-conflicts_prefer(dplyr::filter)
 
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")

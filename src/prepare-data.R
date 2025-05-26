@@ -5,13 +5,11 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-07
 
-# import libraries ------------------------------------------------------------
-library(data.table)
-library(tidyverse)
-library(here)
-library(readxl)
-library(tsibble)
-library(imputeTS)
+
+# Import packages --------------------------------------------------------------
+source("src/packages.R")
+source("src/split-data.R")
+
 
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/raw/")
