@@ -155,6 +155,7 @@ list_models_w <- # select models
     "arima_de",
     "arima_dade",
     "es_e",
+    "rf",
     "mean",
     "naive",
     "snaive")
@@ -190,10 +191,6 @@ metrics <- # scale by wilker from mean model
     value_s = value / value[models == "mean"]
   ) %>% 
   ungroup()
-
-# metrics <- # discard upper/lower for crps (for now not implemented)
-#   metrics %>%
-#   filter(metric == "crps", ! penalty %in% c("upper", "lower"))
 
 # Summarise
 metrics_summary <-

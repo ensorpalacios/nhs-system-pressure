@@ -7,22 +7,10 @@
 #' @date 2025-05-14
 
 # Import packages --------------------------------------------------------------
-library(conflicted)
-library(ggplot2)
-library(scales)
-library(purrr)
-library(patchwork)
-library(dplyr)
-import::from(here, here)
-import::from(magrittr, "%>%")
-import::from(rlang, set_names)
-import::from(forcats, fct_rev)
-import::from(stringr, str_glue)
-source(here("src/colour-mapping.R"))
+source("src/packages.R")
+source("src/split-data.R")
+source("src/colour-mapping.R")
 
-conflicts_prefer(
-  dplyr::filter,
-)
 
 # Load data --------------------------------------------------------------------
 metric_path = here("output/metrics/metrics.RDS")
