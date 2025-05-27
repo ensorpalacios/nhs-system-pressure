@@ -82,6 +82,16 @@ ts_occ <- # impute
   ) %>% 
   ungroup()
 
+# Process adm, dis, bed_escal
+ts_occ <- 
+  ts_occ %>% 
+  group_by(site) %>% 
+  mutate(
+    ad_diff = adm - dis,
+    ad_diff_s = slide_dbl(ad_diff, mean, .before = 7),
+    bed_escal_s = slide_dbl(bed_escal, mean, .before = 7)
+  ) %>% 
+  ungroup()
 
 # Add z-scored value
 ts_occ <- 
