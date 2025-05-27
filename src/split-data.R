@@ -6,7 +6,61 @@
 #' 
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-04-23
-#' 
+
+#' create lagged data
+#' @param .data The data as a tsibble
+#' @param .lag Number of lags
+#' @export
+lag_fun <- 
+  function(.data, .lag = 12) {
+    .lag = .lag + 1 # include no lag
+    
+    map(sites, \(.site) {
+      tmp_data = # site specific data
+        .data %>% filter(site == .site)
+      
+      # Days (one hot encoding)
+      tmp_days =
+        tmp_data %>% 
+        model.matrix(~ 0 + days_, data = .) # 0 for no intercept/ref
+      
+      # Lagged variables
+      tmp_lagged = # design matrix
+        tmp_data %>% as_tibble() %>% 
+        select(-c(index, site, days_, t_ax)) %>% 
+        relocate(bed_occ, bed_occ_z) %>% names() %>% 
+        paste(collapse = "+") %>% paste("~0+", .) %>% formula() %>% 
+        model.matrix(data = tmp_data)
+      
+      tmp_lag_names = # name lagged variables
+        tmp_lagged %>% dimnames %>% .[[2]]
+      tmp_lag_names = 
+        map(seq(.lag), \(.nlag) {
+          if (.nlag == 1) { 
+            tmp_lag_names
+          } else {
+            # str_c(tmp_lag_names, "_lag", .nlag - 1)
+            paste0(tmp_lag_names, "_lag", .nlag - 1)
+          }
+        }) %>% 
+        unlist()
+      
+      tmp_lagged = # expand time
+        embed(tmp_lagged, .lag)
+      
+      colnames(tmp_lagged) =
+        tmp_lag_names
+      
+      # Full df
+      tibble(
+        tmp_data %>% slice(.lag:n()) %>% select(index, site, t_ax, days_),
+        tmp_lagged %>% as_tibble(),
+        tmp_days %>% as_tibble() %>%  slice(.lag:n())
+      )
+    }) %>% 
+      list_rbind()
+  }
+
 #' train-test split
 #' @param .ts_occ The data as a tsibble
 #' @param .len_test Length of the test set in months as string (leave 5 months)
@@ -96,11 +150,13 @@ select_training <- # select training set (by site and split)
     # .vrs is list of outcome (..1) and predictors
     # .type specifies filter (only training or training/test data)
     if (is.null(.vars)) stop(".vars is null; must match exact colnames")
-    
+
     if (.type == "all") {
     .data_sel %>% 
       filter(site == .site, split == .split) %>% 
-      select(all_of(.vars))
+      select(
+        all_of(.vars %>% append("type", after = 0))
+        )
     } else if (.type == "train") {
     .data_sel %>% 
       filter(type == "train", site == .site, split == .split) %>% 
