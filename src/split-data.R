@@ -1,12 +1,15 @@
-#' Split data
+#' Helper functions
 #'
-#' Split data for fitting and testing; split data in a training and test set; 
-#' split training set into k testing and validation sets with resampling using
-#' a roling window.
+#' Include all helper functions (functions used in multiple scripts or too 
+#' lengthy); includes functions for:
+#' - Split/augment (lag) data for fitting and testing.
+#' - Plot functions
+#' - Utility functions
 #' 
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-04-23
 
+# Functions to split/augment data for analysis ---------------------------------
 #' create lagged data
 #' @param .data The data as a tsibble
 #' @param .lag Number of lags
@@ -24,14 +27,16 @@ lag_fun <-
         tmp_data %>% 
         model.matrix(~ 0 + days_, data = .) # 0 for no intercept/ref
       
-      # Lagged variables
+      # Lagged variables (mode.matrix not working with multiple cat variables)
       tmp_lagged = # design matrix
         tmp_data %>% as_tibble() %>% 
         select(-c(index, site, days_, t_ax)) %>% 
-        relocate(bed_occ, bed_occ_z) %>% names() %>% 
-        paste(collapse = "+") %>% paste("~0+", .) %>% formula() %>% 
-        model.matrix(data = tmp_data)
-      
+        relocate(bed_occ) %>% 
+        as.data.table() %>% one_hot() %>% as.matrix()
+       # names() %>% 
+       #  paste(collapse = "+") %>% paste("~ 0 +", .) %>% formula() %>% 
+       #  model.matrix(data = tmp_data)
+
       tmp_lag_names = # name lagged variables
         tmp_lagged %>% dimnames %>% .[[2]]
       tmp_lag_names = 
@@ -53,7 +58,9 @@ lag_fun <-
       
       # Full df
       tibble(
-        tmp_data %>% slice(.lag:n()) %>% select(index, site, t_ax, days_),
+        tmp_data %>% 
+          slice(.lag:n()) %>% 
+          select(index, site, t_ax, days_),
         tmp_lagged %>% as_tibble(),
         tmp_days %>% as_tibble() %>%  slice(.lag:n())
       )
@@ -213,4 +220,174 @@ cv_wrap <-
           .function()
       }) %>% set_names(splits)
     }) %>% set_names(sites)
+  }
+
+
+# Plots ------------------------------------------------------------------------
+#' Correlation plot function; generate plot with acf and pacf
+#' @param ts_tbl tbl with time series
+#' @param ... used to specify variable to plot, number of lags, alpha value
+#' @export
+# ACF/PCF plot function
+plot_cf = function(ts_tbl, .var = NULL, .lag = 50, .alpha = 0.05){
+  # Compute acf and pac.alpha
+  tmp_acf = ts_tbl |> ACF(!!as.symbol(.var), lag_max = .lag)
+  corfun = "acf"
+  tmp_pacf = ts_tbl |> PACF(!!as.symbol(.var), lag_max = .lag)
+  corfun = "pacf"
+
+  # Confidence interval
+  ci_lim = qnorm((1 + (1 - .alpha)) /2) / sqrt(nrow(ts_tbl) / 2)
+
+  # Generate plot
+  plt_acf = tmp_acf |>
+    ggplot(aes(x = lag, y = acf)) +
+    geom_segment(mapping = aes(xend = lag, yend = 0)) +
+    geom_hline(aes(yintercept = ci_lim), linetype = 2, colour = 'blue') +
+    geom_hline(aes(yintercept = -ci_lim), linetype = 2, colour = 'blue') +
+    facet_wrap(
+      ~ site,
+      nrow = 2,
+      scales = "free_y") +
+    labs(x = "lag (days)")
+  plt_pacf = tmp_pacf |>
+    ggplot(aes(x = lag, y = pacf)) +
+    geom_segment(mapping = aes(xend = lag, yend = 0)) +
+    geom_hline(aes(yintercept = ci_lim), linetype = 2, colour = 'blue') +
+    geom_hline(aes(yintercept = -ci_lim), linetype = 2, colour = 'blue') +
+    facet_wrap(
+      ~ site,
+      nrow = 2,
+      scales = "free_y") +
+    labs(x = "lag (days)")
+  plt_acf + plt_pacf + plot_layout(axis_title="collect")
+}
+
+
+# Utility functions ------------------------------------------------------------
+#' Z-score data
+#' @param  .data time series (vector)
+#' @export
+zs_fun <- 
+  function(.data) {
+    (.data - mean(.data, na.rm = TRUE)) / sd(.data, na.rm = TRUE)
+    }
+
+
+#' Stabilise time series
+#' regression (optional)
+#' @param .var variable to detrend (time series/vector)
+#' @param .index time index in y-m-d (time series/vector)
+#' @param .xdays whether to remove effect of special days (e.g., Christmus)
+#' @param .wdays whether to remove effect of week days
+#' @param .stationary whether to make .var stationary
+#' @param .detrend whether to detrend .var (LOESS) - only if .stationary = FALSE
+#' @export
+stabilise <- 
+  function(
+    .var, .index, 
+    .xdays = FALSE, .wdays = FALSE, .stationary = FALSE, .detrend = FALSE
+  ) {
+    # Prepare data
+    tmp_data = 
+      tibble(index = .index, var = .var) %>% 
+      mutate(
+        var_mean = mean(var),
+        var_demean = var - var_mean
+      ) %>% 
+      as_tsibble(index = index)
+    
+    # Remove effects of special days
+    if (.xdays) {
+      christmus_period = 
+        .index %>% base::format("%Y") %>% unique() %>%  # years in data
+        map(\(.year) {
+          seq(
+            as.Date(str_glue("{.year}-12-24")), 
+            as.Date(str_glue("{.year}-12-26")),
+            by = "days")
+        }) %>% 
+        purrr::reduce(c)
+      
+      tmp_data = 
+        tmp_data %>% 
+        mutate(
+          christmus = 
+            case_when(index %in% christmus_period ~ 1, .default = 0) %>%
+            ksmooth(index, ., kernel = "normal", bandwidth = 5) %>% .$y
+        )
+      
+      fit_xdays =
+        tmp_data %>% model(TSLM(formula("var ~ christmus"))) %>%
+        coef() %>% filter(term == "christmus") %>% select(estimate) %>% pull()
+
+      tmp_data =
+        tmp_data %>% 
+        mutate(var = var - c(christmus * fit_xdays),
+               var_mean = mean(var), # new data mean
+               var_demean = var - var_mean) # new mean-subtracted data 
+    }
+    
+    # Remove effects of week days
+    if (.wdays) {
+      fit_wdays =
+        tmp_data %>% 
+        mutate(
+          wdays = factor(weekdays(index))
+        ) %>% 
+        model(lm = TSLM(var_demean ~ wdays)) %>% # fit on mean-subtracted data
+        residuals() %>% pull(.resid)
+      
+      tmp_data =
+        tmp_data %>% 
+        mutate(var = fit_wdays + var_mean, # add back the mean 
+               var_demean = fit_wdays) # new mean-subtracted data 
+    }
+    
+    # Detrend
+    if (.detrend) {
+      tmp_loess = 
+        tmp_data %>% 
+        mutate(index = index %>% as.numeric()
+        ) %>% # fit mean-subtracted .var
+        loess(var ~ index, data = ., span = 0.3) %>% 
+        predict()
+      tmp_loess = tmp_loess - mean(tmp_loess) # mean-subtracted loess fit
+    }
+    
+    # Make stationary
+    if (.stationary) {
+      is_stationary =
+        tmp_data %>% features(var, unitroot_kpss) %>% 
+        select(kpss_pvalue) %>% {(pull(.) > 0.05)}
+      while (!is_stationary) {
+        if (tmp_data %>% features(var, unitroot_nsdiffs) %>% pull() > 0) {
+          tmp_data = tmp_data %>% mutate(var = difference(var, 7))
+        }
+        if (tmp_data %>% features(var, unitroot_ndiffs) %>% pull() > 0) {
+          tmp_data = tmp_data %>% mutate(var = difference(var))
+        }
+        is_stationary =
+          tmp_data %>% features(var, unitroot_kpss) %>% 
+          select(kpss_pvalue) %>% {(pull(.) > 0.05)}
+      }
+      tmp_data =
+        tmp_data %>% # fill NA with mean
+        mutate(var = replace_na(var, mean(var, na.rm = TRUE)))
+    }
+    
+    return(tmp_data %>% pull(var))
+  }
+
+
+#' Silent function
+#' @param .fun function to run without plots
+#' @export
+save_plot <- 
+  function(.fun) {
+    dev.new(width = 10, height = 10) # open null graphic device (big enough!)
+    .fun
+    tmp_plot = recordPlot()
+    dev.off()
+    tmp_plot
   }
