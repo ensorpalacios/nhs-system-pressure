@@ -1,6 +1,19 @@
 #' Plot predictors data
 
-#' Generate plot to describe predictors data and their relationship with bed occupancy
+#' Generate plot to describe predictors data and their relationship with bed occupancy.
+#' Lagged regression (LagReg(input, output)):
+#' Find coefficients \betas of lagged regression model 
+#' y = Sum_r(beta_r * x_r) + v_r, where r is lag, y is output signal, x
+#' is input signal, and v is iid noise. Steps:
+#' - pectral analysis of y and x to get coh, individual spectra, phase
+#' - Fourier reppresentation of \betas (B) computed as 
+#' sqrt(coh * spec_output/spec_input) * exp(1i * phase), where sqrt(.) is the
+#' magnitude of the input/output gain (amplification of input into output at
+#' certain freq) adjusted by the coh (linear, "predictable" x-y relationship 
+#' for each freq) and exp(.) is the phase shift between input and output.
+#' - Invert B, by discretizing the defining integral, to get the coefficients
+#' betas 
+
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles and Practice
 #' CI auto-/cross-corraltion is 1−α/2 quantile * standard deviation of 
 #' autocorrelation (sqrt(var)=1/sqrt(n))
@@ -8,22 +21,59 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-08
 
-# Shebang ---------------------------------------------------------------------
-# !/usr/loca/bin/Rscript
-
 # Import libraries ------------------------------------------------------------
 source("src/packages.R")
 source("src/split-data.R")
 
 
+
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
 ts_occ <- readRDS(file = data_path)
-sites <- ts_occ$site %>% unique
+sites <- ts_occ$site %>% unique()
 
 
-# Plot single predictors (highlight imputations) ------------------------------
-# Admissions
+
+# Plot bed occupancy -----------------------------------------------------------
+# With missing values
+plot_occ_miss <- 
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "BRI") %>%  .$bed_occ_m,
+    title = "Bed occupancy",
+    subtitle = "BRI"
+    ) +
+  ggplot_na_imputations(
+    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ_m,
+    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ_i,
+    size_imputations = 5,
+    title = NULL,
+    subtitle = "Southmead"
+    ) +
+  plot_layout(ncol = 1, axis = "collect_x")
+
+
+# Full data
+plot_occ <-
+  ts_occ |> 
+    ggplot(aes( x = index, y = bed_occ, colour=site)) +
+    geom_line(linewidth = 1) +
+    facet_wrap(
+      ~site,
+      nrow = 2, 
+      scales = "free_y") +
+    labs(y = "bed occupancy") +
+    theme(
+      legend.position="none",
+      axis.title.x = element_blank()
+    )
+
+
+plot_occ_acf = plot_cf(ts_occ, .var = "bed_occ", .lag = 100)
+
+
+
+# Plot row predictors (highlight imputations) ----------------------------------
+# Admissions - missing
 plot_adm_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$adm_m,
@@ -39,7 +89,8 @@ plot_adm_miss <-
     ) +
   plot_layout(ncol = 1, axis = "collect_x")
 
-# Discharges
+
+# Discharges - missing
 plot_dis_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$dis_m,
@@ -55,34 +106,94 @@ plot_dis_miss <-
     ) +
   plot_layout(ncol = 1, axis = "collect_x")
 
-# Bed escalation
-plot_escal_miss <-
-  ggplot_na_distribution(
-    ts_occ %>% filter(site == "BRI") %>%  .$bed_escal_m,
-    title = "Escalation bed",
-    subtitle = "BRI"
-    ) +
-  ggplot_na_imputations(
-    ts_occ %>% filter(site == "Southmead") %>% .$bed_escal_m,
-    ts_occ %>% filter(site == "Southmead") %>% .$bed_escal,
-    size_imputations = 5,
-    title = NULL,
-    subtitle = "Southmead"
-    ) +
-  plot_layout(ncol = 1, axis = "collect_x")
+
+# Admission - discharges (raw and filtered)
+tbl_ad_diff <- 
+  ts_occ %>%
+  pivot_longer(
+    cols = c(ad_diff, ad_diff2, ad_diff_f, ad_diff2_f),
+    names_to = "var"
+  ) %>% 
+  mutate(
+    var = factor(var)#, levels = c("ad_diff", "filtered"))
+  )
+plot_ad_diff <- 
+  tbl_ad_diff %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x = index, y = value, colour = site)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(vars(var), ncol = 1, scales = "free")
+
+plot_ad_diff_acf = plot_cf(ts_occ, .var = "ad_diff", .lag = 100)
+plot_ad_diff2_acf = plot_cf(ts_occ, .var = "ad_diff2", .lag = 100)
+plot_ad_diff3_acf = plot_cf(ts_occ, .var = "ad_diff3", .lag = 100)
+plot_ad_diff_f_acf = plot_cf(ts_occ, .var = "ad_diff_f", .lag = 100)
+plot_ad_diff2_f_acf = plot_cf(ts_occ, .var = "ad_diff2_f", .lag = 100)
+plot_ad_diff3_f_acf = plot_cf(ts_occ, .var = "ad_diff3_f", .lag = 100)
+
+
+# Bed escalation (raw and filtered)
+tbl_escal <- 
+  ts_occ %>%
+  select(bed_escal) %>% 
+  pivot_longer(
+    cols = c(bed_escal),
+    names_to = "var"
+  ) %>% 
+  mutate(
+    var = factor(var)#, levels = c("ad_diff", "filtered"))
+  )
+plot_bed_escal <- 
+  tbl_escal %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x = index, y = value)) +
+  geom_line(linewidth = 1) +
+  # geom_point(
+  #   data = tbl_escal %>% filter(bed_escal_c == T),
+  #   aes(x = index, y = -5, size = 2), 
+  #   colour = "black"
+  # ) +
+  facet_wrap(vars(site), ncol = 1, scales = "free")
+
 
 
 # Plot bed occupancy and predictors -------------------------------------------
-# Time series
-ts_occ_l <- # convert in long format
+ex_var = c(
+  "ad_diff", "ad_diff2", "ad_diff3", 
+  "ad_diff_f", "ad_diff2_f", "ad_diff3_f",
+  "bed_occ_other"
+  )
+
+
+# Time series - all bed data
+plot_beds <- 
   ts_occ %>% 
-    pivot_longer(
-      cols = c(bed_occ, adm, dis, bed_escal),
-      names_to = "var"
+  pivot_longer(
+    cols = c(bed_occ_i,
+             bed_core),
+    names_to = "var"
     ) %>% 
       mutate(
-        var = factor(var, levels = c("bed_occ", "adm", "dis", "bed_escal"))
-      )
+        var = factor(
+          var
+          )
+      ) %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x = index, y = value, colour = var)) +
+  geom_line() +
+  facet_wrap(vars(site), ncol = 1, scales = "free")
+
+
+# Time series - bed occupation and predictors
+ts_occ_l <- # convert in long format
+  ts_occ %>% 
+  pivot_longer(
+    cols = c(bed_occ, all_of(ex_var)),
+    names_to = "var"
+  ) %>% 
+  mutate(
+    var = factor(var)
+  )
 plot_together <- # plot
   ts_occ_l |>
   as.data.frame() |> 
@@ -90,38 +201,80 @@ plot_together <- # plot
   geom_line() +
   facet_wrap(vars(var), ncol = 1, scales = "free")
 
-# Plot cross-correlation (! positive values means var_ccf leads bed occupancy)
-var_ccf = c("adm", "dis", "bed_escal")
-tbl_ccf = # compute ccf
-  map(var_ccf, \(x) {
-    tmp_ccf = ts_occ |> 
-      CCF(bed_occ, !!as.symbol(x)) |>
-      mutate(var = x) |>
-      update_tsibble(key = c(site, var))
-  }) |> bind_rows()
 
-alpha_= 0.05
-ci_lim <- # confidence interval (see descriptive-plot.R) 
-  qnorm((1 + (1 - alpha_)) /2) / sqrt(nrow(ts_occ) / 2) #
+# Cross-correlation (! positive values means ex_var leads bed occupancy)
+# alpha_ <-  0.05
+# ci_lim <- # confidence interval (see descriptive-plot.R) 
+#   qnorm((1 + (1 - alpha_)) / 2) / sqrt(nrow(ts_occ) / 2) #
+# 
+# tbl_ccf = # compute ccf
+#   map(ex_var, \(x) {
+#     tmp_ccf = ts_occ |> 
+#       CCF(bed_occ, !!as.symbol(x)) |>
+#       mutate(var = x) |>
+#       update_tsibble(key = c(site, var))
+#   }) |> bind_rows()
+# 
+# plot_ccf <-  # plot ccf
+#   tbl_ccf |>
+#     ggplot(aes(x = lag, y = ccf, group = var)) +
+#     geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#     geom_hline(
+#       aes(yintercept = ci_lim), 
+#       linetype = 2, 
+#       colour = 'blue') +
+#     geom_hline(
+#       aes(yintercept = -ci_lim), 
+#       linetype = 2, 
+#       colour = 'blue') +
+#     labs(x = "lag (days)") +
+#     facet_wrap(
+#       factor(var) ~., 
+#       ncol = 1)
+#     # xlim(0, NA) # causes warning
 
-plot_ccf <-  # plot ccf
-  tbl_ccf |>
-    ggplot(aes(x = lag, y = ccf, group = var)) +
-    geom_segment(mapping = aes(xend = lag, yend = 0)) +
-    geom_hline(
-      aes(yintercept = ci_lim), 
-      linetype = 2, 
-      colour = 'blue') +
-    geom_hline(
-      aes(yintercept = -ci_lim), 
-      linetype = 2, 
-      colour = 'blue') +
-    labs(x = "lag (days)") +
-    facet_wrap(
-      factor(var, levels = c("adm", "dis", "bed_escal")) ~., 
-      ncol = 1)
-    # xlim(0, NA) # causes warning
 
+# Lags/spectral analysis
+plot_lags =
+  map(sites, \(.site) {
+    tmp_data = 
+      ts_occ %>% filter(site == .site) %>% as_tibble() %>% 
+      select(c("bed_occ", all_of(ex_var))) %>%
+      ts(frequency = 7)
+    
+    # Pre-whitened cross-correlation
+    plt_pwcorr =
+      map(ex_var, \(.ex) {
+        save_plot(pre.white(tmp_data[, .ex], tmp_data[, "bed_occ"]))
+      }) %>% 
+      set_names(ex_var)
+    
+    # Lagged regression
+    plt_lagreg = 
+      map(ex_var, \(.ex) {
+        list(
+          "ex-occ" = 
+            save_plot(
+              LagReg(tmp_data[, .ex], tmp_data[, "bed_occ"], L = 10, M = 30)
+            ),
+          "occ-ex" = 
+            save_plot(
+              LagReg(tmp_data[, .ex], tmp_data[, "bed_occ"], L = 10, M = 30,
+                     inverse = TRUE)
+            )
+        )
+      }) %>% 
+      set_names(ex_var)
+    
+    # Spectrum
+    plt_spectr = save_plot(tmp_data %>% .[, "bed_occ"] %>% spectrum(span = 15))
+    
+    list(
+      "plt_pwcorr" = plt_pwcorr, 
+      "plt_lagreg" = plt_lagreg, 
+      "plt_spectr" = plt_spectr)
+  }) %>% 
+  set_names(sites)
 
 # Save plots ------------------------------------------------------------------
 save_path <- here("output/plots/predictors/")
@@ -131,19 +284,61 @@ if (!file.exists(save_path)) {
 }
 
 ls_plots <- list(
-  "adm_miss" = plot_adm_miss, 
-  "dis_miss" = plot_dis_miss, 
-  "escal_miss" = plot_escal_miss,
-  "all" = plot_together, 
-  "ccf" = plot_ccf
+  "occ_miss" = plot_occ_miss,
+  "occ" = plot_occ,
+  "occ_acf" = plot_occ_acf,
+  "adm_miss" = plot_adm_miss,
+  "dis_miss" = plot_dis_miss,
+  "dis_miss" = plot_dis_miss,
+  "ad_diff" = plot_ad_diff,
+  "ad_diff_acf" = plot_ad_diff_acf,
+  "ad_diff2_acf" = plot_ad_diff2_acf,
+  "ad_diff3_acf" = plot_ad_diff3_acf,
+  "ad_diff_f_acf" = plot_ad_diff_f_acf,
+  "ad_diff2_f_acf" = plot_ad_diff2_f_acf,
+  "ad_diff3_f_acf" = plot_ad_diff3_f_acf,
+  "bed_escal" = plot_bed_escal,
+  "beds" = plot_beds,
+  "together" = plot_together
+  )
+ls_plots_lag <- list(
+  "spectr" = plot_lags %>% map(., ~ ( pluck(.x, "plt_spectr"))),
+  "pwccf" = plot_lags %>% map(., ~ ( pluck(.x, "plt_pwcorr"))),
+  "lagreg" = plot_lags %>% map(., ~ ( pluck(.x, "plt_lagreg")))
   )
 
-pwalk(list(ls_plots, ls_plots %>% names), \(tmp_plot, tmp_title) {
-  tmp_plot %>% 
+iwalk(ls_plots, \(.plot, .title) {
+  .plot %>% 
     ggsave(
-      filename = paste(save_path, tmp_title, ".eps"),
-      width = 35, 
-      height = 20, 
-      units = "cm", 
+      filename = paste(save_path, .title, ".eps"),
+      width = 35, height = 20, units = "cm", 
       device = cairo_ps)
+})
+
+iwalk(ls_plots_lag, \(.plots, .title) {
+  .plots %>% imap(., \(.plt, .site) {
+      if (.title == "spectr") {
+        svg(str_glue("{save_path}{.title}_{.site}.svg"))
+        print(.plt)
+        dev.off()
+      } else if (.title == "pwccf") {
+        .plt %>%
+          iwalk(., \(.x, .ex) {
+            svg(str_glue("{save_path}{.title}_{.ex}_{.site}.svg"))
+            print(.x)
+            dev.off()
+          })
+      } else if (.title == "lagreg") {
+        .plt %>%
+          iwalk(., \(.x, .ex) {
+            iwalk(.x, \(.x, .var_order) {
+              svg(
+                str_glue("{save_path}{.title}_{.ex}_{.site}_{.var_order}.svg")
+                )
+            print(.x)
+            dev.off()
+            })
+          })
+      }
+  })
 })
