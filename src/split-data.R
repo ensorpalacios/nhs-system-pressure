@@ -31,7 +31,7 @@ lag_fun <-
       tmp_lagged = # design matrix
         tmp_data %>% as_tibble() %>% 
         select(-c(index, site, days_, t_ax)) %>% 
-        relocate(bed_occ) %>% 
+        relocate(occ) %>% 
         as.data.table() %>% one_hot() %>% as.matrix()
        # names() %>% 
        #  paste(collapse = "+") %>% paste("~ 0 +", .) %>% formula() %>% 

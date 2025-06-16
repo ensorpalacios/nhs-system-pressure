@@ -28,7 +28,7 @@ source("src/split-data.R")
 
 
 # Load data -------------------------------------------------------------------
-data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
+data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
 sites <- ts_occ$site %>% unique()
 
@@ -38,13 +38,13 @@ sites <- ts_occ$site %>% unique()
 # With missing values
 plot_occ_miss <- 
   ggplot_na_distribution(
-    ts_occ %>% filter(site == "BRI") %>%  .$bed_occ_m,
+    ts_occ %>% filter(site == "BRI") %>%  .$occ_m,
     title = "Bed occupancy",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
-    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ_m,
-    ts_occ %>% filter(site == "Southmead") %>% .$bed_occ_i,
+    ts_occ %>% filter(site == "Southmead") %>% .$occ_m,
+    ts_occ %>% filter(site == "Southmead") %>% .$occ_i,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -55,7 +55,7 @@ plot_occ_miss <-
 # Full data
 plot_occ <-
   ts_occ |> 
-    ggplot(aes( x = index, y = bed_occ, colour=site)) +
+    ggplot(aes( x = index, y = occ, colour=site)) +
     geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
@@ -68,7 +68,7 @@ plot_occ <-
     )
 
 
-plot_occ_acf = plot_cf(ts_occ, .var = "bed_occ", .lag = 100)
+plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
 
 
 
@@ -135,21 +135,21 @@ plot_ad_diff3_f_acf = plot_cf(ts_occ, .var = "ad_diff3_f", .lag = 100)
 # Bed escalation (raw and filtered)
 tbl_escal <- 
   ts_occ %>%
-  select(bed_escal) %>% 
+  select(escal) %>% 
   pivot_longer(
-    cols = c(bed_escal),
+    cols = c(escal),
     names_to = "var"
   ) %>% 
   mutate(
     var = factor(var)#, levels = c("ad_diff", "filtered"))
   )
-plot_bed_escal <- 
+plot_escal <- 
   tbl_escal %>% 
   as.data.frame() %>% 
   ggplot(aes(x = index, y = value)) +
   geom_line(linewidth = 1) +
   # geom_point(
-  #   data = tbl_escal %>% filter(bed_escal_c == T),
+  #   data = tbl_escal %>% filter(escal_c == T),
   #   aes(x = index, y = -5, size = 2), 
   #   colour = "black"
   # ) +
@@ -161,7 +161,7 @@ plot_bed_escal <-
 ex_var = c(
   "ad_diff", "ad_diff2", "ad_diff3", 
   "ad_diff_f", "ad_diff2_f", "ad_diff3_f",
-  "bed_occ_other"
+  "occ_other"
   )
 
 
@@ -169,8 +169,8 @@ ex_var = c(
 plot_beds <- 
   ts_occ %>% 
   pivot_longer(
-    cols = c(bed_occ_i,
-             bed_core),
+    cols = c(occ_i,
+             core),
     names_to = "var"
     ) %>% 
       mutate(
@@ -188,7 +188,7 @@ plot_beds <-
 ts_occ_l <- # convert in long format
   ts_occ %>% 
   pivot_longer(
-    cols = c(bed_occ, all_of(ex_var)),
+    cols = c(occ, all_of(ex_var)),
     names_to = "var"
   ) %>% 
   mutate(
@@ -210,7 +210,7 @@ plot_together <- # plot
 # tbl_ccf = # compute ccf
 #   map(ex_var, \(x) {
 #     tmp_ccf = ts_occ |> 
-#       CCF(bed_occ, !!as.symbol(x)) |>
+#       CCF(occ, !!as.symbol(x)) |>
 #       mutate(var = x) |>
 #       update_tsibble(key = c(site, var))
 #   }) |> bind_rows()
@@ -239,13 +239,13 @@ plot_lags =
   map(sites, \(.site) {
     tmp_data = 
       ts_occ %>% filter(site == .site) %>% as_tibble() %>% 
-      select(c("bed_occ", all_of(ex_var))) %>%
+      select(c("occ", all_of(ex_var))) %>%
       ts(frequency = 7)
     
     # Pre-whitened cross-correlation
     plt_pwcorr =
       map(ex_var, \(.ex) {
-        save_plot(pre.white(tmp_data[, .ex], tmp_data[, "bed_occ"]))
+        save_plot(pre.white(tmp_data[, .ex], tmp_data[, "occ"]))
       }) %>% 
       set_names(ex_var)
     
@@ -255,11 +255,11 @@ plot_lags =
         list(
           "ex-occ" = 
             save_plot(
-              LagReg(tmp_data[, .ex], tmp_data[, "bed_occ"], L = 10, M = 30)
+              LagReg(tmp_data[, .ex], tmp_data[, "occ"], L = 10, M = 30)
             ),
           "occ-ex" = 
             save_plot(
-              LagReg(tmp_data[, .ex], tmp_data[, "bed_occ"], L = 10, M = 30,
+              LagReg(tmp_data[, .ex], tmp_data[, "occ"], L = 10, M = 30,
                      inverse = TRUE)
             )
         )
@@ -267,7 +267,7 @@ plot_lags =
       set_names(ex_var)
     
     # Spectrum
-    plt_spectr = save_plot(tmp_data %>% .[, "bed_occ"] %>% spectrum(span = 15))
+    plt_spectr = save_plot(tmp_data %>% .[, "occ"] %>% spectrum(span = 15))
     
     list(
       "plt_pwcorr" = plt_pwcorr, 
@@ -297,7 +297,7 @@ ls_plots <- list(
   "ad_diff_f_acf" = plot_ad_diff_f_acf,
   "ad_diff2_f_acf" = plot_ad_diff2_f_acf,
   "ad_diff3_f_acf" = plot_ad_diff3_f_acf,
-  "bed_escal" = plot_bed_escal,
+  "escal" = plot_escal,
   "beds" = plot_beds,
   "together" = plot_together
   )

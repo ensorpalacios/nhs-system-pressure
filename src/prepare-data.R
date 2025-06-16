@@ -1,8 +1,8 @@
 #' Preprocess data
 #'
 #' Load, clean and recode data.
-#' Attention: bed_occ is total number of beds used, whereas bed_escal and 
-#' bed_core are beds open, not used; however, assume that core beds are fully 
+#' Attention: occ is total number of beds used, whereas escal and 
+#' core are beds open, not used; however, assume that core beds are fully 
 #' used before escalation beds, meaning that core beds open = used, and we can
 #' recover escalation beds from total - core.
 #'
@@ -45,9 +45,9 @@ df_occ <-
         "NBT" ~ "Southmead"),
       adm = `Number of Admissions`,
       dis = `Number of Discharges`,
-      bed_escal = `Escalation beds open`,
-      bed_core = `Core stock open`,
-      bed_occ = `Bed occupancy`,
+      escal = `Escalation beds open`,
+      core = `Core stock open`,
+      occ = `Bed occupancy`,
       provider = NULL,
       `Number of Admissions` = NULL,
       `Number of Discharges` = NULL,
@@ -77,14 +77,14 @@ ts_occ <- # impute
   group_by(site) %>% 
   mutate(
     # Save data with missing values
-    bed_occ_m = bed_occ,
+    occ_m = occ,
     dis_m = dis,
     adm_m = adm,
-    bed_escal_m = bed_escal,
-    bed_core_m = bed_core,
+    escal_m = escal,
+    core_m = core,
     # Impute (simple moving average, window=7)
-    bed_occ_i = bed_occ %>% na_ma(k = 3, weighting = "simple"),
-    bed_core = bed_core %>% na_ma(k = 3, weighting = "simple"),
+    occ_i = occ %>% na_ma(k = 3, weighting = "simple"),
+    core = core %>% na_ma(k = 3, weighting = "simple"),
     dis = dis %>% na_ma(k = 3, weighting = "simple"),
     adm = adm %>% na_ma(k = 3, weighting = "simple"),
   ) %>% 
@@ -97,14 +97,14 @@ ts_occ <-
   group_by(site) %>% 
   mutate(
     # Process bed escalation
-    bed_escal = # assume bed_core = core bed actually used
-      (bed_occ - bed_core) %>% if_else(. < 0, 0, .), 
-    # bed_escal_c = bed_escal %>% slide(aa, .before = 3),
+    escal = # assume core = core bed actually used
+      (occ - core) %>% if_else(. < 0, 0, .), 
+    # escal_c = escal %>% slide(aa, .before = 3),
 
-    # New bed occupation (scaled by bed_core)
-    bed_occ = bed_occ_i / bed_core, # scale bed_occ by bed_core
-    bed_occ = # subtract holidays effect + detrend
-      stabilise(bed_occ, index, .xdays = TRUE, .detrend = TRUE),
+    # New bed occupation (scaled by core)
+    occ = occ_i / core, # scale occ by core
+    occ = # subtract holidays effect + detrend
+      stabilise(occ, index, .xdays = TRUE, .detrend = TRUE),
 
     # New admission-discharge variables
     ad_diff = adm - dis, # difference
@@ -119,8 +119,8 @@ ts_occ <-
     ad_diff3_f = slide_dbl(ad_diff3, mean, .before = 2),
     
     # Z-score
-    bed_core = (1 - mean(bed_occ)) / sd(bed_occ), # as 100% ref for new bed_occ
-    bed_occ = zs_fun(bed_occ),
+    core = (1 - mean(occ)) / sd(occ), # as 100% ref for new occ
+    occ = zs_fun(occ),
     ad_diff = zs_fun(ad_diff),
     ad_diff2 = zs_fun(ad_diff2),
     ad_diff_f = zs_fun(ad_diff_f),
@@ -129,8 +129,8 @@ ts_occ <-
   ) %>% 
   ungroup()
 
-ts_occ$bed_occ_other <- # add bed occupancy other hospital
-  ts_occ %>% arrange(rev(site)) %>% pull(bed_occ)
+ts_occ$occ_other <- # add bed occupancy other hospital
+  ts_occ %>% arrange(rev(site)) %>% pull(occ)
 
 
 # Add days of week and time index
@@ -149,4 +149,4 @@ if (!file.exists(save_path)) {
     dir.create(save_path, recursive = TRUE)
 }
 
-saveRDS(ts_occ, file = paste0(save_path, 'bed_occupancy.RDS'))
+saveRDS(ts_occ, file = paste0(save_path, 'tbl_occ.RDS'))
