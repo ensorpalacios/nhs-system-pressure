@@ -26,8 +26,18 @@ source("src/split-data.R")
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
 fc_path <- here("output/fits/forecasts_short.RDS")
+
 split_data_cv <- readRDS(file = split_path)
 fc_all <- readRDS(file = fc_path)
+
+
+
+# Remove aggregated data -------------------------------------------------------
+split_data_cv <- 
+  split_data_cv %>% filter(!is_aggregated(site))
+fc_all <- 
+  fc_all %>% filter(!is_aggregated(site))
+
 
 
 # Helper functions -------------------------------------------------------------
@@ -104,12 +114,12 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
     tmp_data =
       .data$all %>% 
       filter(type == "test") %>% 
-      select(split, site, index, bed_occ) %>% 
+      select(split, site, index, occ) %>% 
       left_join(
         .data$test %>%
           as_tibble() %>%
-          select(index, .model, bed_occ) %>% 
-          pivot_wider(names_from = .model, values_from = bed_occ),
+          select(index, .model, occ) %>% 
+          pivot_wider(names_from = .model, values_from = occ),
         by = "index"
       )
     
@@ -118,7 +128,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
     penalty = c("upper", "none", "lower")
     map(penalty, \(.penalty) {
       map(ls_models, \(.model_name) {
-        tmp_obs = tmp_data[["bed_occ"]]
+        tmp_obs = tmp_data[["occ"]]
         tmp_fc = tmp_data[[.model_name]] # forecast distribution
         tibble(
           split = tmp_data$split,
@@ -145,20 +155,30 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
   }
 
 
+
 # Compute/summarise metrics ----------------------------------------------------
 # Compute
 list_models_w <- # select models
   c(
     "arima",
-    "arima_d",
     "arima_dad",
-    "arima_de",
-    "arima_dade",
-    "es_e",
-    "rf",
+    "arima_dad_l",
+    "arima_dad_nof",
+    "arima_dado",
+    "arima_dado_l",
+    "locf_arima_dad",
+    "locf_arima_dad_l",
+    "locf_arima_dad_l_nof_rec",
+    "locf_arima_dad_nof",
+    "locf_arima_dad_rec",
+    "locf_arima_dado",
+    "locf_arima_dado_l",
+    "locf_es_ado_f",
+    "rf_dado_f",
     "mean",
     "naive",
     "snaive")
+
 
 metrics <- # compute metrics
   cv_wrap(
@@ -170,6 +190,7 @@ metrics <- # compute metrics
   flatten() %>%
   bind_rows()
 
+
 # Wrangling
 n_split <- # number of splits 
   metrics$split %>% unique() %>% tail(1) %>% as.numeric()
@@ -180,11 +201,11 @@ metrics <- # add joint time axis
   mutate(
     t_ax = as.numeric(index),
     t_ax = t_ax - (t_ax[1]),
-    t_ax = t_ax + 14 * (n_split - as.numeric(split))
+    t_ax = t_ax + 7 * (n_split - as.numeric(split))
   ) %>% 
   ungroup()
 
-metrics <- # scale by wilker from mean model
+metrics <- # scale by mean model score
   metrics %>% 
   group_by(site, penalty, metric, index) %>%
   mutate(
@@ -192,34 +213,91 @@ metrics <- # scale by wilker from mean model
   ) %>% 
   ungroup()
 
-# Summarise
-metrics_summary <-
+metrics <-   
   metrics %>% 
   mutate(
     penalty = factor(penalty) %>% fct_rev()
-  ) %>% 
+  )
+
+# Summarise
+var_summary <- 
+  c(
+    "mean", # Either one of mean, naive, snaive
+    "naive", # Either one of mean, naive, snaive
+    "snaive", # Either one of mean, naive, snaive
+    "arima_dad_l", # looks the best (2024-06-22)
+    "arima_dado_l", # looks the best (2024-06-22)
+    "locf_arima_dad",
+    "locf_arima_dad_rec",
+    "locf_arima_dado",
+    "rf_dado_f"
+  )
+
+tmp_metrics <- 
+  metrics %>%  
+  filter(models %in% var_summary) # select variables for summary
+
+metrics_summary <- 
+  tmp_metrics %>%  
+  filter(models %in% var_summary) %>%
   group_by(split, site, penalty, index, metric) %>% 
-  summarise(
-    # Add time axis
-    "t_ax" = t_ax[1],
-    # Take best model
-    "value_min" = min(value),
+  summarise( # take best model
+    "value_min" = min(value_s),
     "best_model" = 
-      models[which.min(value)] %>% 
+      models[which.min(value_s)] %>% 
       {if (grepl("mean|naive|snaive", .)) "baseline_min" else .},
-    # Scale score by best score
-    "arima_dade" = value[models == "arima_dade"] / value_min,
-    "arima_de" = value[models == "arima_de"] / value_min,
-    "es_e" = value[models == "es_e"] / value_min,
-    # Pull baseline models together
-    "baseline_min" =
-      min(value[grepl("mean|naive|snaive", models)]) / value_min,
   ) %>% 
-  pivot_longer(
-    cols = -c(split:best_model),
-    names_to = "models"
-  ) %>% 
-  ungroup()
+  ungroup() %>% 
+  inner_join(tmp_metrics) %>% # join to tibble
+  group_by(split, site, penalty, index, metric) %>% 
+  group_modify( # add baseline_model
+    \(.x, .y) {
+      tmp = .x %>% head(1)
+      tmp$models = "baseline_min"
+      tmp$value_s = 
+        min(.x$value_s[grepl("mean|naive|snaive", .x$models)])
+      .x %>% 
+      add_row(
+        tmp,
+        .before = 0
+      )
+    }
+  ) %>% # remove single baseline models
+  filter(!(models %in% c("mean", "naive", "snaive")))
+ 
+# metrics_summary <-
+#   metrics %>% 
+#   # mutate(
+#   #   penalty = factor(penalty) %>% fct_rev()
+#   # ) %>% 
+#   group_by(split, site, penalty, index, metric) %>% 
+#   summarise(
+#     # Add time axis
+#     "t_ax" = t_ax[1],
+#     # Take best model
+#     "value_min" = min(value),
+#     "best_model" = 
+#       models[which.min(value)] %>% 
+#       {if (grepl("mean|naive|snaive", .)) "baseline_min" else .},
+#     # Scale score by best score
+#     # "arima" = value[models == "arima"] / value_min,
+#     # "arima_dae" = value[models == "arima_dae"] / value_min,
+#     # # "arima_dae_c" = value[models == "arima_dae_c"] / value_min,
+#     # # "arima_dae_c_locf" = value[models == "arima_dae_c_locf"] / value_min,
+#     # "arima_dae_f" = value[models == "arima_dae_f"] / value_min,
+#     # "arima_dae_f_locf" = value[models == "arima_dae_f_locf"] / value_min,
+#     # "es_ae_c" = value[models == "es_ae_c"] / value_min,
+#     # "rf" = value[models == "rf"] / value_min,
+#     # Pull baseline models together
+#     "baseline_min" =
+#       min(value[grepl("mean|naive|snaive", models)]) / value_min,
+#   ) %>% 
+#   inner_join(metrics)
+#   pivot_longer(
+#     cols = -c(split:best_model),
+#     names_to = "models"
+#   ) %>% 
+#   ungroup()
 
 
 # Save -------------------------------------------------------------------------
@@ -228,9 +306,9 @@ if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
 
-wilker_data =
+metric_data =
   list(
   "metrics" = metrics,
   "metrics_summary" = metrics_summary
 )
-saveRDS(wilker_data, file = paste0(save_path, "metrics.RDS"))
+saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))
