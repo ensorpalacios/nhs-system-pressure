@@ -15,8 +15,9 @@
 #' @param .lag Number of lags
 #' @export
 lag_fun <- 
-  function(.data, .lag = 12) {
+  function(.data, .lag = 7) {
     .lag = .lag + 1 # include no lag
+    sites = .data$site %>% unique()
     
     map(sites, \(.site) {
       tmp_data = # site specific data
@@ -390,4 +391,34 @@ save_plot <-
     tmp_plot = recordPlot()
     dev.off()
     tmp_plot
+  }
+
+
+#' Locf function
+#' Create last observation carried forward dataset
+#' @param .data tibble with cv splits and sites as groups
+locf_fun <- 
+  function(.data, .var, .idx_test, .type) {
+    .data %>% 
+    group_by(split, site) %>% 
+      mutate(
+        across(
+          contains(.var), 
+          ~ {
+            tmp_lag = 
+              tryCatch({
+                cur_column() %>% str_sub(start = -1) %>% as.numeric()
+              }, warning = function(w) 0)
+            
+            if_else(
+              row_number() >= (.idx_test + tmp_lag),
+              if (.type == "locf") {
+                .x[.idx_test + tmp_lag - 1]
+              },
+              .x
+            )
+          }
+        )
+      ) %>% 
+      ungroup()
   }
