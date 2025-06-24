@@ -83,7 +83,8 @@ ts_occ <- # impute
     escal_m = escal,
     core_m = core,
     # Impute (simple moving average, window=7)
-    occ_i = occ %>% na_ma(k = 3, weighting = "simple"),
+    # occ_i = occ %>% na_ma(k = 3, weighting = "simple"),
+    occ = occ %>% na_ma(k = 3, weighting = "simple"),
     core = core %>% na_ma(k = 3, weighting = "simple"),
     dis = dis %>% na_ma(k = 3, weighting = "simple"),
     adm = adm %>% na_ma(k = 3, weighting = "simple"),
@@ -92,23 +93,55 @@ ts_occ <- # impute
 
 
 # Process data -----------------------------------------------------------------
+# # Add total core beds (used later to compute relative site weight)
+# ts_occ <-
+#   ts_occ %>% 
+#   as_tibble() %>% group_by(index) %>% 
+#   summarise(core_all = sum(core)) %>% 
+#   full_join(ts_occ, by = c("index")) %>% 
+#   as_tsibble(index = index, key = "site")
+
+# Process bed occupation and escalation
 ts_occ <- 
   ts_occ %>% 
   group_by(site) %>% 
   mutate(
-    # Process bed escalation
-    escal = # assume core = core bed actually used
-      (occ - core) %>% if_else(. < 0, 0, .), 
-    # escal_c = escal %>% slide(aa, .before = 3),
+    # Escalation
+    escal = # threshold above core
+      (occ - core) %>% if_else(. < 0, 0, .),
+    # Occupancy
+    occ = # stabilise (- holidays effect & detrend)
+      stabilise(occ, index, .xdays = TRUE, .detrend = TRUE)
+  ) %>% 
+  ungroup()
 
-    # New bed occupation (scaled by core)
-    occ = occ_i / core, # scale occ by core
-    occ = # subtract holidays effect + detrend
-      stabilise(occ, index, .xdays = TRUE, .detrend = TRUE),
 
-    # New admission-discharge variables
+# Aggregate BRI/Southmead
+ts_occ <- 
+  ts_occ %>%
+  aggregate_key(
+    site, 
+    occ = sum(occ),
+    adm = sum(adm),
+    dis = sum(dis),
+    escal = sum(escal),
+    core = sum(core),
+    occ_m = sum(occ_m),
+    adm_m = sum(adm_m),
+    dis_m = sum(dis_m),
+    escal_m = sum(escal_m),
+    core_m = sum(core_m),
+  )
+
+
+# Process admissions-discharges
+ts_occ <- 
+  ts_occ %>% 
+  group_by(site) %>% 
+  mutate(
+    # New variables
     ad_diff = adm - dis, # difference
-    ad_diff = # subtract holidays + week days effect
+    ad_diff = # stabilise (-holidays/week days effect)
       stabilise(ad_diff, index, .xdays = TRUE, .wdays = TRUE),
     ad_diff2 = c(0, diff(ad_diff)), # rate of change of ad_diff
     ad_diff3 = c(0, 0, diff(ad_diff, differences = 2)), # rate of rate of change
@@ -118,29 +151,44 @@ ts_occ <-
     ad_diff2_f = slide_dbl(ad_diff2, mean, .before = 2),
     ad_diff3_f = slide_dbl(ad_diff3, mean, .before = 2),
     
-    # Z-score
-    core = (1 - mean(occ)) / sd(occ), # as 100% ref for new occ
-    occ = zs_fun(occ),
-    ad_diff = zs_fun(ad_diff),
-    ad_diff2 = zs_fun(ad_diff2),
-    ad_diff_f = zs_fun(ad_diff_f),
-    ad_diff2_f = zs_fun(ad_diff2_f),
-    ad_diff3_f = zs_fun(ad_diff3_f),
+    # # Z-score
+    # core = (1 - mean(occ)) / sd(occ), # as 100% ref for new occ
+    # occ = zs_fun(occ),
+    # ad_diff = zs_fun(ad_diff),
+    # ad_diff2 = zs_fun(ad_diff2),
+    # ad_diff_f = zs_fun(ad_diff_f),
+    # ad_diff2_f = zs_fun(ad_diff2_f),
+    # ad_diff3_f = zs_fun(ad_diff3_f),
   ) %>% 
   ungroup()
 
-ts_occ$occ_other <- # add bed occupancy other hospital
-  ts_occ %>% arrange(rev(site)) %>% pull(occ)
 
-
-# Add days of week and time index
+# Add bed occupancy from other hospital
 ts_occ <- 
-  ts_occ |>  
+  ts_occ %>% 
+  index_by(index) %>%
+  mutate(
+    tmp_mask = site %in% c("BRI", "Southmead"),
+    occ_other = 
+      occ[tmp_mask] %>% 
+      rev() %>% 
+      .[tmp_mask %>% if_else(row_number(), NA) %>%  rank(na.last="keep")],
+    tmp_mask = NULL
+  ) %>% 
+  ungroup()
+
+
+# Add days of week and numeric time index
+ts_occ <- 
+  ts_occ %>%   
     mutate(
       days_ = format(index, "%a") |> 
         factor(levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")),
-      t_ax = rep(1:(length(days_)/2), 2)
+      # t_ax = rep(1:(length(days_)/2), 2)
+      t_ax = index %>% as.numeric(),
+      t_ax = t_ax - min(t_ax) + 1
     )
+
 
 
 # Save ts ---------------------------------------------------------------------
