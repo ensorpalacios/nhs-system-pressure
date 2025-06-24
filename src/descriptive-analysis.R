@@ -22,7 +22,7 @@ source("src/split-data.R")
 
 
 # Load occupancy data ---------------------------------------------------------
-data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
+data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
 sites <- ts_occ$site |> unique()
 
