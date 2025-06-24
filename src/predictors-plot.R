@@ -30,8 +30,11 @@ source("src/split-data.R")
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
+ts_occ <- 
+  ts_occ %>% 
+  filter(!is_aggregated(site)) %>% 
+  mutate(site = site %>% as.character())
 sites <- ts_occ$site %>% unique()
-
 
 
 # Plot bed occupancy -----------------------------------------------------------
@@ -44,7 +47,8 @@ plot_occ_miss <-
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$occ_m,
-    ts_occ %>% filter(site == "Southmead") %>% .$occ_i,
+    # ts_occ %>% filter(site == "Southmead") %>% .$occ_i,
+    ts_occ %>% filter(site == "Southmead") %>% .$occ,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -143,6 +147,7 @@ tbl_escal <-
   mutate(
     var = factor(var)#, levels = c("ad_diff", "filtered"))
   )
+
 plot_escal <- 
   tbl_escal %>% 
   as.data.frame() %>% 
@@ -169,7 +174,8 @@ ex_var = c(
 plot_beds <- 
   ts_occ %>% 
   pivot_longer(
-    cols = c(occ_i,
+    # cols = c(occ_i,
+    cols = c(occ,
              core),
     names_to = "var"
     ) %>% 
@@ -188,12 +194,13 @@ plot_beds <-
 ts_occ_l <- # convert in long format
   ts_occ %>% 
   pivot_longer(
-    cols = c(occ, all_of(ex_var)),
+    cols = c(occ, all_of(ex_var), -occ_other),
     names_to = "var"
   ) %>% 
   mutate(
     var = factor(var)
   )
+
 plot_together <- # plot
   ts_occ_l |>
   as.data.frame() |> 
