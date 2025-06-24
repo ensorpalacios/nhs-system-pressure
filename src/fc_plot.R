@@ -8,44 +8,55 @@
 #' @date 2025-05-01
 
 # Import packages ----------------------------------------------------------------
-library(ggplot2)
-library(scales)
-library(patchwork)
-library(tibble)
-library(purrr)
-library(dplyr)
-library(fable)
-import::from(here, here)
-import::from(tsibble, tsibble)
-source(here("src/colour-mapping.R"))
-source(here("src/split-data.R"))
+source("src/packages.R")
+source("src/split-data.R")
+source("src/colour-mapping.R")
 
 
 # Load data --------------------------------------------------------------------
-split_path = here("output/fits/splits_short.RDS")
-fc_path = here("output/fits/forecasts_short.RDS")
-split_data_cv = readRDS(split_path)
-fc_all = readRDS(fc_path)
+split_path <- here("output/fits/splits_short.RDS")
+fc_path <- here("output/fits/forecasts_short.RDS")
+
+split_data_cv <- readRDS(split_path)
+fc_all <- readRDS(fc_path)
+
+# Recode sites
+rec_fun <- 
+  function(.tbl) {
+    .tbl %>% 
+      mutate(
+        site = if_else(is_aggregated(site), "aggregate", site),
+        site = site %>% as.character()
+      )
+  }
+split_data_cv <- 
+  split_data_cv %>% rec_fun()
+fc_all <-
+  fc_all %>% rec_fun()
+
 
 
 # Generate plots ---------------------------------------------------------------
 # Plot forecasts
 list_models_f <- # select models for forecast plot
   c(
-    "arima",
-    "arima_d",
-    "arima_dad",
-    "arima_de",
-    "arima_dade",
-    "es_e",
     "mean",
-    # "naive", # don't plot - ci too wide
-    "snaive")
+    "snaive",
+    "arima_dad_l",
+    "arima_dado_l",
+    "locf_arima_dad",
+    "locf_arima_dad_rec",
+    "locf_arima_dado",
+    "rf_dado_f")
 
 
-plot_forecast <- # plot forecast
+fc_all <- 
+  fc_all %>% filter(.model %in% list_models_f)
+
+
+plot_forecast <- # plot forecast function
   function(.data) {
-    .data$all = # reduce length observations
+    .data$all = # reduce length observations (x axis)
       .data$all %>% 
       group_by(split, type, site) %>% 
       mutate(
@@ -63,12 +74,14 @@ plot_forecast <- # plot forecast
     
     .data$test %>% # plot
       autoplot() +
-      autolayer(.data$all, .vars = bed_occ) +
+      autolayer(.data$all, .vars = occ) +
       scale_colour_manual(name = "models", values = col_models) + 
       scale_fill_manual(name = "models", values = col_models) + 
       scale_y_continuous(breaks = c(600, 700)) +
       facet_wrap(vars(.model), ncol = 1, strip.position = "right")
   }
+
+
 
 
 plt_fc <- # generate plots 
@@ -86,6 +99,9 @@ if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
 
+sites = fc_all$site %>% unique() %>% as.character()
+splits = fc_all$split %>% unique() %>% as.character()
+
 walk(sites, \(.site) {
   walk(splits, \(.split) {
     tmp_path = str_glue("{save_path}{.site}_split{.split}.eps")
@@ -93,6 +109,3 @@ walk(sites, \(.site) {
       ggsave(file = tmp_path, width = 11, height = 7)
   })
 })
-
-
-
