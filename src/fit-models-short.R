@@ -145,7 +145,16 @@ fit_fable_var_ad <- # adm - dis
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
   model(
-    var_ad = VAR(vars(occ, ad_diff_f))
+    var_ad = VAR(vars(occ, ad_diff_f) ~ season(period = "week"))
+  )
+
+fit_fable_var_ad_nof <- # adm - dis not filtered
+  split_data_cv %>% 
+  filter(type == "train", !is_aggregated(site)) %>%
+  mutate(site = site %>% as.character()) %>% 
+  tsibble(index = index, key = c(split, site)) %>%
+  model(
+    var_ad_nof = VAR(vars(occ, ad_diff) ~ season(period = "week"))
   )
 
 fit_fable_var_ad2 <- # diff(adm - dis)
@@ -154,8 +163,18 @@ fit_fable_var_ad2 <- # diff(adm - dis)
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
   model(
-    var_ad2 = VAR(vars(occ, ad_diff2_f))
+    var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
   )
+
+fit_fable_var_ad2_nof <- # diff(adm - dis) not filtered
+  split_data_cv %>% 
+  filter(type == "train", !is_aggregated(site)) %>%
+  mutate(site = site %>% as.character()) %>% 
+  tsibble(index = index, key = c(split, site)) %>%
+  model(
+    var_ad2_nof = VAR(vars(occ, ad_diff2) ~ season(period = "week"))
+  )
+
 
 fit_fable_var_ad3 <- # diff(diff(adm - dis)
   split_data_cv %>% 
@@ -163,8 +182,18 @@ fit_fable_var_ad3 <- # diff(diff(adm - dis)
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
   model(
-    var_ad3 = VAR(vars(occ, ad_diff3_f))
+    var_ad3 = VAR(vars(occ, ad_diff3_f) ~ season(period = "week"))
   )
+
+fit_fable_var_ad3_nof <- # diff(diff(adm - dis) not filtered
+  split_data_cv %>% 
+  filter(type == "train", !is_aggregated(site)) %>%
+  mutate(site = site %>% as.character()) %>% 
+  tsibble(index = index, key = c(split, site)) %>%
+  model(
+    var_ad3_nof = VAR(vars(occ, ad_diff3) ~ season(period = "week"))
+  )
+
 
 fit_fable_var_other <- # BRI vs Southmead
   split_data_cv %>% 
@@ -174,7 +203,7 @@ fit_fable_var_other <- # BRI vs Southmead
   select(occ) %>% 
   pivot_wider(names_from = site, values_from = occ) %>% 
   model(
-    var_other = VAR(vars(BRI, Southmead)),
+    var_other = VAR(vars(BRI, Southmead) ~ season(period = "week"))
   )
 
 
@@ -294,14 +323,18 @@ fit_all =
     "fable" = fit_fable,
     "fable_agg" = fit_fable_agg,
     "fable_var_ad" = fit_fable_var_ad,
+    "fable_var_ad_nof" = fit_fable_var_ad,
     "fable_var_ad2" = fit_fable_var_ad2,
+    "fable_var_ad2_nof" = fit_fable_var_ad2_nof,
     "fable_var_ad3" = fit_fable_var_ad3,
+    "fable_var_ad3_nof" = fit_fable_var_ad3_nof,
     "fable_var_other" = fit_fable_var_other,
     "es_ae_f" = fit_es,
     # "rf_dae_f" = fit_rf,
     "rf_dae_f_par" = ls_par
     )
 # fit_fable = fit_all$fable
+# fit_fable_agg = fit_all$fable_agg
 # fit_fable_agg = fit_all$fable_agg
 # fit_es = fit_all$es_ae_f
 # ls_par = fit_all$rf_dae_f_par
@@ -349,22 +382,81 @@ fc_fable_locf_rec <-
   )
 
 # Vector autoregressive models
-fc_fable_var_da <- 
+fc_fable_var_ad <- 
   fit_fable_var_ad %>% 
   forecast(h = horizon)
 
-fc_fable_var_da2 <- 
+fc_fable_var_ad_nof <- 
+  fit_fable_var_ad_nof %>% 
+  forecast(h = horizon)
+
+fc_fable_var_ad2 <- 
   fit_fable_var_ad2 %>% 
   forecast(h = horizon)
 
-fc_fable_var_da3 <- 
+fc_fable_var_ad2_nof <- 
+  fit_fable_var_ad2_nof %>% 
+  forecast(h = horizon)
+
+fc_fable_var_ad3 <- 
   fit_fable_var_ad3 %>% 
+  forecast(h = horizon)
+
+fc_fable_var_ad3_nof <- 
+  fit_fable_var_ad3_nof %>% 
   forecast(h = horizon)
 
 fc_fable_var_other <- 
   fit_fable_var_other %>% 
   forecast(h = horizon)
 
+
+fc_var <- # bind VAR fc
+  map(
+    list(
+      fc_fable_var_ad, fc_fable_var_ad_nof,
+      fc_fable_var_ad2, fc_fable_var_ad2_nof,
+      fc_fable_var_ad3, fc_fable_var_ad3_nof
+      ),
+    \(.x) {
+      .x %>% 
+        as_tibble() %>% 
+        mutate(
+          occ = 
+            dist_normal(
+              mean = .distribution %>% mean() %>% .[, "occ"],
+              sigma = .distribution %>% variance() %>% sqrt() %>% .[, "occ"]
+            ),
+          .mean = occ %>% mean(),
+          # .mean = NULL,
+          .distribution = NULL
+        ) %>% 
+        as_tsibble(index = index, key = c(split, site, .model))
+    }
+  ) %>% 
+  bind_rows() %>% 
+  bind_rows(
+    imap(
+      fc_fable_var_other %>% pluck(".distribution") %>%  dimnames(),
+      \(.x, .y) {
+        fc_fable_var_other %>% 
+          as_tibble() %>% 
+          mutate(
+            occ = 
+              dist_normal(
+                mean = .distribution %>% mean() %>% .[, .x],
+                sigma = .distribution %>% variance() %>% .[, .x]
+              ),
+            site = .x,
+            .model = paste0("var_", .x),
+            .mean = .mean[.y],
+            .distribution = NULL
+          ) %>% 
+          as_tsibble(index = index, key = c(split, site, .model))
+      }
+    ) %>% 
+      bind_rows()
+  )
 
 # Exponential smoothing with predictors (esx)
 select_model <- # select model fit (by site and split)
@@ -446,17 +538,13 @@ fc_rf <- # convert to tsibble
 
 
 # Join fc
-dimnames(fc_ese$occ) <- "occ" # add rowname to match fc_fable
+dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
+dimnames(fc_ese$occ) <- "occ" 
 dimnames(fc_rf$occ) <- "occ"
 fc_all <- 
   list(
-    fc_fable, fc_fable_locf, fc_fable_locf_rec, fc_ese, fc_rf) %>% 
+    fc_fable, fc_fable_locf, fc_fable_locf_rec, fc_var , fc_ese, fc_rf) %>% 
   reduce(bind_rows)
-
-fc_var <- 
-  list(
-    fc_fable_var_da, fc_fable_var_da2, fc_fable_var_da3, fc_fable_var_other
-  )
 
 
 
@@ -470,5 +558,4 @@ if (!file.exists(save_path)) {
 saveRDS(split_data_cv, file = paste0(save_path, "splits_short.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
-saveRDS(fc_var, file = paste0(save_path, "forecasts_short_var.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))

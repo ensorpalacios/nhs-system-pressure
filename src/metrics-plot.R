@@ -25,9 +25,12 @@ metric_names <- metrics$metric %>% unique()
 
 
 
-# Get subset models
+# Get subset models ------------------------------------------------------------
 metrics <- 
-  metrics %>% filter(!grepl("locf.*_l", models))
+  metrics %>% 
+  filter(!grepl("locf.*_l", models)) %>% # exclude locf lagged models
+  filter(!grepl("var.*", models)) %>% # exclude VAR
+
 metrics_summary <- 
   metrics_summary %>% filter(!grepl("locf.*_l", models))
 

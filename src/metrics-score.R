@@ -12,7 +12,8 @@
 #' centred around the observed value).
 
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles 
-#' and Practice; https: //www.lokad.com/continuous-ranked-probability-score/ 
+# and Practice; https: //www.lokad.com/continuous-ranked-probability-score/;
+#' Gneiting_JBES_2011
 #'
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-05-14
@@ -30,9 +31,7 @@ fc_path <- here("output/fits/forecasts_short.RDS")
 split_data_cv <- readRDS(file = split_path)
 fc_all <- readRDS(file = fc_path)
 
-
-
-# Remove aggregated data -------------------------------------------------------
+# Remove aggregated data
 split_data_cv <- 
   split_data_cv %>% filter(!is_aggregated(site))
 fc_all <- 
@@ -158,7 +157,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
 
 # Compute/summarise metrics ----------------------------------------------------
 # Compute
-list_models_w <- # select models
+list_models_m <- # select models
   c(
     "arima",
     "arima_dad",
@@ -166,6 +165,14 @@ list_models_w <- # select models
     "arima_dad_nof",
     "arima_dado",
     "arima_dado_l",
+    "var_ad",
+    "var_ad_nof",
+    "var_ad2",
+    "var_ad2_nof",
+    "var_ad3",
+    "var_ad3_nof",
+    "var_BRI",
+    "var_Southmead",
     "locf_arima_dad",
     "locf_arima_dad_l",
     "locf_arima_dad_l_nof_rec",
@@ -179,13 +186,12 @@ list_models_w <- # select models
     "naive",
     "snaive")
 
-
 metrics <- # compute metrics
   cv_wrap(
     list("all" = split_data_cv , "fc" = fc_all), 
     select_fc,
     wrap_metric,
-    list_models_w
+    list_models_m
   ) %>% 
   flatten() %>%
   bind_rows()
