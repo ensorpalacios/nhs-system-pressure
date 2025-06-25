@@ -233,6 +233,11 @@ var_summary <-
     "snaive", # Either one of mean, naive, snaive
     "arima_dad_l", # looks the best (2024-06-22)
     "arima_dado_l", # looks the best (2024-06-22)
+    "var_ad",
+    "var_ad2",
+    "var_ad3",
+    "var_BRI",
+    "var_Southmead",
     "locf_arima_dad",
     "locf_arima_dad_rec",
     "locf_arima_dado",

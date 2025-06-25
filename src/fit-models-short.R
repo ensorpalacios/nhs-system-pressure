@@ -445,7 +445,7 @@ fc_var <- # bind VAR fc
             occ = 
               dist_normal(
                 mean = .distribution %>% mean() %>% .[, .x],
-                sigma = .distribution %>% variance() %>% .[, .x]
+                sigma = .distribution %>% variance() %>% sqrt() %>% .[, .x]
               ),
             site = .x,
             .model = paste0("var_", .x),
