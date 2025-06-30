@@ -272,28 +272,28 @@ rf_reg <-
     # Loop over horizons
     rf_save = 
       map(seq(.horizon), \(.h) {
-      # Select data
-      tmp_lag = str_glue("lag{.h}")
-      tmp_train = 
-        bind_cols(y_train, xl_train %>% select(ends_with(tmp_lag)), xd_train)
-      tmp_test = 
-        bind_cols(y_test, xl_test %>% select(ends_with(tmp_lag)), xd_test) %>% 
-        slice(.h) # predict only the .h day ahead from last observed .lag days
-      
-      # Compute
-      tmp_fit = randomForest(occ ~ ., data = tmp_train, ntree = 1000)
-      tmp_fc = predict(tmp_fit,  tmp_test, predict.all = TRUE)
-
-      # Forecast parameters
-      tmp_par = 
-        list(
-          "mean" = tmp_fc$aggregate, 
-          "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
-        )
-      
-      # Return as list
-      tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc, "par" = tmp_par)
-    }) %>% 
+        # Select data
+        tmp_lag = str_glue("lag{.h}")
+        tmp_train = 
+          bind_cols(y_train, xl_train %>% select(ends_with(tmp_lag)), xd_train)
+        tmp_test = 
+          bind_cols(y_test, xl_test %>% select(ends_with(tmp_lag)), xd_test) %>% 
+          slice(.h) # predict only the .h day ahead from last observed .lag days
+        
+        # Compute
+        tmp_fit = randomForest(occ ~ ., data = tmp_train, ntree = 1000)
+        tmp_fc = predict(tmp_fit,  tmp_test, predict.all = TRUE)
+        
+        # Forecast parameters
+        tmp_par = 
+          list(
+            "mean" = tmp_fc$aggregate, 
+            "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
+          )
+        
+        # Return as list
+        tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc, "par" = tmp_par)
+      }) %>% 
       set_names(seq(.horizon))
   }
 
@@ -301,7 +301,7 @@ ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
     split_data_cv %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
-    )
+  )
 
 fit_rf <-  # extract fits
   ls_rf %>% 
@@ -317,6 +317,7 @@ ls_par <- # extract parameters fc distribution
               map(.x, ~ # horizon
                     pluck(.x, "par"))))
 
+
 # Save all fits in list
 fit_all = 
   list(
@@ -330,11 +331,10 @@ fit_all =
     "fable_var_ad3_nof" = fit_fable_var_ad3_nof,
     "fable_var_other" = fit_fable_var_other,
     "es_ae_f" = fit_es,
-    # "rf_dae_f" = fit_rf,
+    "rf_dae_f" = fit_rf,
     "rf_dae_f_par" = ls_par
     )
 # fit_fable = fit_all$fable
-# fit_fable_agg = fit_all$fable_agg
 # fit_fable_agg = fit_all$fable_agg
 # fit_es = fit_all$es_ae_f
 # ls_par = fit_all$rf_dae_f_par
@@ -507,6 +507,7 @@ fc_ese <- # convert to tsibble
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
+
 
 # Random forest
 fc_forecast =

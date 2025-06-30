@@ -23,17 +23,15 @@ metrics_summary <- metric_data$metrics_summary
 sites <- metrics$site %>% unique()
 metric_names <- metrics$metric %>% unique()
 
-
-
-# Get subset models ------------------------------------------------------------
+# Get subset models
 metrics <- 
   metrics %>% 
   filter(!grepl("locf.*_l", models)) # exclude locf lagged models
   # filter(!grepl("var_(?!ad)", models, perl = TRUE)) # exclude VAR
 
-
 metrics_summary <- 
   metrics_summary %>% filter(!grepl("locf.*_l", models))
+
 
 
 # Generate plots ---------------------------------------------------------------
