@@ -243,60 +243,6 @@ list_var_rf <-
     contains("days_"), -days_) %>%
   names()
 
-rf_reg <- 
-  function(.data_rf, .lag = 1, .horizon = horizon) {
-    # Fit random forests from lagged variables and generate forecasts. Use
-    # predictors of increasing lag to predict bed occupancy with increasing time
-    # horizon .h.
-    
-    # Train set
-    data_train = 
-      .data_rf %>% filter(type == "train")
-    y_train = 
-      data_train %>% select(occ)
-    xl_train = # lagged data
-      data_train %>%  select(contains("lag"))
-    xd_train = # days
-      data_train %>% select(starts_with("days_"))
-    
-    # Test set
-    data_test = 
-      .data_rf %>% filter(type == "test")
-    y_test = 
-      data_test %>% select(occ)
-    xl_test = # lagged data 
-      data_test %>%  select(contains("lag"))
-    xd_test = # days
-      data_test %>% select(starts_with("days_"))
-    
-    # Loop over horizons
-    rf_save = 
-      map(seq(.horizon), \(.h) {
-        # Select data
-        tmp_lag = str_glue("lag{.h}")
-        tmp_train = 
-          bind_cols(y_train, xl_train %>% select(ends_with(tmp_lag)), xd_train)
-        tmp_test = 
-          bind_cols(y_test, xl_test %>% select(ends_with(tmp_lag)), xd_test) %>% 
-          slice(.h) # predict only the .h day ahead from last observed .lag days
-        
-        # Compute
-        tmp_fit = randomForest(occ ~ ., data = tmp_train, ntree = 1000)
-        tmp_fc = predict(tmp_fit,  tmp_test, predict.all = TRUE)
-        
-        # Forecast parameters
-        tmp_par = 
-          list(
-            "mean" = tmp_fc$aggregate, 
-            "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
-          )
-        
-        # Return as list
-        tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc, "par" = tmp_par)
-      }) %>% 
-      set_names(seq(.horizon))
-  }
-
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
     split_data_cv %>% filter(!is_aggregated(site)), 
