@@ -128,6 +128,3 @@ walk(metric_names, \(.metric) {
       dpi = 500
     )
 })
-
-# Plot residuals .... 
-gg_tsresiduals
