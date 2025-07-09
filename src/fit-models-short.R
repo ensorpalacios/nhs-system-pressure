@@ -97,7 +97,7 @@ fit_fable <-
       ARIMA(
         occ ~ 
           days_ + 
-          ad_diff_f + ad_diff2_f + ad_diff3_f + occ_other +
+          ad_diff_f + ad_diff2_f + ad_diff3_f +# occ_other +
           ad_diff_f_lag1 + ad_diff2_f_lag1 + ad_diff3_f_lag1 + occ_other_lag1 +
           ad_diff_f_lag2 + ad_diff2_f_lag2 + ad_diff3_f_lag2 + occ_other_lag2 +
           ad_diff_f_lag3 + ad_diff2_f_lag3 + ad_diff3_f_lag3 + occ_other_lag3 +
