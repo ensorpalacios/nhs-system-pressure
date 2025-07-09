@@ -38,6 +38,7 @@ import::from(stringr, str_glue)
 import::from(mltools, one_hot)
 import::from(data.table, as.data.table)
 import::from(astsa, LagReg, pre.white)
+import::from(readr, parse_number)
 
 # Resolve conflicts (using conflicted package)
 conflicts_prefer(

@@ -15,7 +15,7 @@ source(here("src/packages.R"))
 # show_col(hue_pal()(12))
 # show_col(viridis_pal(option="turbo")(12))
 
-col_models = viridis_pal(option = "turbo")(27) # Colour mapping
+col_models = viridis_pal(option = "turbo")(28) # Colour mapping
 names(col_models) = 
   c(
     "arima",
@@ -41,6 +41,7 @@ names(col_models) =
     "locf_arima_dado",
     "locf_es_ado_f",
     "rf_dado_f",
+    "rf_dado_f_int",
     "mean",
     "naive",
     "snaive",

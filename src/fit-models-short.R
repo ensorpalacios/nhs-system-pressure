@@ -80,7 +80,6 @@ fit_fable <-
       ARIMA(
         occ ~ 
           days_ +
-          
           ad_diff_f + ad_diff2_f + ad_diff3_f +
           ad_diff_f_lag1 + ad_diff2_f_lag1 + ad_diff3_f_lag1 +
           ad_diff_f_lag2 + ad_diff2_f_lag2 + ad_diff3_f_lag2 +
@@ -245,7 +244,7 @@ list_var_rf <-
 
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
-    split_data_cv %>% filter(!is_aggregated(site)), 
+    data_locf %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
   )
 
@@ -264,6 +263,78 @@ ls_par <- # extract parameters fc distribution
                     pluck(.x, "par"))))
 
 
+# Random forest - interaction
+data_locf_int <- 
+  data_locf %>%
+  select(split, type, site, index, all_of(list_var_rf)) %>%
+  rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
+  rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
+  pivot_longer(
+    cols = c(contains("lag")),
+    names_to = c(".value", "lag"),
+    names_sep = "-"
+  )
+
+list_var_rf_int <- 
+  data_locf_int %>% select(-c(split, type, site, index)) %>% names()
+
+rf_reg_int <- 
+  function(.data_rf, .horizon = horizon) {
+    # Fit random forests from lagged variables and generate forecasts. Use
+    # predictors of increasing lag to predict bed occupancy with increasing time
+    # horizon .h.
+    
+    # Train set
+    data_train = 
+      .data_rf %>% filter(type == "train") %>% select(-type)
+    
+    # Test set
+    data_test = 
+      .data_rf %>% filter(type == "test") %>% select(-type)
+    
+    # Compute
+    tmp_fit = randomForest(occ ~ ., data = data_train, ntree = 1000)
+    tmp_fc = predict(tmp_fit,  data_test, predict.all = TRUE)
+    
+    # Group fc by lag
+    tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
+    max_lag = data_test$lag %>% parse_number() %>% max()
+    tmp_fc_individuals$lag = rep(seq(horizon), each = max_lag)
+    tmp_fc_individuals = 
+      map(tmp_fc_individuals$lag %>% unique(), \(.lag) {
+        tmp_fc_individuals %>% filter(lag == .lag) %>% select(-lag) %>% 
+          unlist() %>% t() %>% as_tibble()
+      }) %>% 
+      list_rbind()
+    
+    tmp_par = 
+      list(
+        "mean" = tmp_fc_individuals %>% rowMeans(), 
+        "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
+      )
+    
+    tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc_individuals, "par" = tmp_par)
+  }
+
+ls_rf_int <- # fits + fc + parameters fc distribution
+  cv_wrap(
+    data_locf_int %>% filter(!is_aggregated(site)), 
+    select_training,  rf_reg_int,  list_var_rf_int, "all"
+  )
+
+fit_rf_int <-  # extract fits
+  ls_rf_int %>% 
+  map(., ~ # site
+        map(.x, ~ # split
+              pluck(.x, "fit")))
+
+ls_par_int <- # extract parameters fc distribution
+  ls_rf_int %>% 
+  map(., ~ # site
+        map(.x, ~ # split
+              pluck(.x, "par")))
+
+
 # Save all fits in list
 fit_all = 
   list(
@@ -278,12 +349,20 @@ fit_all =
     "fable_var_other" = fit_fable_var_other,
     "es_ae_f" = fit_es,
     "rf_dae_f" = fit_rf,
-    "rf_dae_f_par" = ls_par
+    "rf_dae_f_int" = fit_rf_int,
+    "rf_dae_f_int_par" = ls_par_int
     )
-# fit_fable = fit_all$fable
-# fit_fable_agg = fit_all$fable_agg
-# fit_es = fit_all$es_ae_f
-# ls_par = fit_all$rf_dae_f_par
+fit_fable = fit_all$fable
+fit_fable_agg = fit_all$fable_agg
+fit_fable_var_ad = fit_all$fable_var_ad
+fit_fable_var_ad_nof = fit_all$fable_var_ad_nof
+fit_fable_var_ad2 = fit_all$fable_var_ad2
+fit_fable_var_ad2_nof = fit_all$fable_var_ad2_nof
+fit_fable_var_ad3 = fit_all$fable_var_ad3
+fit_fable_var_ad3_nof = fit_all$fable_var_ad3_nof
+fit_fable_var_other = fit_all$fable_var_other
+fit_es = fit_all$es_ae_f
+ls_par = fit_all$rf_dae_f_par
 
 
 
@@ -456,12 +535,12 @@ fc_ese <- # convert to tsibble
 
 
 # Random forest
-fc_forecast =
+rf_forecast =
   function(.data) {
     .data$index = # get test data
       .data$index %>% filter(type == "test")
-    .data$model = .data$model %>% map_dfr(~ as.data.frame(.x)) %>% as_tibble()
-    
+    .data$model = 
+      .data$model %>% map_dfr(~ as.data.frame(.x)) %>% as_tibble()
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
@@ -475,10 +554,39 @@ fc_forecast =
   }
 
 fc_rf <- 
-  cv_wrap(ls_par, select_model, fc_forecast)
+  cv_wrap(ls_par, select_model, rf_forecast)
 
 fc_rf <- # convert to tsibble
   fc_rf %>% 
+  flatten() %>% 
+  bind_rows() %>% 
+  as_tsibble(index = index, key = c("split", "site", ".model"))
+
+
+# Random forest - interaction
+rf_forecast_int =
+  function(.data) {
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    .data$model = 
+      .data$model %>% as_tibble()
+    tmp_fc =
+      bind_cols(.data$model, .data$index) %>% 
+      mutate(
+        .model = "rf_dado_f_int",
+        .mean = mean, # necessary for fable::autoplot
+        occ = dist_normal(mu = mean, sd = sd),
+        mean = NULL,
+        sd = NULL
+      ) %>%
+      relocate(c(.model, occ, .mean), .after = index)
+  }
+
+fc_rf_int <- 
+  cv_wrap(ls_par_int, select_model, rf_forecast_int)
+
+fc_rf_int <- # convert to tsibble
+  fc_rf_int %>% 
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
@@ -488,9 +596,12 @@ fc_rf <- # convert to tsibble
 dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
 dimnames(fc_ese$occ) <- "occ" 
 dimnames(fc_rf$occ) <- "occ"
+dimnames(fc_rf_int$occ) <- "occ"
 fc_all <- 
   list(
-    fc_fable, fc_fable_locf, fc_fable_locf_rec, fc_var , fc_ese, fc_rf) %>% 
+    fc_fable, fc_fable_locf, fc_fable_locf_rec, fc_var, 
+    fc_ese, fc_rf, fc_rf_int
+    ) %>% 
   reduce(bind_rows)
 
 

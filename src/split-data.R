@@ -464,7 +464,7 @@ rf_reg <-
           slice(.h) # predict only the .h day ahead from last observed .lag days
         
         # Compute
-        tmp_fit = randomForest(occ ~ ., data = tmp_train, ntree = 1000)
+        tmp_fit = randomForest(occ ~ ., data = tmp_train, ntree = 7000)
         tmp_fc = predict(tmp_fit,  tmp_test, predict.all = TRUE)
         
         # Forecast parameters

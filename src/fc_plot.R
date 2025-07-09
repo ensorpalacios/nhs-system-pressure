@@ -52,7 +52,9 @@ list_models_f <- # select models for forecast plot
     "locf_arima_dad",
     "locf_arima_dad_rec",
     "locf_arima_dado",
-    "rf_dado_f")
+    "rf_dado_f",
+    "rf_dado_f_int"
+    )
 
 
 fc_all <- 

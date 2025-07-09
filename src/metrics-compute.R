@@ -184,6 +184,7 @@ list_models_m <- # select models
     "locf_arima_dado_l",
     "locf_es_ado_f",
     "rf_dado_f",
+    "rf_dado_f_int",
     "mean",
     "naive",
     "snaive")
@@ -243,7 +244,8 @@ var_summary <-
     "locf_arima_dad",
     "locf_arima_dad_rec",
     "locf_arima_dado",
-    "rf_dado_f"
+    "rf_dado_f",
+    "rf_dado_f_int"
   )
 
 tmp_metrics <- 
