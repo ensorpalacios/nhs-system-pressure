@@ -394,34 +394,106 @@ save_plot <-
   }
 
 
-#' Locf function
-#' Create last observation carried forward dataset
+#' Predict regressor function
+#' Predict regressors (occ, occ_other, all ad_diff) using last observation
+#' carried forward or ARIMA model; replace test values for different 
+#' lags appropriately (lag 0 replace #' all -- lag7 replace none).
 #' @param .data tibble with cv splits and sites as groups
-locf_fun <- 
+#' @param .var list of variables to predict
+#' @param .idx_test index where test data start
+#' @param .type whether to predict with locf or ARIMA model
+xpredict_fun <- 
   function(.data, .var, .idx_test, .type) {
-    .data %>% 
-    group_by(split, site) %>% 
-      mutate(
-        across(
-          contains(.var), 
-          ~ {
-            tmp_lag = 
-              tryCatch({
-                cur_column() %>% str_sub(start = -1) %>% as.numeric()
-              }, warning = function(w) 0)
-            
-            if_else(
-              row_number() >= (.idx_test + tmp_lag),
-              if (.type == "locf") {
-                .x[.idx_test + tmp_lag - 1]
-              },
-              .x
-            )
-          }
-        )
-      ) %>% 
-      ungroup()
+    if (.type == "locf") {
+      .data %>% 
+        group_by(split, site) %>% 
+        mutate(
+          across(
+            contains(.var), 
+            ~ {
+              tmp_lag = 
+                tryCatch({
+                  cur_column() %>% str_sub(start = -1) %>% as.numeric()
+                }, warning = function(w) 0)
+              
+              if_else(
+                row_number() >= (.idx_test + tmp_lag),
+                .x[.idx_test + tmp_lag - 1],
+                .x,
+              )
+            }
+          )
+        ) %>% 
+        ungroup()
+    } else if (.type == "arima") {
+      .data =
+        .data %>% 
+        group_by(split, site) %>% 
+        mutate(
+          across(
+            c(contains(.var), -contains("lag")),
+            ~ {
+              # Predict with ARIMA
+              x_ts =
+                tibble(index, split, type, site, .x, days_)
+              
+              x_predict = 
+                x_ts %>%
+                filter(type == "train") %>%
+                as_tsibble(index = index, key = c(split, site)) %>%
+                model(
+                  arima = ARIMA(.x ~ days_)
+                ) %>%
+                forecast(
+                  new_data =
+                    x_ts %>%
+                    filter(type == "test") %>%
+                    as_tsibble(index = index, key = c(split, site))
+                )
+              
+              
+              # Replace true with predicted
+              x_ts$.x[x_ts$type == "test"] = round(x_predict$.mean, 2)
+              x_ts$.x
+            },
+            .names = "{.col}_predicted"
+          ),
+          across(
+            c(contains(.var), -contains("predicted")),
+            ~ {
+              tmp_lag = 
+                tryCatch({
+                  cur_column() %>% str_sub(start = -1) %>% as.numeric()
+                }, warning = function(w) 0)
+              
+              
+              if (n() - .idx_test - tmp_lag >= 0) {
+                tmp_horizon = n() - .idx_test - tmp_lag
+                
+                tmp_predicted =
+                  gsub("_lag.*", "", cur_column()) %>%
+                  paste0("_predicted") %>%
+                  get()
+                tmp_predicted =
+                  tmp_predicted[.idx_test: (.idx_test + tmp_horizon)]
+                
+                .x[row_number() >= (.idx_test + tmp_lag)] =
+                  tmp_predicted
+                .x
+              } else {
+                .x
+              }
+            }
+          ),
+          across(
+            contains("predicted"),
+            ~ {.x = NULL}
+          )
+        ) %>% 
+        ungroup()
+    }
   }
+
 
 
 #' @param .data_rf tibble of data

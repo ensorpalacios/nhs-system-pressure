@@ -57,8 +57,31 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 # Predict test exogenous -------------------------------------------------------
 # Last observation carried forward
 data_locf <- 
-  locf_fun(split_data_cv, c("occ", "ad_diff"), idx_start_test, "locf")
+  xpredict_fun(split_data_cv, c("occ", "ad_diff"), idx_start_test, "locf")
 
+data_arima <- 
+  xpredict_fun(split_data_cv, c("occ", "ad_diff"), idx_start_test, "arima")
+
+# for (x in data_arima$split %>% unique()) {
+#   x11()
+#   ok = 
+#     data_arima %>% filter(split==x, type == "test", site == "Southmead") %>% 
+#     select(type, index, contains("ad_diff_f"), - contains("other"), - split, -site) %>%
+#     mutate(predict = "yes") %>%
+#     bind_rows(.,
+#               split_data_cv%>%
+#                 filter(split==x, site == "Southmead", type == "test") %>%
+#                 ungroup() %>%
+#                 select(type, index, contains("ad_diff_f"), - contains("other"), - split, -site) %>%
+#                 mutate(predict = "no")
+#     ) %>%
+#     pivot_longer(-c(type, index, predict)) %>%
+#     filter(type == "test") %>%
+#     ggplot(aes(x=index, y=value, colour = predict)) + geom_line() +
+#     facet_wrap(vars(name))
+#   print(ok)
+# }
+  
 
 
 # Fit models -------------------------------------------------------------------
@@ -97,7 +120,7 @@ fit_fable <-
       ARIMA(
         occ ~ 
           days_ + 
-          ad_diff_f + ad_diff2_f + ad_diff3_f +# occ_other +
+          ad_diff_f + ad_diff2_f + ad_diff3_f +
           ad_diff_f_lag1 + ad_diff2_f_lag1 + ad_diff3_f_lag1 + occ_other_lag1 +
           ad_diff_f_lag2 + ad_diff2_f_lag2 + ad_diff3_f_lag2 + occ_other_lag2 +
           ad_diff_f_lag3 + ad_diff2_f_lag3 + ad_diff3_f_lag3 + occ_other_lag3 +
@@ -244,7 +267,7 @@ list_var_rf <-
 
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
-    data_locf %>% filter(!is_aggregated(site)), 
+    data_arima %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
   )
 
@@ -264,8 +287,8 @@ ls_par <- # extract parameters fc distribution
 
 
 # Random forest - interaction
-data_locf_int <- 
-  data_locf %>%
+data_arima_int <- 
+  data_arima %>%
   select(split, type, site, index, all_of(list_var_rf)) %>%
   rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
   rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
@@ -276,7 +299,7 @@ data_locf_int <-
   )
 
 list_var_rf_int <- 
-  data_locf_int %>% select(-c(split, type, site, index)) %>% names()
+  data_arima_int %>% select(-c(split, type, site, index)) %>% names()
 
 rf_reg_int <- 
   function(.data_rf, .horizon = horizon) {
@@ -318,7 +341,7 @@ rf_reg_int <-
 
 ls_rf_int <- # fits + fc + parameters fc distribution
   cv_wrap(
-    data_locf_int %>% filter(!is_aggregated(site)), 
+    data_arima_int %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg_int,  list_var_rf_int, "all"
   )
 
@@ -381,7 +404,7 @@ fc_fable_locf <-
   select(contains("arima_da")) %>% 
   forecast(
     new_data = 
-      data_locf %>% 
+      data_arima %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
   ) %>% 
@@ -398,7 +421,7 @@ fc_fable_locf_rec <-
     ) %>% 
   select(-arima_dad_agg, -arima_dad_l_nof_agg) %>%
   forecast(
-    new_data = data_locf %>% 
+    new_data = data_arima %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
   ) %>% 
@@ -489,7 +512,7 @@ select_model <- # select model fit (by site and split)
     # .data is list (site) of list (split) of model fits
     list(
       "model" = .data[[.site]][[.split]],
-      "index" = data_locf %>% filter(site == .site, split == .split)
+      "index" = data_arima %>% filter(site == .site, split == .split)
     )
   }
 
@@ -614,6 +637,7 @@ if (!file.exists(save_path)) {
 
 
 saveRDS(split_data_cv, file = paste0(save_path, "splits_short.RDS"))
+saveRDS(data_arima, file = paste0(save_path, "data_arima.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
