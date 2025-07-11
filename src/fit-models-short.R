@@ -364,7 +364,7 @@ fit_all =
     "fable" = fit_fable,
     "fable_agg" = fit_fable_agg,
     "fable_var_ad" = fit_fable_var_ad,
-    "fable_var_ad_nof" = fit_fable_var_ad,
+    "fable_var_ad_nof" = fit_fable_var_ad_nof,
     "fable_var_ad2" = fit_fable_var_ad2,
     "fable_var_ad2_nof" = fit_fable_var_ad2_nof,
     "fable_var_ad3" = fit_fable_var_ad3,
@@ -373,19 +373,21 @@ fit_all =
     "es_ae_f" = fit_es,
     "rf_dae_f" = fit_rf,
     "rf_dae_f_int" = fit_rf_int,
+    "rf_dae_f_par" = ls_par,
     "rf_dae_f_int_par" = ls_par_int
     )
-fit_fable = fit_all$fable
-fit_fable_agg = fit_all$fable_agg
-fit_fable_var_ad = fit_all$fable_var_ad
-fit_fable_var_ad_nof = fit_all$fable_var_ad_nof
-fit_fable_var_ad2 = fit_all$fable_var_ad2
-fit_fable_var_ad2_nof = fit_all$fable_var_ad2_nof
-fit_fable_var_ad3 = fit_all$fable_var_ad3
-fit_fable_var_ad3_nof = fit_all$fable_var_ad3_nof
-fit_fable_var_other = fit_all$fable_var_other
-fit_es = fit_all$es_ae_f
-ls_par = fit_all$rf_dae_f_par
+# fit_fable = fit_all$fable
+# fit_fable_agg = fit_all$fable_agg
+# fit_fable_var_ad = fit_all$fable_var_ad
+# fit_fable_var_ad_nof = fit_all$fable_var_ad_nof
+# fit_fable_var_ad2 = fit_all$fable_var_ad2
+# fit_fable_var_ad2_nof = fit_all$fable_var_ad2_nof
+# fit_fable_var_ad3 = fit_all$fable_var_ad3
+# fit_fable_var_ad3_nof = fit_all$fable_var_ad3_nof
+# fit_fable_var_other = fit_all$fable_var_other
+# fit_es = fit_all$es_ae_f
+# ls_par = fit_all$rf_dae_f_par
+# ls_par_int = fit_all$rf_dae_f_int_par
 
 
 
