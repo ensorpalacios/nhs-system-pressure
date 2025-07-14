@@ -55,33 +55,15 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 # Predict test exogenous -------------------------------------------------------
-# Last observation carried forward
-data_locf <- 
-  xpredict_fun(split_data_cv, c("occ", "ad_diff"), idx_start_test, "locf")
+xpredict_method = "pull" # mean, naive, snaive, arima, ets
+data_xpredict <- 
+  xpredict_fun(
+    split_data_cv, 
+    c("occ", "ad_diff"), 
+    idx_start_test, 
+    xpredict_method
+    )
 
-data_arima <- 
-  xpredict_fun(split_data_cv, c("occ", "ad_diff"), idx_start_test, "arima")
-
-# for (x in data_arima$split %>% unique()) {
-#   x11()
-#   ok = 
-#     data_arima %>% filter(split==x, type == "test", site == "Southmead") %>% 
-#     select(type, index, contains("ad_diff_f"), - contains("other"), - split, -site) %>%
-#     mutate(predict = "yes") %>%
-#     bind_rows(.,
-#               split_data_cv%>%
-#                 filter(split==x, site == "Southmead", type == "test") %>%
-#                 ungroup() %>%
-#                 select(type, index, contains("ad_diff_f"), - contains("other"), - split, -site) %>%
-#                 mutate(predict = "no")
-#     ) %>%
-#     pivot_longer(-c(type, index, predict)) %>%
-#     filter(type == "test") %>%
-#     ggplot(aes(x=index, y=value, colour = predict)) + geom_line() +
-#     facet_wrap(vars(name))
-#   print(ok)
-# }
-  
 
 
 # Fit models -------------------------------------------------------------------
@@ -143,20 +125,20 @@ fit_fable_agg <-
         occ ~ 
           days_ + 
           ad_diff_f + ad_diff2_f + ad_diff3_f
-      ),
-    arima_dad_l_nof_agg = 
-      ARIMA(
-        occ ~ 
-          days_ + 
-          ad_diff + ad_diff2 + ad_diff3 +
-          ad_diff_lag1 + ad_diff2_lag1 + ad_diff3_lag1 +
-          ad_diff_lag2 + ad_diff2_lag2 + ad_diff3_lag2 +
-          ad_diff_lag3 + ad_diff2_lag3 + ad_diff3_lag3 +
-          ad_diff_lag4 + ad_diff2_lag4 + ad_diff3_lag4 +
-          ad_diff_lag5 + ad_diff2_lag5 + ad_diff3_lag5 +
-          ad_diff_lag6 + ad_diff2_lag6 + ad_diff3_lag6 +
-          ad_diff_lag7 + ad_diff2_lag7 + ad_diff3_lag7
-      )
+      )#,
+    # arima_dad_l_nof_agg = 
+    #   ARIMA(
+    #     occ ~ 
+    #       days_ + 
+    #       ad_diff + ad_diff2 + ad_diff3 +
+    #       ad_diff_lag1 + ad_diff2_lag1 + ad_diff3_lag1 +
+    #       ad_diff_lag2 + ad_diff2_lag2 + ad_diff3_lag2 +
+    #       ad_diff_lag3 + ad_diff2_lag3 + ad_diff3_lag3 +
+    #       ad_diff_lag4 + ad_diff2_lag4 + ad_diff3_lag4 +
+    #       ad_diff_lag5 + ad_diff2_lag5 + ad_diff3_lag5 +
+    #       ad_diff_lag6 + ad_diff2_lag6 + ad_diff3_lag6 +
+    #       ad_diff_lag7 + ad_diff2_lag7 + ad_diff3_lag7
+    #   )
   )
 
 
@@ -267,7 +249,7 @@ list_var_rf <-
 
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
-    data_arima %>% filter(!is_aggregated(site)), 
+    data_xpredict %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
   )
 
@@ -287,8 +269,8 @@ ls_par <- # extract parameters fc distribution
 
 
 # Random forest - interaction
-data_arima_int <- 
-  data_arima %>%
+data_xpredict_int <- 
+  data_xpredict %>%
   select(split, type, site, index, all_of(list_var_rf)) %>%
   rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
   rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
@@ -299,7 +281,7 @@ data_arima_int <-
   )
 
 list_var_rf_int <- 
-  data_arima_int %>% select(-c(split, type, site, index)) %>% names()
+  data_xpredict_int %>% select(-c(split, type, site, index)) %>% names()
 
 rf_reg_int <- 
   function(.data_rf, .horizon = horizon) {
@@ -341,7 +323,7 @@ rf_reg_int <-
 
 ls_rf_int <- # fits + fc + parameters fc distribution
   cv_wrap(
-    data_arima_int %>% filter(!is_aggregated(site)), 
+    data_xpredict_int %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg_int,  list_var_rf_int, "all"
   )
 
@@ -370,9 +352,12 @@ fit_all =
     "fable_var_ad3" = fit_fable_var_ad3,
     "fable_var_ad3_nof" = fit_fable_var_ad3_nof,
     "fable_var_other" = fit_fable_var_other,
-    "es_ae_f" = fit_es,
-    "rf_dae_f" = fit_rf,
-    "rf_dae_f_int" = fit_rf_int,
+    # "es_ae_f" = fit_es,
+    "es" = fit_es,
+    # "rf_dae_f" = fit_rf,
+    "rf" = fit_rf,
+    # "rf_dae_f_int" = fit_rf_int,
+    "rf_int" = fit_rf_int,
     "rf_dae_f_par" = ls_par,
     "rf_dae_f_int_par" = ls_par_int
     )
@@ -401,21 +386,21 @@ fc_fable <-
              tsibble(index = index, key = c(split, site)))
 
 # ARIMA with predicted exogenous
-fc_fable_locf <- 
+fc_fable_xpred <- 
   fit_fable %>% 
   select(contains("arima_da")) %>% 
   forecast(
     new_data = 
-      data_arima %>% 
+      data_xpredict %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
   ) %>% 
-  mutate( # change name locf models
-    .model = paste0("locf_",.model)
+  mutate( # rename models
+    .model = paste0("xpred_",.model)
   )
 
 # ARIMA reconciled
-fc_fable_locf_rec <- 
+fc_fable_xpred_rec <- 
   fit_fable_agg %>% 
   reconcile(
     arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov"),
@@ -423,12 +408,12 @@ fc_fable_locf_rec <-
     ) %>% 
   select(-arima_dad_agg, -arima_dad_l_nof_agg) %>%
   forecast(
-    new_data = data_arima %>% 
+    new_data = data_xpredict %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
   ) %>% 
-  mutate( # change name locf models
-    .model = paste0("locf_",.model)
+  mutate( # rename models
+    .model = paste0("xpred_",.model)
   )
 
 # Vector autoregressive models
@@ -514,7 +499,7 @@ select_model <- # select model fit (by site and split)
     # .data is list (site) of list (split) of model fits
     list(
       "model" = .data[[.site]][[.split]],
-      "index" = data_arima %>% filter(site == .site, split == .split)
+      "index" = data_xpredict %>% filter(site == .site, split == .split)
     )
   }
 
@@ -540,7 +525,7 @@ es_forecast <- # define esx forecast
         cbind
       ) %>% 
       mutate( # create forecast distribution (assuming nid error)
-        .model = "locf_es_ado_f",
+        .model = "xpred_es",
         occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 2),
         .mean = mean, # necessary for fable::autoplot
         mean = NULL,
@@ -569,7 +554,7 @@ rf_forecast =
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
-        .model = "rf_dado_f",
+        .model = "xpred_rf",
         .mean = mean, # necessary for fable::autoplot
         occ = dist_normal(mu = mean, sd = sd),
         mean = NULL,
@@ -598,7 +583,7 @@ rf_forecast_int =
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
-        .model = "rf_dado_f_int",
+        .model = "xpred_rf_int",
         .mean = mean, # necessary for fable::autoplot
         occ = dist_normal(mu = mean, sd = sd),
         mean = NULL,
@@ -624,7 +609,7 @@ dimnames(fc_rf$occ) <- "occ"
 dimnames(fc_rf_int$occ) <- "occ"
 fc_all <- 
   list(
-    fc_fable, fc_fable_locf, fc_fable_locf_rec, fc_var, 
+    fc_fable, fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
     fc_ese, fc_rf, fc_rf_int
     ) %>% 
   reduce(bind_rows)
@@ -639,7 +624,7 @@ if (!file.exists(save_path)) {
 
 
 saveRDS(split_data_cv, file = paste0(save_path, "splits_short.RDS"))
-saveRDS(data_arima, file = paste0(save_path, "data_arima.RDS"))
+saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
-saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
+saveRDS(fc_all, file = paste0(save_path, "forecasts_short_ets.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))

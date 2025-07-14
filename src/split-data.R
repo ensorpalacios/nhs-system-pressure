@@ -395,103 +395,106 @@ save_plot <-
 
 
 #' Predict regressor function
-#' Predict regressors (occ, occ_other, all ad_diff) using last observation
-#' carried forward or ARIMA model; replace test values for different 
+#' Predict regressors (occ, occ_other, all ad_diff) using mean, naive/locf,
+#' snaive, arima, ets model; replace test values for different 
 #' lags appropriately (lag 0 replace #' all -- lag7 replace none).
 #' @param .data tibble with cv splits and sites as groups
 #' @param .var list of variables to predict
 #' @param .idx_test index where test data start
-#' @param .type whether to predict with locf or ARIMA model
+#' @param .type choose model for x-predictions
 xpredict_fun <- 
   function(.data, .var, .idx_test, .type) {
-    if (.type == "locf") {
+    .data =
       .data %>% 
-        group_by(split, site) %>% 
-        mutate(
-          across(
-            contains(.var), 
-            ~ {
-              tmp_lag = 
-                tryCatch({
-                  cur_column() %>% str_sub(start = -1) %>% as.numeric()
-                }, warning = function(w) 0)
-              
-              if_else(
-                row_number() >= (.idx_test + tmp_lag),
-                .x[.idx_test + tmp_lag - 1],
-                .x,
-              )
-            }
-          )
-        ) %>% 
-        ungroup()
-    } else if (.type == "arima") {
-      .data =
-        .data %>% 
-        group_by(split, site) %>% 
-        mutate(
-          across(
-            c(contains(.var), -contains("lag")),
-            ~ {
-              # Predict with ARIMA
-              x_ts =
-                tibble(index, split, type, site, .x, days_)
-              
-              x_predict = 
-                x_ts %>%
-                filter(type == "train") %>%
-                as_tsibble(index = index, key = c(split, site)) %>%
+      group_by(split, site) %>% 
+      mutate(
+        across(
+          c(contains(.var), -contains("lag")),
+          ~ {
+            if (!any(is_aggregated(site)) & !grepl("occ_other", cur_column())) {
+            # Predict with ARIMA
+            x_ts =
+              tibble(index, split, type, site, .x, days_)
+            
+            x_predict = 
+              x_ts %>%
+              filter(type == "train") %>%
+              as_tsibble(index = index, key = c(split, site))
+            
+            if (.type == "mean") {
+              x_predict =  x_predict %>% model(xmodel= MEAN(.x))
+            } else if (.type == "naive") {
+              x_predict =  x_predict %>% model(xmodel= NAIVE(.x))
+            } else if (.type == "snaive") {
+              x_predict =  x_predict %>% 
+                model(xmodel= SNAIVE(.x ~ lag("week")))
+            } else if (.type == "arima") {
+              x_predict =  x_predict %>% model(xmodel= ARIMA(.x ~ days_))
+            } else if (.type == "ets") {
+              x_predict =  x_predict %>% model(xmodel= ETS(.x))
+            } else if (.type == "pull") {
+              x_predict =  x_predict %>% 
                 model(
+                  mean = MEAN(.x),
+                  ets = ETS(.x), 
                   arima = ARIMA(.x ~ days_)
-                ) %>%
-                forecast(
-                  new_data =
-                    x_ts %>%
-                    filter(type == "test") %>%
-                    as_tsibble(index = index, key = c(split, site))
-                )
-              
-              
-              # Replace true with predicted
-              x_ts$.x[x_ts$type == "test"] = round(x_predict$.mean, 2)
-              x_ts$.x
-            },
-            .names = "{.col}_predicted"
-          ),
-          across(
-            c(contains(.var), -contains("predicted")),
-            ~ {
-              tmp_lag = 
-                tryCatch({
-                  cur_column() %>% str_sub(start = -1) %>% as.numeric()
-                }, warning = function(w) 0)
-              
-              
-              if (n() - .idx_test - tmp_lag >= 0) {
-                tmp_horizon = n() - .idx_test - tmp_lag
-                
-                tmp_predicted =
-                  gsub("_lag.*", "", cur_column()) %>%
-                  paste0("_predicted") %>%
-                  get()
-                tmp_predicted =
-                  tmp_predicted[.idx_test: (.idx_test + tmp_horizon)]
-                
-                .x[row_number() >= (.idx_test + tmp_lag)] =
-                  tmp_predicted
-                .x
-              } else {
-                .x
-              }
+                  ) %>% 
+                mutate(xmodel = (mean + ets + arima) / 3)
             }
-          ),
-          across(
-            contains("predicted"),
-            ~ {.x = NULL}
-          )
-        ) %>% 
-        ungroup()
-    }
+            x_predict = 
+              x_predict %>%
+              forecast(
+                new_data =
+                  x_ts %>%
+                  filter(type == "test") %>%
+                  as_tsibble(index = index, key = c(split, site))
+              ) %>% 
+              filter(.model == "xmodel")
+            
+            
+            # Replace true with predicted
+            .x[x_ts$type == "test"] = round(x_predict$.mean, 2)
+            .x
+            } else {
+              rep(NA, n())
+            }
+          },
+          .names = "{.col}_predicted"
+        ),
+        across(
+          c(contains(.var), -contains("predicted")),
+          ~ {
+            tmp_lag = 
+              tryCatch({
+                cur_column() %>% str_sub(start = -1) %>% as.numeric()
+              }, warning = function(w) 0)
+            
+            
+            if (n() - .idx_test - tmp_lag >= 0) {
+              tmp_horizon = n() - .idx_test - tmp_lag
+              
+              tmp_predicted =
+                gsub("_lag.*", "", cur_column()) %>%
+                paste0("_predicted") %>%
+                get()
+              tmp_predicted =
+                tmp_predicted[.idx_test: (.idx_test + tmp_horizon)]
+              
+              .x[row_number() >= (.idx_test + tmp_lag)] =
+                tmp_predicted
+              .x
+            } else {
+              .x
+            }
+          }
+        ),
+        across(
+          contains("predicted"),
+          ~ {.x = NULL}
+        )
+      ) %>% 
+      ungroup()
+    # }
   }
 
 
