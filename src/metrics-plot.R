@@ -49,29 +49,6 @@ plt_metric <- # boxplot
 
 # Scores time series
 max_y <- 4
-# plt_metric_time <- # time series scores
-#   map(metric_names, \(.metric) {
-#     map(sites, \(.site) {
-#       metrics %>% 
-#         filter(metric == .metric, models != "mean") %>% 
-#         mutate(
-#           penalty = penalty %>% fct_rev(),
-#           value_s = if_else(value_s > max_y, max_y, value_s) # cap y
-#         ) %>% 
-#         filter(site == .site) %>% 
-#         ggplot(aes(x = t_ax, y = value_s, colour = models)) +
-#         # geom_line() +
-#         geom_line(linewidth = 1) +
-#         scale_colour_manual(name = "models", values = col_models) + 
-#         facet_wrap(vars(penalty), ncol = 1, strip.position = "right") +
-#         labs(title = .site) +
-#         ylim(0, max_y) +
-#         geom_hline(yintercept = max_y,  linetype = "dashed", color = "black")
-#     }) %>%
-#       reduce(`+`) +
-#       plot_layout(ncol = 1, guides = "collect")
-#   }) %>%
-#   set_names(metric_names)
 plt_metric_time_summary <- # time series (summary data)
   map(metric_names, \(.metric) {
     map(sites, \(.site) {
