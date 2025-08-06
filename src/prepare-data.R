@@ -59,17 +59,21 @@ df_occ <-
     relocate(c(index, site)) |>
     arrange(index, site)
 
+
 # Covert to timeseries (tsibble object)
 ts_occ <- df_occ |> as_tsibble(index = index, key = site)
+
 
 # Remove first 3/4 of 2022 data (due to strange behaviour)
 ts_occ <- 
   ts_occ %>% filter(index >= as.Date("2022-09-01"))
 
+
 # Convert implicit gaps into explicit missing values
 ts_occ <- 
   ts_occ |>
     fill_gaps(.full = TRUE) # fully balanced data
+
 
 # Impute missing values
 ts_occ <- # impute
@@ -90,6 +94,15 @@ ts_occ <- # impute
     adm = adm %>% na_ma(k = 3, weighting = "simple"),
   ) %>% 
   ungroup()
+
+
+# Resize ts as week multiple
+ts_occ <- 
+  ts_occ %>% 
+  group_by(site) %>% 
+  slice(1:(floor(n() / 7) * 7)) %>% 
+  ungroup()
+
 
 
 # Process data -----------------------------------------------------------------
@@ -172,7 +185,7 @@ ts_occ <-
     occ_other = 
       occ[tmp_mask] %>% 
       rev() %>% 
-      .[tmp_mask %>% if_else(row_number(), NA) %>%  rank(na.last="keep")],
+      .[tmp_mask %>% if_else(row_number(), NA) %>%  rank(na.last = "keep")],
     tmp_mask = NULL
   ) %>% 
   ungroup()
