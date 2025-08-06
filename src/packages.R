@@ -27,7 +27,7 @@ import::from(magrittr, "%>%")
 import::from(tidyr, pivot_longer, pivot_wider, replace_na, drop_na)
 import::from(forcats, fct_rev)
 import::from(distributional, dist_normal, variance)
-import::from(stringr, str_sub)
+import::from(stringr, str_sub, str_extract)
 import::from(imputeTS, ggplot_na_distribution, ggplot_na_imputations)
 import::from(scales, viridis_pal)
 import::from(slider, slide_dbl)
@@ -40,6 +40,9 @@ import::from(data.table, as.data.table)
 import::from(astsa, LagReg, pre.white)
 import::from(readr, parse_number)
 import::from(data.table, ":=")
+import::from(xgboost, xgb.train, xgb.DMatrix, getinfo)
+import::from(Matrix, sparse.model.matrix)
+
 
 # Resolve conflicts (using conflicted package)
 conflicts_prefer(

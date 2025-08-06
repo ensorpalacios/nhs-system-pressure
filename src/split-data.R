@@ -9,8 +9,8 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-04-23
 
-# Functions to split/augment data for analysis ---------------------------------
-#' create lagged data
+# Functions to split/augment/bootstrap data for analysis -----------------------
+#' Create lagged data
 #' @param .data The data as a tsibble
 #' @param .lag Number of lags
 #' @export
@@ -172,6 +172,7 @@ select_training <- # select training set (by site and split)
     }
   }
 
+
 #' extract site-, split- and model-specific forecast set from cross-validated
 #' train-validation sets (split_data_cv)
 #' @param .data Data 
@@ -192,6 +193,20 @@ select_fc <- # select forecast (by site and split) - used in cv_wrap()
       "test" =
         .data$fc %>% 
         filter(site == .site, .model %in% .models, split == .split)
+    )
+  }
+
+
+#' extract site-, and split-specific model fit/fc parameters (es, rf, xgb)
+#' @param .data fits/fc parameters
+#' @param .site from cv_wrap
+#' @param .split from cv_wrap
+select_model <- # select model fit (by site and split)
+  function(.data, .site, .split, ...)  {
+    # .data is list (site) of list (split) of model fits
+    list(
+      "model" = .data[[.site]][[.split]],
+      "index" = data_xpredict %>% filter(site == .site, split == .split)
     )
   }
 
@@ -222,6 +237,133 @@ cv_wrap <-
       }) %>% set_names(splits)
     }) %>% set_names(sites)
   }
+
+
+#' Block Bootstrap
+#' Function to created block bootstrap data data
+#' fit-models-short.R)
+#' @param tmp_data Training data
+#' @param .sites List of sites
+#' @param n_boot Number of bootstraps
+#' @param block_size Length of block
+block_boot <- 
+  function(.tbl_data, .n_boot = 20, .b_size = 14) {
+    tmp_sites = .tbl_data %>% pull(site) %>% as.character() %>% unique()
+    
+    map(tmp_sites, \(.site) {
+      tmp_data = .tbl_data %>% filter(site == .site)
+      len_data = dim(tmp_data)[1]
+      samp_last = len_data - .b_size
+      samp_n =  len_data / .b_size
+      
+      map(as.list(seq(1, .n_boot)), ~ {
+        tmp_start = sample(seq(1, samp_last), samp_n)
+        
+        # Block bootstrap
+        tmp_boot =
+          map(tmp_start, \(.start) {
+            tmp_data %>% 
+              as_tibble() %>% 
+              select(-index, -site, -t_ax) %>% 
+              slice(.start:(.start + .b_size - 1))
+          }) %>% 
+          list_rbind() %>% 
+          mutate(
+            index = tmp_data$index, 
+            site = tmp_data$site, 
+            t_ax = tmp_data$t_ax
+          ) %>% 
+          as_tsibble(index = index, key = site) %>% 
+          relocate(index, site, occ)
+      })
+    }) %>% 
+      set_names(tmp_sites) %>% 
+      list_transpose() %>% 
+      map(\(.tmp_data) {
+        .tmp_data %>% list_rbind()
+      })
+  }
+
+
+
+#' #' Bootstrap & lag data
+#' #' Function to created block bootstrapped training data. To do so, get rid of
+#' #' lagged data, bootstrap training set, and lag new data. Sample with
+#' #' replacement
+#' #' Attention: horizon is global variables defined outside the function (in
+#' #' fit-models-short.R)
+#' #' @param tmp_data Training data
+#' #' @param n_boot Number of bootstraps
+#' #' @param block_size Length of block
+#' #' @param boot Whether to bootstrap or only lag data
+#' boot_lag <- 
+#'   function(tmp_data, n_boot = 20, block_size = 14, boot = TRUE) {
+#'     tmp_data %>% select(lag)
+#'     tmp_data = tmp_data %>% filter(lag == "lag1")
+#'     save_index = tmp_data$index
+#'     len_data = max(save_index)
+#'     samp_last = len_data - block_size # last possible index for .start
+#'     samp_n =  len_data / block_size # number of bootstrapped samples
+#'     nlag = horizon + 1
+#'     
+#'     map(as.list(seq(1, n_boot)), ~ {
+#'       tmp_start = sample(seq(1, samp_last), samp_n, replace = TRUE)
+#'       
+#'       # Block bootstrap
+#'       tmp_boot =
+#'         map(tmp_start, \(.start) {
+#'           tmp_data %>% 
+#'             select(-index) %>% 
+#'             slice(.start:(.start + block_size - 1))
+#'         }) %>% 
+#'         list_rbind()# %>% 
+#'         # mutate(index = save_index)
+#'       
+#'       # Add lags
+#'       tmp_lag = # matrix lagged data
+#'         tmp_boot %>% select(-contains("days")) %>% 
+#'         as.matrix()
+#'       
+#'       tmp_lag_names = # name lagged variables
+#'         tmp_lag %>% dimnames %>% .[[2]]
+#'       tmp_lag_names = 
+#'         map(seq(nlag), \(.nlag) {
+#'           if (.nlag == 1) { 
+#'             tmp_lag_names
+#'           } else {
+#'             paste0(tmp_lag_names, "_lag", .nlag - 1)
+#'           }
+#'         }) %>% 
+#'         unlist()
+#'       
+#'       tmp_lag = # expand time
+#'         embed(tmp_lag, nlag)
+#'       
+#'       colnames(tmp_lag) = # rename cols
+#'         tmp_lag_names
+#'       
+#'       tmp_all = # join lagged & non-lagged data
+#'         tibble(
+#'           tmp_boot %>% 
+#'             slice(nlag:n()) %>% 
+#'             select(contains("days")),
+#'           tmp_lag %>% as_tibble(),
+#'         ) %>% 
+#'         relocate(occ)
+#'       
+#'       # Wide to long format
+#'       tmp_all <- # long format data with lag column
+#'         tmp_all %>%
+#'         select(-occ_other, -ad_diff_f, -ad_diff2_f, -ad_diff3_f) %>%
+#'         rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>%
+#'         rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% # fixed for _
+#'         pivot_longer(
+#'           cols = c(contains("lag")),
+#'           names_to = c(".value", "lag"),
+#'           names_sep = "-"
+#'         )
+#'     })
+#'   }
 
 
 # Plots ------------------------------------------------------------------------
@@ -498,15 +640,17 @@ xpredict_fun <-
   }
 
 
-
+#' Random forest fit and predict
+#' Random forest for forecast. Train RF on data in wide format: lagged data have
+#' their own column. Additionally predict bed occupancy for the next 7 days;
+#' easier to train and predict in one for loop. Finally, extract forecast
+#' parameters (i.e., expected forecast values) and compute confidence interval
+#' using average root mean squared error from oob data. Use predictors of
+#' increasing lag to predict bed occupancy with increasing time horizon h.
 #' @param .data_rf tibble of data
 #' @param .horizon forecast horizon
 rf_reg <- 
   function(.data_rf, .horizon = horizon) {
-    # Fit random forests from lagged variables and generate forecasts. Use
-    # predictors of increasing lag to predict bed occupancy with increasing time
-    # horizon .h.
-    
     # Train set
     data_train = 
       .data_rf %>% filter(type == "train")
@@ -553,4 +697,154 @@ rf_reg <-
         tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc, "par" = tmp_par)
       }) %>% 
       set_names(seq(.horizon))
+  }
+
+
+#' Random forest - interaction
+#' Random forest for forecast with interaction for lag. Train RF on data in 
+#' long format: lagged data are stacked and paird with lag column; let the
+#' random forests learn the interaction between lag and var_lagged. Additionally
+#' predict bed occupancy for the next 7 days; easier to train and predict in 
+#' one for loop. Finally, extract forecast parameters (i.e., expected forecast
+#' values) and compute confidence interval using average root mean squared 
+#' error from oob data.
+#' @param .data_rf tibble of data
+#' @param .horizon forecast horizon
+rf_reg_int <- 
+  function(.data_rf, .horizon = horizon) {
+    # Train set
+    data_train = 
+      .data_rf %>% filter(type == "train") %>% select(-type)
+    
+    # Test set
+    data_test = 
+      .data_rf %>% filter(type == "test") %>% select(-type)
+    
+    # Compute
+    tmp_fit = randomForest(occ ~ ., data = data_train, ntree = 1000)
+    tmp_fc = predict(tmp_fit,  data_test, predict.all = TRUE)
+    
+    # Group fc by lag
+    tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
+    max_lag = data_test$lag %>% parse_number() %>% max()
+    tmp_fc_individuals$lag = rep(seq(horizon), each = max_lag)
+    tmp_fc_individuals = 
+      map(tmp_fc_individuals$lag %>% unique(), \(.lag) {
+        tmp_fc_individuals %>% filter(lag == .lag) %>% select(-lag) %>% 
+          unlist() %>% t() %>% as_tibble()
+      }) %>% 
+      list_rbind()
+    
+    tmp_par = 
+      list(
+        "mean" = tmp_fc_individuals %>% rowMeans(), 
+        "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
+      )
+    
+    tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc_individuals, "par" = tmp_par)
+  }
+
+
+
+#' XGBoost - interaction
+#' @param .data_rf tibble of data
+#' @param .horizon forecast horizon
+xgb_reg_int <- 
+  function(.data_rf, .horizon = horizon) {
+    # Initialise
+    seq_boots <- # list of bootstraps
+      .data_rf %>% pull(boot) %>% unique()
+    
+    qreg = # quantile loss function (grad and hess)
+      function(.alpha) {
+        function(preds, dtrain) {
+          tmp_labels = getinfo(dtrain, "label")
+          pe = tmp_labels - preds
+          grad = if_else(pe < 0, 1 - .alpha, -.alpha)
+          hess = rep(1, length(grad))
+          list(grad = grad, hess = hess)
+        }
+      }
+    
+    
+    # Fit/forecast
+    tmp_fc <- 
+      map(seq_boots, \(.boot) { # for each bootstrap
+        # Train set
+        data_train =
+          .data_rf %>%
+          filter(type == "train", boot == .boot) %>% select(-type, -boot)# %>%
+        data_train =
+          xgb.DMatrix(
+            data = sparse.model.matrix(occ ~ . - 1, data = data_train),
+            label = data_train %>% pull(occ)
+          )
+        
+        # Test set
+        # Attention: always predict boot == 0 (original ts)!
+        data_test = 
+          .data_rf %>% 
+          filter(type == "test", boot == 0) %>% select(-type, -boot)
+        max_lag = # save for later
+          data_test$lag %>% parse_number() %>% max()
+        data_test =
+          xgb.DMatrix(
+            data = sparse.model.matrix(occ ~ . - 1, data = data_test),
+            label = data_test %>% pull(occ)
+          )
+        
+        # Fit and forecast
+        # for -1/+1 sd (assuming normal distribution)
+        map(c("1q" = .25, "mu" = 0.5, "3q" = .75), \(.alpha){ 
+          if (.alpha == 0.5) {
+            params = 
+              list(
+                objective = "reg:squarederror", # for mean forecasting
+                eta = 0.3, # default learning rate
+                gamma = 0, # default min loss reduction for leaf split
+                lambda = 1, # default L2 regularisation
+                alpha = 0, # default L1 regularisation
+                base_score = # initialise predictions based on sample mean
+                  getinfo(data_train, "label") %>% mean()
+              )
+          } else {
+            params = 
+              list(
+                objective = qreg(.alpha), # for quantile forecasting
+                eta = 0.3, # default learning rate
+                gamma = 0, # default min loss reduction for leaf split
+                lambda = 1, # default L2 regularisation
+                alpha = 0, # default L1 regularisation
+                base_score = # initialise predictions based on sample mean
+                  getinfo(data_train, "label") %>% mean()
+              )
+          }
+          tmp_fit =
+            xgb.train(
+              params,
+              data_train,
+              nrounds = 150 # max number of boosting interactions
+            )
+          tmp_fc = predict(tmp_fit,  data_test)
+          
+          # Average forecasts over lags
+          tmp_fc %>% matrix(nrow = max_lag, ncol = horizon) %>% t() %>% 
+            rowMeans()# %>% as.data.frame() %>% setNames(.idx)
+        }) %>% 
+          bind_rows() %>% 
+        mutate(
+          h = seq(1, n()),
+          boot = .boot
+        )
+    }) %>%  
+      list_rbind() %>% 
+      group_by(h) %>% 
+      mutate(var= ((`3q` - `1q`) / 1.349) ** 2) %>% # sample variance
+      summarise( # mean and sd of mixture of bootstrap fc
+        mean = mean(mu),
+        sd = # from var = weighted average of var + variance of means
+          sqrt(mean(var) + mean(mu - mean) ** 2) 
+        )
+    
+    list("mean" = tmp_fc$mean, "sd" = tmp_fc$sd)
   }

@@ -53,7 +53,8 @@ list_models_f <- # select models for forecast plot
     "locf_arima_dad_rec",
     "locf_arima_dado",
     "rf_dado_f",
-    "rf_dado_f_int"
+    "rf_dado_f_int",
+    "xpred_xgb"
     )
 
 
@@ -87,8 +88,6 @@ plot_forecast <- # plot forecast function
       scale_y_continuous(breaks = c(600, 700)) +
       facet_wrap(vars(.model), ncol = 1, strip.position = "right")
   }
-
-
 
 
 plt_fc <- # generate plots 

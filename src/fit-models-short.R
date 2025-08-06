@@ -36,18 +36,40 @@ ts_occ <-
 
 
 
+# Block Bootstrap --------------------------------------------------------------
+# Use ts_occ_b for getting lagged and splitted bootstrapped training data (no need of xreg though as using bootstrapped data only for training)
+n_boot <- 20
+block_size <- 14
+ts_occ_b <-
+  block_boot(
+    ts_occ %>% filter(!is_aggregated(site)),
+    .n_boot = n_boot,
+    .b_size = block_size
+    )
+
+
+
 # Lag/split dataset ------------------------------------------------------------
 horizon = 7
 ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
+ts_occ_lag_b <- # on bootstrapped data
+  map(ts_occ_b, \(x) lag_fun(x, .lag = horizon))
+
 
 split_data_tt <- # Train/test set
   split_tt(ts_occ_lag)
+split_data_tt_b <- # on bootstrapped data
+  map(ts_occ_lag_b, \(x) split_tt(x))
+
 
 initial <- "16 weeks" 
 assess <- "1 weeks"
 skip <- "6 weeks"
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
+split_data_cv_b <- # on bootstrapped data
+  map(split_data_tt_b, \(x) split_cv(x, initial, assess, skip))
+
 
 splits <- split_data_cv$split %>% unique() # save cv splits names
 idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
@@ -55,10 +77,11 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 # Predict test exogenous -------------------------------------------------------
+# Exclude occ_other (possibly add too much noise)
 xpredict_method = "pull" # mean, naive, snaive, arima, ets
 data_xpredict <- 
   xpredict_fun(
-    split_data_cv, 
+    split_data_cv %>% select(-contains("occ_other")), 
     c("occ", "ad_diff"), 
     idx_start_test, 
     xpredict_method
@@ -96,7 +119,7 @@ fit_fable <-
       ),
     arima_dado = 
       ARIMA(
-        occ ~ days_ + ad_diff_f + ad_diff2_f + ad_diff3_f + occ_other
+        occ ~ days_ + ad_diff_f + ad_diff2_f + ad_diff3_f# + occ_other
       ), 
     arima_dado_l = 
       ARIMA(
@@ -220,8 +243,8 @@ es_model <- # define esx fit
 
 list_var_ese <- 
   c("occ", 
-    "ad_diff_f", "ad_diff2_f", "ad_diff3_f",
-    "occ_other")
+    "ad_diff_f", "ad_diff2_f", "ad_diff3_f")#,
+    # "occ_other")
 # list_var_ese <-
 #   split_data_cv %>%
 #   select(
@@ -239,6 +262,8 @@ fit_es <- # fit es
 
 
 # Random forest
+# Attention: here excluding same-day predictors; plus using occ_other as no
+# need to predict it
 list_var_rf <-
   split_data_cv %>%
   select(
@@ -249,7 +274,7 @@ list_var_rf <-
 
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
-    data_xpredict %>% filter(!is_aggregated(site)), 
+    split_data_cv %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
   )
 
@@ -260,7 +285,7 @@ fit_rf <-  # extract fits
               map(.x, ~ # horizon
                     pluck(.x, "fit"))))
 
-ls_par <- # extract parameters fc distribution
+ls_rf_par <- # extract parameters fc distribution
   ls_rf %>% 
   map(., ~ # site
         map(.x, ~ # split
@@ -269,7 +294,11 @@ ls_par <- # extract parameters fc distribution
 
 
 # Random forest - interaction
-data_xpredict_int <- 
+# Attention: here excluding same-day predictors and occ_other
+list_var_rf <- # exclude occ_other
+  list_var_rf[!grepl("occ_other*.", list_var_rf)]
+
+data_xpredict_int <- # long format data with lag column
   data_xpredict %>%
   select(split, type, site, index, all_of(list_var_rf)) %>%
   rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
@@ -280,46 +309,9 @@ data_xpredict_int <-
     names_sep = "-"
   )
 
-list_var_rf_int <- 
+list_var_rf_int <- # list predictors 
   data_xpredict_int %>% select(-c(split, type, site, index)) %>% names()
 
-rf_reg_int <- 
-  function(.data_rf, .horizon = horizon) {
-    # Fit random forests from lagged variables and generate forecasts. Use
-    # predictors of increasing lag to predict bed occupancy with increasing time
-    # horizon .h.
-    
-    # Train set
-    data_train = 
-      .data_rf %>% filter(type == "train") %>% select(-type)
-    
-    # Test set
-    data_test = 
-      .data_rf %>% filter(type == "test") %>% select(-type)
-    
-    # Compute
-    tmp_fit = randomForest(occ ~ ., data = data_train, ntree = 1000)
-    tmp_fc = predict(tmp_fit,  data_test, predict.all = TRUE)
-    
-    # Group fc by lag
-    tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
-    max_lag = data_test$lag %>% parse_number() %>% max()
-    tmp_fc_individuals$lag = rep(seq(horizon), each = max_lag)
-    tmp_fc_individuals = 
-      map(tmp_fc_individuals$lag %>% unique(), \(.lag) {
-        tmp_fc_individuals %>% filter(lag == .lag) %>% select(-lag) %>% 
-          unlist() %>% t() %>% as_tibble()
-      }) %>% 
-      list_rbind()
-    
-    tmp_par = 
-      list(
-        "mean" = tmp_fc_individuals %>% rowMeans(), 
-        "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
-      )
-    
-    tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc_individuals, "par" = tmp_par)
-  }
 
 ls_rf_int <- # fits + fc + parameters fc distribution
   cv_wrap(
@@ -333,11 +325,47 @@ fit_rf_int <-  # extract fits
         map(.x, ~ # split
               pluck(.x, "fit")))
 
-ls_par_int <- # extract parameters fc distribution
+ls_rf_int_par <- # extract parameters fc distribution
   ls_rf_int %>% 
   map(., ~ # site
         map(.x, ~ # split
               pluck(.x, "par")))
+
+
+# XGBoosting - interaction
+# Join bootstrapped samples in one tibble; convert wide to long (for lag
+# as for rf_int data); join real (data_xpredict_int) with bootstrapped data
+split_data_cv_b <- # joint 
+  split_data_cv_b %>% 
+  imap(\(x, idx) {
+    x %>% mutate(boot = idx)
+  }) %>%
+  list_rbind()
+
+data_xpredict_int_b <- # long format data with lag column
+  split_data_cv_b %>% 
+  select(split, type, site, index, boot, all_of(list_var_rf)) %>%
+  rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
+  rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
+  pivot_longer(
+    cols = c(contains("lag")),
+    names_to = c(".value", "lag"),
+    names_sep = "-"
+  )
+
+data_xpredict_int_b <- # join real/bootstrapped data
+  data_xpredict_int %>% 
+  mutate(boot = 0) %>% 
+  bind_rows(data_xpredict_int_b)
+
+list_var_xgb <- # list predictors + boot identifier
+  data_xpredict_int_b %>% select(-c(split, type, site, index)) %>% names()
+
+ls_xgb_par <- # fits + fc + parameters fc distribution
+  cv_wrap(
+    data_xpredict_int_b %>% filter(!is_aggregated(site)),
+    select_training,  xgb_reg_int,  list_var_xgb, "all"
+  )
 
 
 # Save all fits in list
@@ -352,14 +380,10 @@ fit_all =
     "fable_var_ad3" = fit_fable_var_ad3,
     "fable_var_ad3_nof" = fit_fable_var_ad3_nof,
     "fable_var_other" = fit_fable_var_other,
-    # "es_ae_f" = fit_es,
     "es" = fit_es,
-    # "rf_dae_f" = fit_rf,
-    "rf" = fit_rf,
-    # "rf_dae_f_int" = fit_rf_int,
-    "rf_int" = fit_rf_int,
-    "rf_dae_f_par" = ls_par,
-    "rf_dae_f_int_par" = ls_par_int
+    "rf_dae_f_par" = ls_rf_par,
+    "rf_dae_f_int_par" = ls_rf_int_par,
+    "xgb_par" = ls_xgb_par
     )
 # fit_fable = fit_all$fable
 # fit_fable_agg = fit_all$fable_agg
@@ -403,10 +427,11 @@ fc_fable_xpred <-
 fc_fable_xpred_rec <- 
   fit_fable_agg %>% 
   reconcile(
-    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov"),
-    arima_dad_l_nof_rec = min_trace(arima_dad_l_nof_agg, method = "mint_cov")
+    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov")#,
+    # arima_dad_l_nof_rec = min_trace(arima_dad_l_nof_agg, method = "mint_cov")
     ) %>% 
-  select(-arima_dad_agg, -arima_dad_l_nof_agg) %>%
+  # select(-arima_dad_agg, -arima_dad_l_nof_agg) %>%
+  select(-arima_dad_agg) %>%
   forecast(
     new_data = data_xpredict %>% 
       filter(type == "test") %>% 
@@ -494,14 +519,14 @@ fc_var <- # bind VAR fc
   )
 
 # Exponential smoothing with predictors (esx)
-select_model <- # select model fit (by site and split)
-  function(.data, .site, .split, ...)  {
-    # .data is list (site) of list (split) of model fits
-    list(
-      "model" = .data[[.site]][[.split]],
-      "index" = data_xpredict %>% filter(site == .site, split == .split)
-    )
-  }
+# select_model <- # select model fit (by site and split)
+#   function(.data, .site, .split, ...)  {
+#     # .data is list (site) of list (split) of model fits
+#     list(
+#       "model" = .data[[.site]][[.split]],
+#       "index" = data_xpredict %>% filter(site == .site, split == .split)
+#     )
+#   }
 
 es_forecast <- # define esx forecast
   function(.data) {
@@ -564,7 +589,7 @@ rf_forecast =
   }
 
 fc_rf <- 
-  cv_wrap(ls_par, select_model, rf_forecast)
+  cv_wrap(ls_rf_par, select_model, rf_forecast)
 
 fc_rf <- # convert to tsibble
   fc_rf %>% 
@@ -593,10 +618,39 @@ rf_forecast_int =
   }
 
 fc_rf_int <- 
-  cv_wrap(ls_par_int, select_model, rf_forecast_int)
+  cv_wrap(ls_rf_int_par, select_model, rf_forecast_int)
 
 fc_rf_int <- # convert to tsibble
   fc_rf_int %>% 
+  flatten() %>% 
+  bind_rows() %>% 
+  as_tsibble(index = index, key = c("split", "site", ".model"))
+
+
+# XGBoost
+xgb_forecast =
+  function(.data) {
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    .data$model = 
+      .data$model %>% as_tibble()
+    tmp_fc =
+      bind_cols(.data$model, .data$index) %>% 
+      mutate(
+        .model = "xpred_xgb",
+        .mean = mean, # necessary for fable::autoplot
+        occ = dist_normal(mu = mean, sd = sd),
+        mean = NULL,
+        sd = NULL
+      ) %>%
+      relocate(c(.model, occ, .mean), .after = index)
+  }
+
+fc_xgb <- 
+  cv_wrap(ls_xgb_par, select_model, xgb_forecast)
+
+fc_xgb <- # convert to tsibble
+  fc_xgb %>% 
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
@@ -607,10 +661,11 @@ dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
 dimnames(fc_ese$occ) <- "occ" 
 dimnames(fc_rf$occ) <- "occ"
 dimnames(fc_rf_int$occ) <- "occ"
+dimnames(fc_xgb$occ) <- "occ"
 fc_all <- 
   list(
     fc_fable, fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
-    fc_ese, fc_rf, fc_rf_int
+    fc_ese, fc_rf, fc_rf_int, fc_xgb
     ) %>% 
   reduce(bind_rows)
 
@@ -626,5 +681,5 @@ if (!file.exists(save_path)) {
 saveRDS(split_data_cv, file = paste0(save_path, "splits_short.RDS"))
 saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
-saveRDS(fc_all, file = paste0(save_path, "forecasts_short_ets.RDS"))
+saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
