@@ -30,21 +30,6 @@ ts_occ <-
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
     -adm, -dis,
     -escal, -core,
-    # -escal, -core, -occ_i,
-    # -ad_diff, -ad_diff2, -ad_diff3
-    )
-
-
-
-# Block Bootstrap --------------------------------------------------------------
-# Use ts_occ_b for getting lagged and splitted bootstrapped training data (no need of xreg though as using bootstrapped data only for training)
-n_boot <- 20
-block_size <- 14
-ts_occ_b <-
-  block_boot(
-    ts_occ %>% filter(!is_aggregated(site)),
-    .n_boot = n_boot,
-    .b_size = block_size
     )
 
 
@@ -52,14 +37,10 @@ ts_occ_b <-
 # Lag/split dataset ------------------------------------------------------------
 horizon = 7
 ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
-ts_occ_lag_b <- # on bootstrapped data
-  map(ts_occ_b, \(x) lag_fun(x, .lag = horizon))
 
 
 split_data_tt <- # Train/test set
   split_tt(ts_occ_lag)
-split_data_tt_b <- # on bootstrapped data
-  map(ts_occ_lag_b, \(x) split_tt(x))
 
 
 initial <- "16 weeks" 
@@ -67,8 +48,6 @@ assess <- "1 weeks"
 skip <- "6 weeks"
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
-split_data_cv_b <- # on bootstrapped data
-  map(split_data_tt_b, \(x) split_cv(x, initial, assess, skip))
 
 
 splits <- split_data_cv$split %>% unique() # save cv splits names
@@ -76,9 +55,21 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 
+# Block Bootstrap --------------------------------------------------------------
+# Use ts_occ_b for getting lagged and splitted bootstrapped training data (no need of xreg though as using bootstrapped data only for training)
+n_boot <- 20
+block_size <- 14
+split_data_cv_b <-
+  boot_fun(
+    split_data_cv %>% filter(!is_aggregated(site)),
+    .n_boot = n_boot
+    )
+
+
+
 # Predict test exogenous -------------------------------------------------------
 # Exclude occ_other (possibly add too much noise)
-xpredict_method = "pull" # mean, naive, snaive, arima, ets
+xpredict_method = "pull" # TSLM, naive, snaive, arima, ets
 data_xpredict <- 
   xpredict_fun(
     split_data_cv %>% select(-contains("occ_other")), 
@@ -97,42 +88,25 @@ fit_fable <-
   tsibble(index = index, key = c(split, site)) %>%
   model(
     # Baseline models (for comparison)
-    mean = MEAN(occ),
+    lmts = TSLM(occ ~ trend() + days_),
     naive = NAIVE(occ),
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
     arima = ARIMA(occ),
-    arima_dad = ARIMA(occ ~ days_ + ad_diff_f + ad_diff2_f + ad_diff3_f),
-    arima_dad_nof = ARIMA(occ ~ days_ + ad_diff + ad_diff2 + ad_diff3),
     arima_dad_l = 
       ARIMA(
         occ ~ 
           days_ +
-          ad_diff_f + ad_diff2_f + ad_diff3_f +
-          ad_diff_f_lag1 + ad_diff2_f_lag1 + ad_diff3_f_lag1 +
-          ad_diff_f_lag2 + ad_diff2_f_lag2 + ad_diff3_f_lag2 +
-          ad_diff_f_lag3 + ad_diff2_f_lag3 + ad_diff3_f_lag3 +
-          ad_diff_f_lag4 + ad_diff2_f_lag4 + ad_diff3_f_lag4 +
-          ad_diff_f_lag5 + ad_diff2_f_lag5 + ad_diff3_f_lag5 +
-          ad_diff_f_lag6 + ad_diff2_f_lag6 + ad_diff3_f_lag6 +
-          ad_diff_f_lag7 + ad_diff2_f_lag7 + ad_diff3_f_lag7
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6
       ),
-    arima_dado = 
-      ARIMA(
-        occ ~ days_ + ad_diff_f + ad_diff2_f + ad_diff3_f# + occ_other
-      ), 
     arima_dado_l = 
       ARIMA(
         occ ~ 
-          days_ + 
-          ad_diff_f + ad_diff2_f + ad_diff3_f +
-          ad_diff_f_lag1 + ad_diff2_f_lag1 + ad_diff3_f_lag1 + occ_other_lag1 +
-          ad_diff_f_lag2 + ad_diff2_f_lag2 + ad_diff3_f_lag2 + occ_other_lag2 +
-          ad_diff_f_lag3 + ad_diff2_f_lag3 + ad_diff3_f_lag3 + occ_other_lag3 +
-          ad_diff_f_lag4 + ad_diff2_f_lag4 + ad_diff3_f_lag4 + occ_other_lag4 +
-          ad_diff_f_lag5 + ad_diff2_f_lag5 + ad_diff3_f_lag5 + occ_other_lag5 +
-          ad_diff_f_lag6 + ad_diff2_f_lag6 + ad_diff3_f_lag6 + occ_other_lag6 +
-          ad_diff_f_lag7 + ad_diff2_f_lag7 + ad_diff3_f_lag7 + occ_other_lag7
+          days_ +
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 + 
+          occ_other
       )
   )
 
@@ -147,21 +121,9 @@ fit_fable_agg <-
       ARIMA(
         occ ~ 
           days_ + 
-          ad_diff_f + ad_diff2_f + ad_diff3_f
-      )#,
-    # arima_dad_l_nof_agg = 
-    #   ARIMA(
-    #     occ ~ 
-    #       days_ + 
-    #       ad_diff + ad_diff2 + ad_diff3 +
-    #       ad_diff_lag1 + ad_diff2_lag1 + ad_diff3_lag1 +
-    #       ad_diff_lag2 + ad_diff2_lag2 + ad_diff3_lag2 +
-    #       ad_diff_lag3 + ad_diff2_lag3 + ad_diff3_lag3 +
-    #       ad_diff_lag4 + ad_diff2_lag4 + ad_diff3_lag4 +
-    #       ad_diff_lag5 + ad_diff2_lag5 + ad_diff3_lag5 +
-    #       ad_diff_lag6 + ad_diff2_lag6 + ad_diff3_lag6 +
-    #       ad_diff_lag7 + ad_diff2_lag7 + ad_diff3_lag7
-    #   )
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6
+      )
   )
 
 
@@ -175,14 +137,6 @@ fit_fable_var_ad <- # adm - dis
     var_ad = VAR(vars(occ, ad_diff_f) ~ season(period = "week"))
   )
 
-fit_fable_var_ad_nof <- # adm - dis not filtered
-  split_data_cv %>% 
-  filter(type == "train", !is_aggregated(site)) %>%
-  mutate(site = site %>% as.character()) %>% 
-  tsibble(index = index, key = c(split, site)) %>%
-  model(
-    var_ad_nof = VAR(vars(occ, ad_diff) ~ season(period = "week"))
-  )
 
 fit_fable_var_ad2 <- # diff(adm - dis)
   split_data_cv %>% 
@@ -191,34 +145,6 @@ fit_fable_var_ad2 <- # diff(adm - dis)
   tsibble(index = index, key = c(split, site)) %>%
   model(
     var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
-  )
-
-fit_fable_var_ad2_nof <- # diff(adm - dis) not filtered
-  split_data_cv %>% 
-  filter(type == "train", !is_aggregated(site)) %>%
-  mutate(site = site %>% as.character()) %>% 
-  tsibble(index = index, key = c(split, site)) %>%
-  model(
-    var_ad2_nof = VAR(vars(occ, ad_diff2) ~ season(period = "week"))
-  )
-
-
-fit_fable_var_ad3 <- # diff(diff(adm - dis)
-  split_data_cv %>% 
-  filter(type == "train", !is_aggregated(site)) %>%
-  mutate(site = site %>% as.character()) %>% 
-  tsibble(index = index, key = c(split, site)) %>%
-  model(
-    var_ad3 = VAR(vars(occ, ad_diff3_f) ~ season(period = "week"))
-  )
-
-fit_fable_var_ad3_nof <- # diff(diff(adm - dis) not filtered
-  split_data_cv %>% 
-  filter(type == "train", !is_aggregated(site)) %>%
-  mutate(site = site %>% as.character()) %>% 
-  tsibble(index = index, key = c(split, site)) %>%
-  model(
-    var_ad3_nof = VAR(vars(occ, ad_diff3) ~ season(period = "week"))
   )
 
 
@@ -243,15 +169,9 @@ es_model <- # define esx fit
 
 list_var_ese <- 
   c("occ", 
-    "ad_diff_f", "ad_diff2_f", "ad_diff3_f")#,
-    # "occ_other")
-# list_var_ese <-
-#   split_data_cv %>%
-#   select(
-#     contains("occ"), -occ_other,
-#     matches("ad_diff.*_f") , -ad_diff_f, -ad_diff2_f, -ad_diff3_f,
-#     contains("days_"), -days_) %>%
-#   names()
+    "ad_diff_f_lag3", "ad_diff2_f_lag3", 
+    "ad_diff_f_lag6", "ad_diff2_f_lag6"
+    )
 
 fit_es <- # fit es
   cv_wrap(
@@ -262,13 +182,15 @@ fit_es <- # fit es
 
 
 # Random forest
-# Attention: here excluding same-day predictors; plus using occ_other as no
-# need to predict it
+# Attention: here excluding same-day predictors, but including lagged
+# occ_other because not predicted; also including all laggs because 
+# collinearity not a problem here.
 list_var_rf <-
   split_data_cv %>%
   select(
     contains("occ"), -occ_other,
-    matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f, -ad_diff3_f,
+    matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
+    -contains("ad_diff3"), # put after previous line to not override!
     contains("days_"), -days_) %>%
   names()
 
@@ -294,7 +216,7 @@ ls_rf_par <- # extract parameters fc distribution
 
 
 # Random forest - interaction
-# Attention: here excluding same-day predictors and occ_other
+# Attention: same as rf but also excluding occ_other (would have to predict it)
 list_var_rf <- # exclude occ_other
   list_var_rf[!grepl("occ_other*.", list_var_rf)]
 
@@ -333,15 +255,9 @@ ls_rf_int_par <- # extract parameters fc distribution
 
 
 # XGBoosting - interaction
+# Same predictors as rf interaction
 # Join bootstrapped samples in one tibble; convert wide to long (for lag
 # as for rf_int data); join real (data_xpredict_int) with bootstrapped data
-split_data_cv_b <- # joint 
-  split_data_cv_b %>% 
-  imap(\(x, idx) {
-    x %>% mutate(boot = idx)
-  }) %>%
-  list_rbind()
-
 data_xpredict_int_b <- # long format data with lag column
   split_data_cv_b %>% 
   select(split, type, site, index, boot, all_of(list_var_rf)) %>%
@@ -353,7 +269,7 @@ data_xpredict_int_b <- # long format data with lag column
     names_sep = "-"
   )
 
-data_xpredict_int_b <- # join real/bootstrapped data
+data_xpredict_int_b <- # add data with xpred var
   data_xpredict_int %>% 
   mutate(boot = 0) %>% 
   bind_rows(data_xpredict_int_b)
@@ -374,15 +290,11 @@ fit_all =
     "fable" = fit_fable,
     "fable_agg" = fit_fable_agg,
     "fable_var_ad" = fit_fable_var_ad,
-    "fable_var_ad_nof" = fit_fable_var_ad_nof,
     "fable_var_ad2" = fit_fable_var_ad2,
-    "fable_var_ad2_nof" = fit_fable_var_ad2_nof,
-    "fable_var_ad3" = fit_fable_var_ad3,
-    "fable_var_ad3_nof" = fit_fable_var_ad3_nof,
     "fable_var_other" = fit_fable_var_other,
     "es" = fit_es,
-    "rf_dae_f_par" = ls_rf_par,
-    "rf_dae_f_int_par" = ls_rf_int_par,
+    "rf_par" = ls_rf_par,
+    "rf_int_par" = ls_rf_int_par,
     "xgb_par" = ls_xgb_par
     )
 # fit_fable = fit_all$fable
@@ -412,7 +324,7 @@ fc_fable <-
 # ARIMA with predicted exogenous
 fc_fable_xpred <- 
   fit_fable %>% 
-  select(contains("arima_da")) %>% 
+  select(arima_dad_l) %>% 
   forecast(
     new_data = 
       data_xpredict %>% 
@@ -427,10 +339,8 @@ fc_fable_xpred <-
 fc_fable_xpred_rec <- 
   fit_fable_agg %>% 
   reconcile(
-    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov")#,
-    # arima_dad_l_nof_rec = min_trace(arima_dad_l_nof_agg, method = "mint_cov")
+    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov")
     ) %>% 
-  # select(-arima_dad_agg, -arima_dad_l_nof_agg) %>%
   select(-arima_dad_agg) %>%
   forecast(
     new_data = data_xpredict %>% 
@@ -446,24 +356,8 @@ fc_fable_var_ad <-
   fit_fable_var_ad %>% 
   forecast(h = horizon)
 
-fc_fable_var_ad_nof <- 
-  fit_fable_var_ad_nof %>% 
-  forecast(h = horizon)
-
 fc_fable_var_ad2 <- 
   fit_fable_var_ad2 %>% 
-  forecast(h = horizon)
-
-fc_fable_var_ad2_nof <- 
-  fit_fable_var_ad2_nof %>% 
-  forecast(h = horizon)
-
-fc_fable_var_ad3 <- 
-  fit_fable_var_ad3 %>% 
-  forecast(h = horizon)
-
-fc_fable_var_ad3_nof <- 
-  fit_fable_var_ad3_nof %>% 
   forecast(h = horizon)
 
 fc_fable_var_other <- 
@@ -473,11 +367,7 @@ fc_fable_var_other <-
 
 fc_var <- # bind VAR fc
   map(
-    list(
-      fc_fable_var_ad, fc_fable_var_ad_nof,
-      fc_fable_var_ad2, fc_fable_var_ad2_nof,
-      fc_fable_var_ad3, fc_fable_var_ad3_nof
-      ),
+    list(fc_fable_var_ad, fc_fable_var_ad2),
     \(.x) {
       .x %>% 
         as_tibble() %>% 
@@ -519,24 +409,26 @@ fc_var <- # bind VAR fc
   )
 
 # Exponential smoothing with predictors (esx)
-# select_model <- # select model fit (by site and split)
-#   function(.data, .site, .split, ...)  {
-#     # .data is list (site) of list (split) of model fits
-#     list(
-#       "model" = .data[[.site]][[.split]],
-#       "index" = data_xpredict %>% filter(site == .site, split == .split)
-#     )
-#   }
+select_model <- # select model fit (by site and split)
+  function(.data, .site, .split, ...)  {
+    # .data is list (site) of list (split) of model fits
+    # attention: data_xpredict defined globally; leave this here!
+    list(
+      "model" = .data[[.site]][[.split]],
+      "index" = data_xpredict %>% filter(site == .site, split == .split)
+    )
+  }
 
 es_forecast <- # define esx forecast
   function(.data) {
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     tmp_fc = # compute forecasts
-      forecast(.data$model, h = horizon,
-               interval = "prediction",
-               level = .95,
-               newdata = .data$index
+      forecast(
+        .data$model, h = horizon,
+        interval = "prediction",
+        level = .95,
+        newdata = .data$index
       )
     tmp_fc = # add forecast distributions
       reduce(

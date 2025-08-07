@@ -197,19 +197,6 @@ select_fc <- # select forecast (by site and split) - used in cv_wrap()
   }
 
 
-#' extract site-, and split-specific model fit/fc parameters (es, rf, xgb)
-#' @param .data fits/fc parameters
-#' @param .site from cv_wrap
-#' @param .split from cv_wrap
-select_model <- # select model fit (by site and split)
-  function(.data, .site, .split, ...)  {
-    # .data is list (site) of list (split) of model fits
-    list(
-      "model" = .data[[.site]][[.split]],
-      "index" = data_xpredict %>% filter(site == .site, split == .split)
-    )
-  }
-
 
 #' wrapper over site- and cv split-specific data
 #' @param .data Data organised by site and splits
@@ -239,49 +226,44 @@ cv_wrap <-
   }
 
 
-#' Block Bootstrap
-#' Function to created block bootstrap data data
+#' Bootstrap
+#' Function to created bootstrapped data data. Bootstrap only training sets
+#' for each cv fold. 
+#' Attention: don't care about block bootstrap because XGB uses only 
+#' row-wise information to predict outcome, which is not altered by
+#' bootstrapping.
+#' 
 #' fit-models-short.R)
-#' @param tmp_data Training data
-#' @param .sites List of sites
-#' @param n_boot Number of bootstraps
-#' @param block_size Length of block
-block_boot <- 
-  function(.tbl_data, .n_boot = 20, .b_size = 14) {
-    tmp_sites = .tbl_data %>% pull(site) %>% as.character() %>% unique()
+#' @param .tbl_cv Cross-validated (and lagged) time series
+#' @param .n_boot Number of bootstraps
+#' @param .b_size Length of block
+#' @param .lag Length of lag
+boot_fun <- 
+  function(.tbl_cv, .n_boot = 20) {
+    # Initialise
+    len_data = 
+      .tbl_cv %>% group_by(split, type, site) %>% group_size() %>% unique()
+    len_train = len_data %>% max()
+    len_test = len_data %>% min()
     
-    map(tmp_sites, \(.site) {
-      tmp_data = .tbl_data %>% filter(site == .site)
-      len_data = dim(tmp_data)[1]
-      samp_last = len_data - .b_size
-      samp_n =  len_data / .b_size
-      
-      map(as.list(seq(1, .n_boot)), ~ {
-        tmp_start = sample(seq(1, samp_last), samp_n)
-        
-        # Block bootstrap
-        tmp_boot =
-          map(tmp_start, \(.start) {
-            tmp_data %>% 
-              as_tibble() %>% 
-              select(-index, -site, -t_ax) %>% 
-              slice(.start:(.start + .b_size - 1))
-          }) %>% 
-          list_rbind() %>% 
-          mutate(
-            index = tmp_data$index, 
-            site = tmp_data$site, 
-            t_ax = tmp_data$t_ax
-          ) %>% 
-          as_tsibble(index = index, key = site) %>% 
-          relocate(index, site, occ)
-      })
+    # Bootstrap
+    map(as.list(seq(1, .n_boot)), \(.boot) { # for each boot
+      .tbl_cv %>% 
+        group_by(split, site) %>% # for each split and site
+        mutate(
+          across(-all_of(c("type", "index", "t_ax")), # preserve index and t_ax
+                 ~ { # resample training set with replacement
+                   tmp_idx = 
+                     sample(len_train, replace = TRUE) %>% 
+                     c(seq(len_train + 1, len_train + len_test))
+                   .x[tmp_idx]
+                 }
+          ),
+          boot = .boot
+        ) %>% 
+        ungroup()
     }) %>% 
-      set_names(tmp_sites) %>% 
-      list_transpose() %>% 
-      map(\(.tmp_data) {
-        .tmp_data %>% list_rbind()
-      })
+      list_rbind()
   }
 
 
@@ -563,8 +545,9 @@ xpredict_fun <-
               filter(type == "train") %>%
               as_tsibble(index = index, key = c(split, site))
             
-            if (.type == "mean") {
-              x_predict =  x_predict %>% model(xmodel= MEAN(.x))
+            if (.type == "tslm") {
+              x_predict =  
+                x_predict %>% model(xmodel= TSLM(.x ~ trend() + days_))
             } else if (.type == "naive") {
               x_predict =  x_predict %>% model(xmodel= NAIVE(.x))
             } else if (.type == "snaive") {
@@ -577,11 +560,11 @@ xpredict_fun <-
             } else if (.type == "pull") {
               x_predict =  x_predict %>% 
                 model(
-                  mean = MEAN(.x),
+                  tslm = TSLM(.x ~ trend() + days_),
                   ets = ETS(.x), 
                   arima = ARIMA(.x ~ days_)
                   ) %>% 
-                mutate(xmodel = (mean + ets + arima) / 3)
+                mutate(xmodel = (tslm+ ets + arima) / 3)
             }
             x_predict = 
               x_predict %>%
@@ -781,7 +764,7 @@ xgb_reg_int <-
           )
         
         # Test set
-        # Attention: always predict boot == 0 (original ts)!
+        # Attention: use only boot == 0 to use xpred variables
         data_test = 
           .data_rf %>% 
           filter(type == "test", boot == 0) %>% select(-type, -boot)
