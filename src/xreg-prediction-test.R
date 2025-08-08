@@ -28,8 +28,7 @@ ts_occ <-
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
     -adm, -dis,
     -escal, -core,
-    # -escal, -core, -occ_i,
-    # -ad_diff, -ad_diff2, -ad_diff3
+    -ad_diff, -ad_diff2, -ad_diff3 # ignore these in this script!
     )
 
 
@@ -38,8 +37,10 @@ ts_occ <-
 horizon = 7
 ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
 
+
 split_data_tt <- # Train/test set
   split_tt(ts_occ_lag)
+
 
 initial <- "16 weeks" 
 assess <- "1 weeks"
@@ -52,7 +53,9 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 
-xpredict_method = c("mean", "naive", "snaive", "arima", "ets", "pull")
+# Predict test exogenous -------------------------------------------------------
+# Exclude occ_other (as in fit-models-short.R)
+xpredict_method = c("tslm", "naive", "snaive", "arima", "ets", "pull")
 tbl_data <- 
   map(xpredict_method, \(.xmod) {
     data_xpredict <- 
@@ -84,7 +87,7 @@ tbl_data <-
 plt_err <- 
   tbl_data %>%
   filter(type == "test", !is_aggregated(site)) %>% 
-  select(xpredict_mod, site, contains("error")) %>% 
+  select(xpredict_mod, site, contains("error"), -contains("other")) %>% 
   pivot_longer(-c(xpredict_mod, site)) %>% 
   ggplot(aes(x = name, y = value, colour = xpredict_mod)) +
   geom_boxplot(outliers = FALSE) +
