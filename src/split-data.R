@@ -9,7 +9,7 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-04-23
 
-# Functions to split/augment/bootstrap data for analysis -----------------------
+# Functions to split and augment data for analysis -----------------------------
 #' Create lagged data
 #' @param .data The data as a tsibble
 #' @param .lag Number of lags
@@ -226,127 +226,6 @@ cv_wrap <-
   }
 
 
-#' Bootstrap
-#' Function to created bootstrapped data data. Bootstrap only training sets
-#' for each cv fold. 
-#' Attention: don't care about block bootstrap because XGB uses only 
-#' row-wise information to predict outcome, which is not altered by
-#' bootstrapping.
-#' 
-#' fit-models-short.R)
-#' @param .tbl_cv Cross-validated (and lagged) time series
-#' @param .n_boot Number of bootstraps
-#' @param .b_size Length of block
-#' @param .lag Length of lag
-boot_fun <- 
-  function(.tbl_cv, .n_boot = 20) {
-    # Initialise
-    len_data = 
-      .tbl_cv %>% group_by(split, type, site) %>% group_size() %>% unique()
-    len_train = len_data %>% max()
-    len_test = len_data %>% min()
-    
-    # Bootstrap
-    map(as.list(seq(1, .n_boot)), \(.boot) { # for each boot
-      .tbl_cv %>% 
-        group_by(split, site) %>% # for each split and site
-        mutate(
-          across(-all_of(c("type", "index", "t_ax")), # preserve index and t_ax
-                 ~ { # resample training set with replacement
-                   tmp_idx = 
-                     sample(len_train, replace = TRUE) %>% 
-                     c(seq(len_train + 1, len_train + len_test))
-                   .x[tmp_idx]
-                 }
-          ),
-          boot = .boot
-        ) %>% 
-        ungroup()
-    }) %>% 
-      list_rbind()
-  }
-
-
-
-#' #' Bootstrap & lag data
-#' #' Function to created block bootstrapped training data. To do so, get rid of
-#' #' lagged data, bootstrap training set, and lag new data. Sample with
-#' #' replacement
-#' #' Attention: horizon is global variables defined outside the function (in
-#' #' fit-models-short.R)
-#' #' @param tmp_data Training data
-#' #' @param n_boot Number of bootstraps
-#' #' @param block_size Length of block
-#' #' @param boot Whether to bootstrap or only lag data
-#' boot_lag <- 
-#'   function(tmp_data, n_boot = 20, block_size = 14, boot = TRUE) {
-#'     tmp_data %>% select(lag)
-#'     tmp_data = tmp_data %>% filter(lag == "lag1")
-#'     save_index = tmp_data$index
-#'     len_data = max(save_index)
-#'     samp_last = len_data - block_size # last possible index for .start
-#'     samp_n =  len_data / block_size # number of bootstrapped samples
-#'     nlag = horizon + 1
-#'     
-#'     map(as.list(seq(1, n_boot)), ~ {
-#'       tmp_start = sample(seq(1, samp_last), samp_n, replace = TRUE)
-#'       
-#'       # Block bootstrap
-#'       tmp_boot =
-#'         map(tmp_start, \(.start) {
-#'           tmp_data %>% 
-#'             select(-index) %>% 
-#'             slice(.start:(.start + block_size - 1))
-#'         }) %>% 
-#'         list_rbind()# %>% 
-#'         # mutate(index = save_index)
-#'       
-#'       # Add lags
-#'       tmp_lag = # matrix lagged data
-#'         tmp_boot %>% select(-contains("days")) %>% 
-#'         as.matrix()
-#'       
-#'       tmp_lag_names = # name lagged variables
-#'         tmp_lag %>% dimnames %>% .[[2]]
-#'       tmp_lag_names = 
-#'         map(seq(nlag), \(.nlag) {
-#'           if (.nlag == 1) { 
-#'             tmp_lag_names
-#'           } else {
-#'             paste0(tmp_lag_names, "_lag", .nlag - 1)
-#'           }
-#'         }) %>% 
-#'         unlist()
-#'       
-#'       tmp_lag = # expand time
-#'         embed(tmp_lag, nlag)
-#'       
-#'       colnames(tmp_lag) = # rename cols
-#'         tmp_lag_names
-#'       
-#'       tmp_all = # join lagged & non-lagged data
-#'         tibble(
-#'           tmp_boot %>% 
-#'             slice(nlag:n()) %>% 
-#'             select(contains("days")),
-#'           tmp_lag %>% as_tibble(),
-#'         ) %>% 
-#'         relocate(occ)
-#'       
-#'       # Wide to long format
-#'       tmp_all <- # long format data with lag column
-#'         tmp_all %>%
-#'         select(-occ_other, -ad_diff_f, -ad_diff2_f, -ad_diff3_f) %>%
-#'         rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>%
-#'         rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% # fixed for _
-#'         pivot_longer(
-#'           cols = c(contains("lag")),
-#'           names_to = c(".value", "lag"),
-#'           names_sep = "-"
-#'         )
-#'     })
-#'   }
-
 
 # Plots ------------------------------------------------------------------------
 #' Correlation plot function; generate plot with acf and pacf
@@ -519,7 +398,7 @@ save_plot <-
 
 
 #' Predict regressor function
-#' Predict regressors (occ, occ_other, all ad_diff) using mean, naive/locf,
+#' Predict regressors (occ, occ_other, all ad_diff) using tslm, naive/locf,
 #' snaive, arima, ets model; replace test values for different 
 #' lags appropriately (lag 0 replace #' all -- lag7 replace none).
 #' @param .data tibble with cv splits and sites as groups
@@ -535,7 +414,6 @@ xpredict_fun <-
         across(
           c(contains(.var), -contains("lag")),
           ~ {
-            if (!any(is_aggregated(site)) & !grepl("occ_other", cur_column())) {
             # Predict with ARIMA
             x_ts =
               tibble(index, split, type, site, .x, days_)
@@ -580,9 +458,6 @@ xpredict_fun <-
             # Replace true with predicted
             .x[x_ts$type == "test"] = round(x_predict$.mean, 2)
             .x
-            } else {
-              rep(NA, n())
-            }
           },
           .names = "{.col}_predicted"
         ),
@@ -734,11 +609,8 @@ rf_reg_int <-
 #' @param .horizon forecast horizon
 xgb_reg_int <- 
   function(.data_rf, .horizon = horizon) {
-    # Initialise
-    seq_boots <- # list of bootstraps
-      .data_rf %>% pull(boot) %>% unique()
-    
-    qreg = # quantile loss function (grad and hess)
+    # Quantile loss function (grad and hess)
+    qreg = 
       function(.alpha) {
         function(preds, dtrain) {
           tmp_labels = getinfo(dtrain, "label")
@@ -749,85 +621,69 @@ xgb_reg_int <-
         }
       }
     
+    # Train set
+    data_train =
+      .data_rf %>%
+      filter(type == "train") %>% select(-type)
+    data_train =
+      xgb.DMatrix(
+        data = sparse.model.matrix(occ ~ . - 1, data = data_train),
+        label = data_train %>% pull(occ)
+      )
     
-    # Fit/forecast
-    tmp_fc <- 
-      map(seq_boots, \(.boot) { # for each bootstrap
-        # Train set
-        data_train =
-          .data_rf %>%
-          filter(type == "train", boot == .boot) %>% select(-type, -boot)# %>%
-        data_train =
-          xgb.DMatrix(
-            data = sparse.model.matrix(occ ~ . - 1, data = data_train),
-            label = data_train %>% pull(occ)
-          )
-        
-        # Test set
-        # Attention: use only boot == 0 to use xpred variables
-        data_test = 
-          .data_rf %>% 
-          filter(type == "test", boot == 0) %>% select(-type, -boot)
-        max_lag = # save for later
-          data_test$lag %>% parse_number() %>% max()
-        data_test =
-          xgb.DMatrix(
-            data = sparse.model.matrix(occ ~ . - 1, data = data_test),
-            label = data_test %>% pull(occ)
-          )
-        
-        # Fit and forecast
-        # for -1/+1 sd (assuming normal distribution)
-        map(c("1q" = .25, "mu" = 0.5, "3q" = .75), \(.alpha){ 
-          if (.alpha == 0.5) {
-            params = 
-              list(
-                objective = "reg:squarederror", # for mean forecasting
-                eta = 0.3, # default learning rate
-                gamma = 0, # default min loss reduction for leaf split
-                lambda = 1, # default L2 regularisation
-                alpha = 0, # default L1 regularisation
-                base_score = # initialise predictions based on sample mean
-                  getinfo(data_train, "label") %>% mean()
-              )
-          } else {
-            params = 
-              list(
-                objective = qreg(.alpha), # for quantile forecasting
-                eta = 0.3, # default learning rate
-                gamma = 0, # default min loss reduction for leaf split
-                lambda = 1, # default L2 regularisation
-                alpha = 0, # default L1 regularisation
-                base_score = # initialise predictions based on sample mean
-                  getinfo(data_train, "label") %>% mean()
-              )
-          }
-          tmp_fit =
-            xgb.train(
-              params,
-              data_train,
-              nrounds = 150 # max number of boosting interactions
+    # Test set
+    data_test = 
+      .data_rf %>% 
+      filter(type == "test") %>% select(-type)
+    max_lag = # save for later
+      data_test$lag %>% parse_number() %>% max()
+    data_test =
+      xgb.DMatrix(
+        data = sparse.model.matrix(occ ~ . - 1, data = data_test),
+        label = data_test %>% pull(occ)
+      )
+    
+    # Fit and forecast
+    # for -1/+1 sd (assuming normal distribution)
+    fc =
+      map(c("1q" = .25, "mu" = 0.5, "3q" = .75), \(.alpha){ 
+        if (.alpha == 0.5) {
+          params = 
+            list(
+              objective = "reg:squarederror", # for mean forecasting
+              eta = 0.3, # default learning rate
+              gamma = 0, # default min loss reduction for leaf split
+              lambda = 1, # default L2 regularisation
+              alpha = 0, # default L1 regularisation
+              base_score = # initialise predictions based on sample mean
+                getinfo(data_train, "label") %>% mean()
             )
-          tmp_fc = predict(tmp_fit,  data_test)
-          
-          # Average forecasts over lags
-          tmp_fc %>% matrix(nrow = max_lag, ncol = horizon) %>% t() %>% 
-            rowMeans()# %>% as.data.frame() %>% setNames(.idx)
-        }) %>% 
-          bind_rows() %>% 
-        mutate(
-          h = seq(1, n()),
-          boot = .boot
-        )
-    }) %>%  
-      list_rbind() %>% 
-      group_by(h) %>% 
-      mutate(var= ((`3q` - `1q`) / 1.349) ** 2) %>% # sample variance
-      summarise( # mean and sd of mixture of bootstrap fc
-        mean = mean(mu),
-        sd = # from var = weighted average of var + variance of means
-          sqrt(mean(var) + mean(mu - mean) ** 2) 
-        )
-    
-    list("mean" = tmp_fc$mean, "sd" = tmp_fc$sd)
+        } else {
+          params = 
+            list(
+              objective = qreg(.alpha), # for quantile forecasting
+              eta = 0.3, # default learning rate
+              gamma = 0, # default min loss reduction for leaf split
+              lambda = 1, # default L2 regularisation
+              alpha = 0, # default L1 regularisation
+              base_score = # initialise predictions based on sample mean
+                getinfo(data_train, "label") %>% mean()
+            )
+        }
+        tmp_fit =
+          xgb.train(
+            params,
+            data_train,
+            nrounds = 150 # max number of boosting interactions
+          )
+        
+        tmp_fc = predict(tmp_fit,  data_test)
+        
+        # Average forecasts over different lag rows
+        tmp_fc %>% matrix(nrow = max_lag, ncol = horizon) %>% t() %>% 
+          rowMeans()
+      }) %>%  
+      bind_rows() %>%
+      mutate(sd = sqrt(((`3q` - `1q`) / 1.349) ** 2))
+    list("mean" = fc$mu, "sd" = fc$sd)
   }

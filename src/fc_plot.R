@@ -34,26 +34,24 @@ split_data_cv <-
 fc_all <-
   fc_all %>% rec_fun()
 
-
+fc_all %>% pull(`.model`) %>% unique()
 
 # Generate plots ---------------------------------------------------------------
 # Plot forecasts
 list_models_f <- # select models for forecast plot
   c(
-    "mean",
-    "snaive",
+    "tslm",
+    # "snaive",
     "arima_dad_l",
-    "arima_dado_l",
+    # "arima_dado_l",
     "var_ad",
     "var_ad2",
-    "var_ad3",
     "var_BRI",
     "var_Southmead",
-    "locf_arima_dad",
-    "locf_arima_dad_rec",
-    "locf_arima_dado",
-    "rf_dado_f",
-    "rf_dado_f_int",
+    "xpred_arima_dad_l",
+    "xpred_arima_dad_rec",
+    "xpred_es",
+    "xpred_rf_int",
     "xpred_xgb"
     )
 

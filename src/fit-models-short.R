@@ -55,18 +55,6 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 
-# Block Bootstrap --------------------------------------------------------------
-# Apply to lagged/split data training sets
-n_boot <- 20
-block_size <- 14
-split_data_cv_b <-
-  boot_fun(
-    split_data_cv %>% filter(!is_aggregated(site)),
-    .n_boot = n_boot
-    )
-
-
-
 # Predict test exogenous -------------------------------------------------------
 # Exclude occ_other (possibly add too much noise)
 xpredict_method = "pull" # TSLM, naive, snaive, arima, ets
@@ -256,31 +244,10 @@ ls_rf_int_par <- # extract parameters fc distribution
 
 # XGBoosting - interaction
 # Same predictors as rf interaction
-# Join bootstrapped samples in one tibble; convert wide to long (for lag
-# as for rf_int data); join real (data_xpredict_int) with bootstrapped data
-data_xpredict_int_b <- # long format data with lag column
-  split_data_cv_b %>% 
-  select(split, type, site, index, boot, all_of(list_var_rf)) %>%
-  rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
-  rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
-  pivot_longer(
-    cols = c(contains("lag")),
-    names_to = c(".value", "lag"),
-    names_sep = "-"
-  )
-
-data_xpredict_int_b <- # add data with xpred var
-  data_xpredict_int %>% 
-  mutate(boot = 0) %>% 
-  bind_rows(data_xpredict_int_b)
-
-list_var_xgb <- # list predictors + boot identifier
-  data_xpredict_int_b %>% select(-c(split, type, site, index)) %>% names()
-
-ls_xgb_par <- # fits + fc + parameters fc distribution
+ls_xgb_par <- # parameters fc distribution (mean and sd)
   cv_wrap(
-    data_xpredict_int_b %>% filter(!is_aggregated(site)),
-    select_training,  xgb_reg_int,  list_var_xgb, "all"
+    data_xpredict_int %>% filter(!is_aggregated(site)),
+    select_training,  xgb_reg_int,  list_var_rf_int, "all"
   )
 
 
@@ -300,15 +267,12 @@ fit_all =
 # fit_fable = fit_all$fable
 # fit_fable_agg = fit_all$fable_agg
 # fit_fable_var_ad = fit_all$fable_var_ad
-# fit_fable_var_ad_nof = fit_all$fable_var_ad_nof
 # fit_fable_var_ad2 = fit_all$fable_var_ad2
-# fit_fable_var_ad2_nof = fit_all$fable_var_ad2_nof
-# fit_fable_var_ad3 = fit_all$fable_var_ad3
-# fit_fable_var_ad3_nof = fit_all$fable_var_ad3_nof
 # fit_fable_var_other = fit_all$fable_var_other
-# fit_es = fit_all$es_ae_f
-# ls_par = fit_all$rf_dae_f_par
-# ls_par_int = fit_all$rf_dae_f_int_par
+# fit_es = fit_all$es
+# ls_rf_par = fit_all$rf_par
+# ls_rf_int_par = fit_all$rf_int_par
+# ls_xgb_par = fit_all$xgb_par
 
 
 
@@ -462,8 +426,9 @@ fc_ese <- # convert to tsibble
 
 
 # Random forest
-rf_forecast =
+rf_forecast = 
   function(.data) {
+    # Function to harmonise fc to fable data structure
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     .data$model = 
@@ -493,6 +458,7 @@ fc_rf <- # convert to tsibble
 # Random forest - interaction
 rf_forecast_int =
   function(.data) {
+    # Function to harmonise fc to fable data structure
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     .data$model = 
@@ -522,6 +488,7 @@ fc_rf_int <- # convert to tsibble
 # XGBoost
 xgb_forecast =
   function(.data) {
+    # Function to harmonise fc to fable data structure
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     .data$model = 
@@ -575,3 +542,4 @@ saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
+# data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))
