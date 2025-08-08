@@ -56,7 +56,7 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 # Block Bootstrap --------------------------------------------------------------
-# Use ts_occ_b for getting lagged and splitted bootstrapped training data (no need of xreg though as using bootstrapped data only for training)
+# Apply to lagged/split data training sets
 n_boot <- 20
 block_size <- 14
 split_data_cv_b <-
@@ -88,7 +88,7 @@ fit_fable <-
   tsibble(index = index, key = c(split, site)) %>%
   model(
     # Baseline models (for comparison)
-    lmts = TSLM(occ ~ trend() + days_),
+    tslm = TSLM(occ ~ trend() + days_),
     naive = NAIVE(occ),
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
