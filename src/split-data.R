@@ -398,7 +398,7 @@ save_plot <-
 
 
 #' Predict regressor function
-#' Predict regressors (occ, occ_other, all ad_diff) using tslm, naive/locf,
+#' Predict regressors (occ, occ_other, all ad_diff) using tslm,
 #' snaive, arima, ets model; replace test values for different 
 #' lags appropriately (lag 0 replace #' all -- lag7 replace none).
 #' @param .data tibble with cv splits and sites as groups
@@ -426,8 +426,6 @@ xpredict_fun <-
             if (.type == "tslm") {
               x_predict =  
                 x_predict %>% model(xmodel= TSLM(.x ~ trend() + days_))
-            } else if (.type == "naive") {
-              x_predict =  x_predict %>% model(xmodel= NAIVE(.x))
             } else if (.type == "snaive") {
               x_predict =  x_predict %>% 
                 model(xmodel= SNAIVE(.x ~ lag("week")))

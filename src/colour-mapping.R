@@ -15,7 +15,7 @@ source(here("src/packages.R"))
 # show_col(hue_pal()(12))
 # show_col(viridis_pal(option="turbo")(12))
 
-col_models = viridis_pal(option = "turbo")(16) # Colour mapping
+col_models = viridis_pal(option = "turbo")(15) # Colour mapping
 names(col_models) = 
   c(
     "arima",
@@ -31,7 +31,6 @@ names(col_models) =
     "xpred_rf_int",
     "xpred_xgb",
     "tslm",
-    "naive",
     "snaive",
     "baseline_min"
   )

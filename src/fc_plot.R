@@ -41,7 +41,6 @@ fc_all %>% pull(`.model`) %>% unique()
 list_models_f <- # select models for forecast plot
   c(
     "tslm",
-    # "snaive",
     "arima_dad_l",
     # "arima_dado_l",
     "var_ad",

@@ -175,7 +175,6 @@ list_models_m <- # select models
     "xpred_rf_int",
     "xpred_xgb",
     "tslm",
-    "naive",
     "snaive")
 
 
@@ -221,9 +220,8 @@ metrics <-
 # Summarise (not all models included for clarity)
 var_summary <- 
   c(
-    "tslm", # Either one of tslm, naive, snaive
-    "naive", # Either one of tslm, naive, snaive
-    "snaive", # Either one of tslm, naive, snaive
+    "tslm", # Either one of tslm, snaive
+    "snaive", # Either one of tslm, snaive
     "arima_dad_l", # looks the best (2024-06-22)
     "arima_dado_l", # looks the best (2024-06-22)
     "var_ad",
@@ -248,7 +246,7 @@ metrics_summary <-
     "value_min" = min(value_s),
     "best_model" = 
       models[which.min(value_s)] %>% 
-      {if (grepl("tslm|naive|snaive", .)) "baseline_min" else .},
+      {if (grepl("tslm|snaive", .)) "baseline_min" else .},
   ) %>% 
   ungroup() %>% 
   inner_join(tmp_metrics) %>% # join to tibble
@@ -258,7 +256,7 @@ metrics_summary <-
       tmp = .x %>% head(1)
       tmp$models = "baseline_min"
       tmp$value_s = 
-        min(.x$value_s[grepl("tslm|naive|snaive", .x$models)])
+        min(.x$value_s[grepl("tslm|snaive", .x$models)])
       .x %>% 
       add_row(
         tmp,
@@ -266,7 +264,7 @@ metrics_summary <-
       )
     }
   ) %>% # remove single baseline models
-  filter(!(models %in% c("tslm", "naive", "snaive")))
+  filter(!(models %in% c("tslm", "snaive")))
 
  
 

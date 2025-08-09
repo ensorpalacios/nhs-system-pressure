@@ -1,6 +1,6 @@
 #' Fit models
 #'
-#' Fit different models, including baseline (mean, naive, snaive),
+#' Fit different models, including baseline (TSLM, snaive),
 #' ARIMA, exponential smoothing and random forests; use different 
 #' exogenous predictors such as days of the week, escalation beds, discharges 
 #' and admissions.
@@ -57,7 +57,7 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 # Predict test exogenous -------------------------------------------------------
 # Exclude occ_other (possibly add too much noise)
-xpredict_method = "pull" # TSLM, naive, snaive, arima, ets
+xpredict_method = "pull" # TSLM, snaive, arima, ets
 data_xpredict <- 
   xpredict_fun(
     split_data_cv %>% select(-contains("occ_other")), 
@@ -77,7 +77,6 @@ fit_fable <-
   model(
     # Baseline models (for comparison)
     tslm = TSLM(occ ~ trend() + days_),
-    naive = NAIVE(occ),
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
     arima = ARIMA(occ),
