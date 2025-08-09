@@ -162,32 +162,22 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
 list_models_m <- # select models
   c(
     "arima",
-    "arima_dad",
     "arima_dad_l",
-    "arima_dad_nof",
-    "arima_dado",
     "arima_dado_l",
     "var_ad",
-    "var_ad_nof",
     "var_ad2",
-    "var_ad2_nof",
-    "var_ad3",
-    "var_ad3_nof",
     "var_BRI",
     "var_Southmead",
-    "locf_arima_dad",
-    "locf_arima_dad_l",
-    "locf_arima_dad_l_nof_rec",
-    "locf_arima_dad_nof",
-    "locf_arima_dad_rec",
-    "locf_arima_dado",
-    "locf_arima_dado_l",
-    "locf_es_ado_f",
-    "rf_dado_f",
-    "rf_dado_f_int",
-    "mean",
+    "xpred_arima_dad_l",
+    "xpred_arima_dad_rec",
+    "xpred_es",
+    "xpred_rf",
+    "xpred_rf_int",
+    "xpred_xgb",
+    "tslm",
     "naive",
     "snaive")
+
 
 metrics <- # compute metrics
   cv_wrap(
@@ -214,11 +204,11 @@ metrics <- # add joint time axis
   ) %>% 
   ungroup()
 
-metrics <- # scale by mean model score
+metrics <- # scale by tslm model score
   metrics %>% 
   group_by(site, penalty, metric, index) %>%
   mutate(
-    value_s = value / value[models == "mean"]
+    value_s = value / value[models == "tslm"]
   ) %>% 
   ungroup()
 
@@ -228,24 +218,22 @@ metrics <-
     penalty = factor(penalty) %>% fct_rev()
   )
 
-# Summarise
+# Summarise (not all models included for clarity)
 var_summary <- 
   c(
-    "mean", # Either one of mean, naive, snaive
-    "naive", # Either one of mean, naive, snaive
-    "snaive", # Either one of mean, naive, snaive
+    "tslm", # Either one of tslm, naive, snaive
+    "naive", # Either one of tslm, naive, snaive
+    "snaive", # Either one of tslm, naive, snaive
     "arima_dad_l", # looks the best (2024-06-22)
     "arima_dado_l", # looks the best (2024-06-22)
     "var_ad",
     "var_ad2",
-    "var_ad3",
     "var_BRI",
     "var_Southmead",
-    "locf_arima_dad",
-    "locf_arima_dad_rec",
-    "locf_arima_dado",
-    "rf_dado_f",
-    "rf_dado_f_int"
+    "xpred_arima_dad_l",
+    "xpred_arima_dad_rec",
+    "xpred_rf_int",
+    "xpred_xgb"
   )
 
 tmp_metrics <- 
@@ -260,7 +248,7 @@ metrics_summary <-
     "value_min" = min(value_s),
     "best_model" = 
       models[which.min(value_s)] %>% 
-      {if (grepl("mean|naive|snaive", .)) "baseline_min" else .},
+      {if (grepl("tslm|naive|snaive", .)) "baseline_min" else .},
   ) %>% 
   ungroup() %>% 
   inner_join(tmp_metrics) %>% # join to tibble
@@ -270,7 +258,7 @@ metrics_summary <-
       tmp = .x %>% head(1)
       tmp$models = "baseline_min"
       tmp$value_s = 
-        min(.x$value_s[grepl("mean|naive|snaive", .x$models)])
+        min(.x$value_s[grepl("tslm|naive|snaive", .x$models)])
       .x %>% 
       add_row(
         tmp,
@@ -278,42 +266,9 @@ metrics_summary <-
       )
     }
   ) %>% # remove single baseline models
-  filter(!(models %in% c("mean", "naive", "snaive")))
- 
-# metrics_summary <-
-#   metrics %>% 
-#   # mutate(
-#   #   penalty = factor(penalty) %>% fct_rev()
-#   # ) %>% 
-#   group_by(split, site, penalty, index, metric) %>% 
-#   summarise(
-#     # Add time axis
-#     "t_ax" = t_ax[1],
-#     # Take best model
-#     "value_min" = min(value),
-#     "best_model" = 
-#       models[which.min(value)] %>% 
-#       {if (grepl("mean|naive|snaive", .)) "baseline_min" else .},
-#     # Scale score by best score
-#     # "arima" = value[models == "arima"] / value_min,
-#     # "arima_dae" = value[models == "arima_dae"] / value_min,
-#     # # "arima_dae_c" = value[models == "arima_dae_c"] / value_min,
-#     # # "arima_dae_c_locf" = value[models == "arima_dae_c_locf"] / value_min,
-#     # "arima_dae_f" = value[models == "arima_dae_f"] / value_min,
-#     # "arima_dae_f_locf" = value[models == "arima_dae_f_locf"] / value_min,
-#     # "es_ae_c" = value[models == "es_ae_c"] / value_min,
-#     # "rf" = value[models == "rf"] / value_min,
-#     # Pull baseline models together
-#     "baseline_min" =
-#       min(value[grepl("mean|naive|snaive", models)]) / value_min,
-#   ) %>% 
-#   inner_join(metrics)
-#   pivot_longer(
-#     cols = -c(split:best_model),
-#     names_to = "models"
-#   ) %>% 
-#   ungroup()
+  filter(!(models %in% c("tslm", "naive", "snaive")))
 
+ 
 
 # Save -------------------------------------------------------------------------
 save_path = here("output/metrics/")
