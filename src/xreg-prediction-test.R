@@ -54,8 +54,11 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 # Predict test exogenous -------------------------------------------------------
-# Exclude occ_other (as in fit-models-short.R)
-xpredict_method = c("tslm", "naive", "snaive", "arima", "ets", "pull")
+split_data_cv <- # Exclude occ_other and ad_diff3 (as in fit-models-short.R)
+  split_data_cv %>% select(-contains("occ_other"), -contains("ad_diff3"))
+
+xpredict_method = c("tslm", "snaive", "arima", "ets", "pull")
+
 tbl_data <- 
   map(xpredict_method, \(.xmod) {
     data_xpredict <- 
@@ -69,10 +72,9 @@ tbl_data <-
         xpredict_mod = .xmod,
       )
   }) %>% 
-  list_rbind() %>% 
+  list_rbind() %>%
   mutate(
-    across(
-      c(contains(c("occ", "ad_diff")), -contains("lag")),
+    across(c(contains(c("occ", "ad_diff")), -contains("lag")),
       ~ {
         obs = split_data_cv %>% pull(cur_column())
         abs(obs - .x)
@@ -84,10 +86,10 @@ tbl_data <-
 
 
 # Plot prediction errors -------------------------------------------------------
-plt_err <- 
+plt_err_abs <- # absolute error
   tbl_data %>%
   filter(type == "test", !is_aggregated(site)) %>% 
-  select(xpredict_mod, site, contains("error"), -contains("other")) %>% 
+  select(xpredict_mod, site, contains("error")) %>% 
   pivot_longer(-c(xpredict_mod, site)) %>% 
   ggplot(aes(x = name, y = value, colour = xpredict_mod)) +
   geom_boxplot(outliers = FALSE) +
@@ -95,6 +97,15 @@ plt_err <-
   scale_x_discrete(guide = guide_axis(angle = 45))
 
 
+plt_err_sq <- # squared error
+  tbl_data %>%
+  filter(type == "test", !is_aggregated(site)) %>% 
+  select(xpredict_mod, site, contains("error")) %>% 
+  pivot_longer(-c(xpredict_mod, site)) %>% 
+  ggplot(aes(x = name, y = value ** 2, colour = xpredict_mod)) +
+  geom_boxplot(outliers = FALSE) +
+  facet_wrap(vars(site)) +
+  scale_x_discrete(guide = guide_axis(angle = 45))
 
 # Save plot --------------------------------------------------------------------
 save_path = here("output/plots/xreg_predictions/")
@@ -102,9 +113,11 @@ if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
 
-plt_err %>% 
-  ggsave(file = paste0(save_path, "xreg_err.eps"), width = 11, height = 7)
+plt_err_abs %>% 
+  ggsave(file = paste0(save_path, "xreg_err_abs.eps"), width = 11, height = 7)
 
+plt_err_sq %>% 
+  ggsave(file = paste0(save_path, "xreg_err_sq.eps"), width = 11, height = 7)
 
 # for (x in tbl_data$split %>% unique()) {
 #   x11()

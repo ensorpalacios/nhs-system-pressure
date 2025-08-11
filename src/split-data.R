@@ -398,9 +398,11 @@ save_plot <-
 
 
 #' Predict regressor function
-#' Predict regressors (occ, occ_other, all ad_diff) using tslm,
-#' snaive, arima, ets model; replace test values for different 
-#' lags appropriately (lag 0 replace #' all -- lag7 replace none).
+#' Predict regressors using tslm, snaive, arima, ets model; 
+#' replace test values for different lags appropriately (lag 0 replace 
+#' all -- lag7 replace none): use predicted if t = T + h, else use observed, 
+#' where t is actual time, T is last time of test data (.idx_test - 1) and 
+#' h is forecast horizon.
 #' @param .data tibble with cv splits and sites as groups
 #' @param .var list of variables to predict
 #' @param .idx_test index where test data start
@@ -414,52 +416,55 @@ xpredict_fun <-
         across(
           c(contains(.var), -contains("lag")),
           ~ {
-            # Predict with ARIMA
+            # Train and test data
             x_ts =
-              tibble(index, split, type, site, .x, days_)
+              tibble(index, split, type, site, y = .x, days_,)
             
             x_predict = 
               x_ts %>%
               filter(type == "train") %>%
               as_tsibble(index = index, key = c(split, site))
             
+            x_test =
+              x_ts %>%
+              filter(type == "test") %>%
+              as_tsibble(index = index, key = c(split, site))
+            
             if (.type == "tslm") {
               x_predict =  
-                x_predict %>% model(xmodel= TSLM(.x ~ trend() + days_))
+                x_predict %>% model(xmodel= TSLM(y ~ trend() + days_))
+              
             } else if (.type == "snaive") {
-              x_predict =  x_predict %>% 
-                model(xmodel= SNAIVE(.x ~ lag("week")))
+              x_predict =  x_predict %>% model(xmodel= SNAIVE(y ~ lag("week")))
+              
             } else if (.type == "arima") {
-              x_predict =  x_predict %>% model(xmodel= ARIMA(.x ~ days_))
+              x_predict =  x_predict %>% model(xmodel= ARIMA(y ~ days_))
+              
             } else if (.type == "ets") {
-              x_predict =  x_predict %>% model(xmodel= ETS(.x))
+              x_predict =  x_predict %>% model(xmodel= ETS(y))
+              
             } else if (.type == "pull") {
               x_predict =  x_predict %>% 
                 model(
-                  tslm = TSLM(.x ~ trend() + days_),
-                  ets = ETS(.x), 
-                  arima = ARIMA(.x ~ days_)
+                  tslm = TSLM(y ~ trend() + days_),
+                  ets = ETS(y), 
+                  arima = ARIMA(y ~ days_)
                   ) %>% 
-                mutate(xmodel = (tslm+ ets + arima) / 3)
+                mutate(xmodel = (tslm + ets + arima) / 3)
             }
+            
             x_predict = 
               x_predict %>%
-              forecast(
-                new_data =
-                  x_ts %>%
-                  filter(type == "test") %>%
-                  as_tsibble(index = index, key = c(split, site))
-              ) %>% 
+              forecast(new_data = x_test) %>% 
               filter(.model == "xmodel")
             
-            
-            # Replace true with predicted
+            # Replace true with predicted (all)
             .x[x_ts$type == "test"] = round(x_predict$.mean, 2)
             .x
           },
           .names = "{.col}_predicted"
         ),
-        across(
+        across( # replace predicted with observed when t = T + h
           c(contains(.var), -contains("predicted")),
           ~ {
             tmp_lag = 
@@ -492,7 +497,6 @@ xpredict_fun <-
         )
       ) %>% 
       ungroup()
-    # }
   }
 
 
