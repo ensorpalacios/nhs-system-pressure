@@ -38,7 +38,7 @@ metrics_summary <-
 plt_metric <- # boxplot
   map(metric_names, \(.metric) {
     metrics %>% 
-      filter(metric == .metric, models != "mean") %>% 
+      filter(metric == .metric, models != "tslm") %>% 
       ggplot(aes(x = models, y = value_s)) +
       geom_boxplot(outliers = FALSE) +
         theme(axis.text.x = element_text(angle = 45, hjust=1)) +

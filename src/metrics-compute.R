@@ -162,18 +162,15 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
 list_models_m <- # select models
   c(
     "arima",
-    "arima_dad_l",
-    "arima_dado_l",
     "var_ad",
     "var_ad2",
     "var_BRI",
     "var_Southmead",
-    "xpred_arima_dad_l",
-    "xpred_arima_dad_rec",
-    "xpred_es",
-    "xpred_rf",
-    "xpred_rf_int",
-    "xpred_xgb",
+    "nn",
+    "es",
+    "rf",
+    "rf_int",
+    "xgb",
     "tslm",
     "snaive")
 
@@ -220,18 +217,17 @@ metrics <-
 # Summarise (not all models included for clarity)
 var_summary <- 
   c(
-    "tslm", # Either one of tslm, snaive
-    "snaive", # Either one of tslm, snaive
-    "arima_dad_l", # looks the best (2024-06-22)
-    "arima_dado_l", # looks the best (2024-06-22)
+    "tslm",
+    "snaive",
     "var_ad",
     "var_ad2",
     "var_BRI",
     "var_Southmead",
-    "xpred_arima_dad_l",
-    "xpred_arima_dad_rec",
-    "xpred_rf_int",
-    "xpred_xgb"
+    "arima_dad_l",
+    "arima_dad_rec",
+    "nn",
+    "rf_int",
+    "xgb"
   )
 
 tmp_metrics <- 

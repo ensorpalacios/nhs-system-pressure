@@ -36,22 +36,23 @@ fc_all <-
 
 fc_all %>% pull(`.model`) %>% unique()
 
+
+
 # Generate plots ---------------------------------------------------------------
 # Plot forecasts
 list_models_f <- # select models for forecast plot
   c(
     "tslm",
-    "arima_dad_l",
-    # "arima_dado_l",
-    "var_ad",
     "var_ad2",
     "var_BRI",
     "var_Southmead",
-    "xpred_arima_dad_l",
-    "xpred_arima_dad_rec",
-    "xpred_es",
-    "xpred_rf_int",
-    "xpred_xgb"
+    "arima_dad_l",
+    "arima_dad_rec",
+    "nn",
+    "es",
+    "rf",
+    "rf_int",
+    "xgb"
     )
 
 

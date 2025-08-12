@@ -57,10 +57,10 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 # Predict test exogenous -------------------------------------------------------
 # Exclude occ_other (possibly add too much noise)
-xpredict_method = "pull" # TSLM, snaive, arima, ets
+xpredict_method = "pull" # include tslm, arima, ets
 data_xpredict <- 
   xpredict_fun(
-    split_data_cv %>% select(-contains("occ_other")), 
+    split_data_cv %>% select(-contains("occ_other"), -contains("ad_diff3")), 
     c("occ", "ad_diff"), 
     idx_start_test, 
     xpredict_method
@@ -69,13 +69,13 @@ data_xpredict <-
 
 
 # Fit models -------------------------------------------------------------------
-# Baseline and ARIMA models
-fit_fable <- 
-  split_data_cv %>% 
+# Baseline, NN autoregressive models and ARIMA models
+fit_fable <- # fit models
+  data_xpredict %>% 
   filter(type == "train" & !is_aggregated(site)) %>% 
   tsibble(index = index, key = c(split, site)) %>%
   model(
-    # Baseline models (for comparison)
+    # Baseline models
     tslm = TSLM(occ ~ trend() + days_),
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
@@ -87,20 +87,14 @@ fit_fable <-
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6
       ),
-    arima_dado_l = 
-      ARIMA(
-        occ ~ 
-          days_ +
-          ad_diff_f_lag3 + ad_diff2_f_lag3 +
-          ad_diff_f_lag6 + ad_diff2_f_lag6 + 
-          occ_other
-      )
+    # NN autoregressive models
+    nn = NNETAR(occ)
   )
 
 
 # ARIMA aggregated (exclude occ_other!)
 fit_fable_agg <- 
-  split_data_cv %>% 
+  data_xpredict %>% 
   filter(type == "train") %>%
   tsibble(index = index, key = c(split, site)) %>%
   model(
@@ -116,7 +110,7 @@ fit_fable_agg <-
 
 # Vector autoregressive models
 fit_fable_var_ad <- # adm - dis
-  split_data_cv %>% 
+  data_xpredict %>% 
   filter(type == "train", !is_aggregated(site)) %>%
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
@@ -126,7 +120,7 @@ fit_fable_var_ad <- # adm - dis
 
 
 fit_fable_var_ad2 <- # diff(adm - dis)
-  split_data_cv %>% 
+  data_xpredict %>% 
   filter(type == "train", !is_aggregated(site)) %>%
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
@@ -136,7 +130,7 @@ fit_fable_var_ad2 <- # diff(adm - dis)
 
 
 fit_fable_var_other <- # BRI vs Southmead
-  split_data_cv %>% 
+  data_xpredict %>% 
   filter(type == "train", !is_aggregated(site)) %>%
   mutate(site = site %>% as.character()) %>% 
   tsibble(index = index, key = c(split, site)) %>%
@@ -162,7 +156,7 @@ list_var_ese <-
 
 fit_es <- # fit es
   cv_wrap(
-    split_data_cv %>% filter(type == "train" & !is_aggregated(site)),
+    data_xpredict %>% filter(type == "train" & !is_aggregated(site)),
     select_training,  
     es_model, 
     list_var_ese)
@@ -173,7 +167,7 @@ fit_es <- # fit es
 # occ_other because not predicted; also including all laggs because 
 # collinearity not a problem here.
 list_var_rf <-
-  split_data_cv %>%
+  data_xpredict %>%
   select(
     contains("occ"), -occ_other,
     matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
@@ -183,7 +177,7 @@ list_var_rf <-
 
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
-    split_data_cv %>% filter(!is_aggregated(site)), 
+    data_xpredict %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg,  list_var_rf, "all"
   )
 
@@ -277,25 +271,13 @@ fit_all =
 
 # Forecast ---------------------------------------------------------------------
 # Baseline, ARIMA and exponential smoothing models
-fc_fable <- 
-  fit_fable %>% 
-  forecast(new_data = 
-             split_data_cv %>% 
-             filter(type == "test") %>% 
-             tsibble(index = index, key = c(split, site)))
-
-# ARIMA with predicted exogenous
 fc_fable_xpred <- 
   fit_fable %>% 
-  select(arima_dad_l) %>% 
   forecast(
     new_data = 
       data_xpredict %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
-  ) %>% 
-  mutate( # rename models
-    .model = paste0("xpred_",.model)
   )
 
 # ARIMA reconciled
@@ -309,9 +291,6 @@ fc_fable_xpred_rec <-
     new_data = data_xpredict %>% 
       filter(type == "test") %>% 
       tsibble(index = index, key = c(split, site))
-  ) %>% 
-  mutate( # rename models
-    .model = paste0("xpred_",.model)
   )
 
 # Vector autoregressive models
@@ -405,7 +384,7 @@ es_forecast <- # define esx forecast
         cbind
       ) %>% 
       mutate( # create forecast distribution (assuming nid error)
-        .model = "xpred_es",
+        .model = "es",
         occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 2),
         .mean = mean, # necessary for fable::autoplot
         mean = NULL,
@@ -435,7 +414,7 @@ rf_forecast =
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
-        .model = "xpred_rf",
+        .model = "rf",
         .mean = mean, # necessary for fable::autoplot
         occ = dist_normal(mu = mean, sd = sd),
         mean = NULL,
@@ -465,7 +444,7 @@ rf_forecast_int =
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
-        .model = "xpred_rf_int",
+        .model = "rf_int",
         .mean = mean, # necessary for fable::autoplot
         occ = dist_normal(mu = mean, sd = sd),
         mean = NULL,
@@ -495,7 +474,7 @@ xgb_forecast =
     tmp_fc =
       bind_cols(.data$model, .data$index) %>% 
       mutate(
-        .model = "xpred_xgb",
+        .model = "xgb",
         .mean = mean, # necessary for fable::autoplot
         occ = dist_normal(mu = mean, sd = sd),
         mean = NULL,
@@ -522,7 +501,7 @@ dimnames(fc_rf_int$occ) <- "occ"
 dimnames(fc_xgb$occ) <- "occ"
 fc_all <- 
   list(
-    fc_fable, fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
+    fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
     fc_ese, fc_rf, fc_rf_int, fc_xgb
     ) %>% 
   reduce(bind_rows)
