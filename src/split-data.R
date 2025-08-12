@@ -6,7 +6,7 @@
 #' - Plot functions
 #' - Utility functions
 #' 
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-04-23
 
 # Functions to split and augment data for analysis -----------------------------

@@ -4,7 +4,7 @@
 #' exponential smoothing models with predictors. Fits and forecasts generated 
 #' from fit-models-short.R.
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-01
 
 # Import packages ----------------------------------------------------------------

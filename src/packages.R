@@ -2,7 +2,7 @@
 #' 
 #' Load all packages needed for the project
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-26
 
 # Load packages ----------------------------------------------------------------

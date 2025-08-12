@@ -6,7 +6,7 @@
 #' used before escalation beds, meaning that core beds open = used, and we can
 #' recover escalation beds from total - core.
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-07
 
 

@@ -8,7 +8,7 @@
 #' CI auto-/cross-corraltion is 1−α/2 quantile * standard deviation of 
 #' autocorrelation (sqrt(var)=1/sqrt(n))
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-08
 
 

@@ -12,7 +12,7 @@
 #' and the Heaviside step function.
 #' Use different bias for errors on the left/right side of the forecast
 #' distributions.
-
+#'
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles 
 # and Practice; https: //www.lokad.com/continuous-ranked-probability-score/;
 #' Gneiting_JBES_2011
@@ -260,7 +260,8 @@ metrics_summary <-
       )
     }
   ) %>% # remove single baseline models
-  filter(!(models %in% c("tslm", "snaive")))
+  filter(!(models %in% c("tslm", "snaive"))) %>% 
+  ungroup()
 
  
 

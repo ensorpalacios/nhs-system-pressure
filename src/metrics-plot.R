@@ -3,7 +3,7 @@
 #' Generate plots of Wilker score and crps (continuous ranked probability
 #' score). Scores generated from fit-models-short.R.
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-14
 
 # Import packages --------------------------------------------------------------
