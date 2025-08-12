@@ -17,7 +17,7 @@
 # and Practice; https: //www.lokad.com/continuous-ranked-probability-score/;
 #' Gneiting_JBES_2011
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-14
 
 
@@ -164,8 +164,7 @@ list_models_m <- # select models
     "arima",
     "var_ad",
     "var_ad2",
-    "var_BRI",
-    "var_Southmead",
+    "var_h",
     "nn",
     "es",
     "rf",

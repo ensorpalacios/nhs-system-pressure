@@ -23,7 +23,7 @@ names(col_models) =
     "arima_dad_rec",
     "var_ad",
     "var_ad2",
-    "var_BRI",
+    "var_h",
     "nn",
     "es",
     "rf",
@@ -33,8 +33,5 @@ names(col_models) =
     "snaive",
     "baseline_min"
   )
-
-col_models <- # Same color var_BRI and var_Southmead
-  col_models %>% c(c("var_Southmead" = col_models[["var_BRI"]]))
 
 

@@ -44,8 +44,7 @@ list_models_f <- # select models for forecast plot
   c(
     "tslm",
     "var_ad2",
-    "var_BRI",
-    "var_Southmead",
+    "var_h",
     "arima_dad_l",
     "arima_dad_rec",
     "nn",

@@ -129,7 +129,7 @@ fit_fable_var_ad2 <- # diff(adm - dis)
   )
 
 
-fit_fable_var_other <- # BRI vs Southmead
+fit_fable_var_h <- # BRI vs Southmead
   data_xpredict %>% 
   filter(type == "train", !is_aggregated(site)) %>%
   mutate(site = site %>% as.character()) %>% 
@@ -137,7 +137,7 @@ fit_fable_var_other <- # BRI vs Southmead
   select(occ) %>% 
   pivot_wider(names_from = site, values_from = occ) %>% 
   model(
-    var_other = VAR(vars(BRI, Southmead) ~ season(period = "week"))
+    var_h = VAR(vars(BRI, Southmead) ~ season(period = "week"))
   )
 
 
@@ -251,7 +251,7 @@ fit_all =
     "fable_agg" = fit_fable_agg,
     "fable_var_ad" = fit_fable_var_ad,
     "fable_var_ad2" = fit_fable_var_ad2,
-    "fable_var_other" = fit_fable_var_other,
+    "fable_var_h" = fit_fable_var_h,
     "es" = fit_es,
     "rf_par" = ls_rf_par,
     "rf_int_par" = ls_rf_int_par,
@@ -261,7 +261,7 @@ fit_all =
 # fit_fable_agg = fit_all$fable_agg
 # fit_fable_var_ad = fit_all$fable_var_ad
 # fit_fable_var_ad2 = fit_all$fable_var_ad2
-# fit_fable_var_other = fit_all$fable_var_other
+# fit_fable_var_h = fit_all$fable_var_h
 # fit_es = fit_all$es
 # ls_rf_par = fit_all$rf_par
 # ls_rf_int_par = fit_all$rf_int_par
@@ -302,8 +302,8 @@ fc_fable_var_ad2 <-
   fit_fable_var_ad2 %>% 
   forecast(h = horizon)
 
-fc_fable_var_other <- 
-  fit_fable_var_other %>% 
+fc_fable_var_h <- 
+  fit_fable_var_h %>% 
   forecast(h = horizon)
 
 
@@ -329,9 +329,9 @@ fc_var <- # bind VAR fc
   bind_rows() %>% 
   bind_rows(
     imap(
-      fc_fable_var_other %>% pluck(".distribution") %>%  dimnames(),
+      fc_fable_var_h %>% pluck(".distribution") %>%  dimnames(),
       \(.x, .y) {
-        fc_fable_var_other %>% 
+        fc_fable_var_h %>% 
           as_tibble() %>% 
           mutate(
             occ = 
@@ -340,7 +340,7 @@ fc_var <- # bind VAR fc
                 sigma = .distribution %>% variance() %>% sqrt() %>% .[, .x]
               ),
             site = .x,
-            .model = paste0("var_", .x),
+            .model = "var_h",
             .mean = .mean[.y],
             .distribution = NULL
           ) %>% 
@@ -520,4 +520,5 @@ saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
+# fc_all <- readRDS(paste0(save_path, "fits_short.RDS"))
 # data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))
