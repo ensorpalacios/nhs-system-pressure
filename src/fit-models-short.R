@@ -169,7 +169,7 @@ fit_es <- # fit es
 list_var_rf <-
   data_xpredict %>%
   select(
-    contains("occ"), -occ_other,
+    contains("occ"),
     matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
     -contains("ad_diff3"), # put after previous line to not override!
     contains("days_"), -days_) %>%
