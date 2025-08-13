@@ -65,7 +65,7 @@ crps_func <-  # Compute crps
         .obs_ <= tmp_qf ~ 
           (1 - tmp_alpha) * (tmp_qf - .obs_) * eval(parse(text = tmp_weight))
       ) %>% 
-        sum() * 2 / (length(tmp_alpha) - 1)
+        sum() * 2 / (length(tmp_alpha))
     }) %>% 
       list_c()
     # tmp_domain = seq(0, 2000, 1) # ATTENTION: ad hoc domain common to BRI/Southmead
