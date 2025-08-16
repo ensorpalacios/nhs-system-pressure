@@ -689,3 +689,298 @@ xgb_reg_int <-
       mutate(sd = sqrt(((`3q` - `1q`) / 1.349) ** 2))
     list("mean" = fc$mu, "sd" = fc$sd)
   }
+
+
+
+# Metric-related functions -----------------------------------------------------
+#' Crps function
+#' Compute crps for all cv fc.
+#' @param .obs True occ values
+#' @param .fc Forecast probabilities
+#' @param .penalty Bias to use (upper=right, none, lower=left of dist.)
+crps_func <-  # Compute crps
+  function(.obs, .fc, .penalty) {
+    # .obs: observed value
+    # .fc: forecast distribution
+    # .penalty: 
+    tmp_alpha = seq(0.01, 0.99, 0.01) # alpha level ([0, 1])
+    tmp_weight =
+      .penalty %>% 
+      case_match(
+        "upper" ~ expr("tmp_alpha ** 2"),
+        "none" ~ expr("1"),
+        "lower" ~ expr("(1 - tmp_alpha) ** 2")
+      )
+    
+    map2(.fc, .obs, \(.dist, .obs_) {
+      tmp_qf = # quantile forecast
+        quantile(.dist, tmp_alpha)[[1]]
+      case_when(
+        .obs_ > tmp_qf ~ 
+          -tmp_alpha * (tmp_qf - .obs_) * eval(parse(text = tmp_weight)),
+        .obs_ <= tmp_qf ~ 
+          (1 - tmp_alpha) * (tmp_qf - .obs_) * eval(parse(text = tmp_weight))
+      ) %>% 
+        sum() * 2 / (length(tmp_alpha))
+    }) %>% 
+      list_c()
+    # tmp_domain = seq(0, 2000, 1) # ATTENTION: ad hoc domain common to BRI/Southmead
+    # crps_p =
+    #   map2(.fc, .obs, \(.dist, .obs_) {
+    #   case_when(
+    #     tmp_domain < .obs_ ~  cdf(.dist, tmp_domain)[[1]] ** 2,
+    #     tmp_domain >= .obs_  ~ (cdf(.dist, tmp_domain)[[1]] - 1) ** 2
+    #   ) %>% 
+    #     sum() * 
+    #        ((tail(tmp_domain, 1) - head(tmp_domain, 1)) /
+    #           (length(tmp_domain) - 1))
+    # }) %>% 
+    #   list_c()
+  }
+
+
+
+#' Wilker function
+#' Compute average wilker score over discretized alpha (predictive interval)
+#' values for all cv fc.
+#' @param .obs True occ values
+#' @param .fc Forecast probabilities
+#' @param .penalty Bias to use (upper=right, none, lower=left of dist.)
+wilker_func <- # compute Wilker score - used in wilker_wrap()
+  function(.obs, .fc, .penalty) {
+    # .obs: observed value
+    # .fc: forecast distribution
+    # .penalty: penalise more observations above or below prediction interval
+    ci_width = seq(0.05, 0.95, 0.05) # width of the confidence interval
+    map(ci_width, \(.width) {
+      upper = .fc %>% quantile(0.5 + .width / 2) # (upper interval)
+      lower = .fc %>% quantile(0.5 - .width / 2) # (lower interval)
+      ci_width = upper - lower # width confidence interval
+      .penalty =
+        case_when(
+          .penalty == "upper" ~ 2,
+          .penalty == "none" ~ 1,
+          .penalty == "lower" ~ .5
+        )
+      case_when(
+        .obs > upper ~ ci_width + (2 * .penalty) /.width * (.obs - upper),
+        .obs < lower ~ ci_width + (2 / .penalty) /.width * (lower - .obs),
+        .default = ci_width
+      ) %>% 
+        as_tibble_col(.width %>% as.character())
+    }) %>% 
+      list_cbind() %>% 
+      rowMeans()
+  }
+
+
+
+#' Wrap metrics
+#' Wrapper for crps_fun and wilker_fun to compute metrics for all cv fc.
+#' @param .data Tibble containing true observations and fc distributions.
+wrap_metric <- # general wrapper over metric function - used in cv_wrap()
+  function(.data) {
+    # Organise obs and fc distributions in one tibble
+    tmp_data =
+      .data$all %>% 
+      filter(type == "test") %>% 
+      select(split, site, index, occ) %>% 
+      left_join(
+        .data$test %>%
+          as_tibble() %>%
+          select(index, .model, occ) %>% 
+          pivot_wider(names_from = .model, values_from = occ),
+        by = "index"
+      )
+    
+    # Compute metric for each model and penalty
+    ls_models = tmp_data %>% names %>% tail(-4)
+    penalty = c("upper", "none", "lower")
+    map(penalty, \(.penalty) {
+      map(ls_models, \(.model_name) {
+        tmp_obs = tmp_data[["occ"]]
+        tmp_fc = tmp_data[[.model_name]] # forecast distribution
+        tibble(
+          split = tmp_data$split,
+          site = tmp_data$site,
+          penalty = .penalty,
+          index = tmp_data$index,
+          wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
+          crps = crps_func(tmp_obs, tmp_fc, .penalty)
+        ) %>% pivot_longer(
+          cols = where(is.numeric), 
+          names_to = "metric",
+          values_to = .model_name)
+      }) %>% 
+        reduce(
+          left_join, 
+          by = c("split", "site", "penalty", "index", "metric")
+        ) %>% 
+        pivot_longer(
+          cols = where(is.numeric),
+          names_to = "models"
+        )
+    }) %>% 
+      list_rbind()
+  }
+
+
+
+#' Process metrics 
+#' Post-process output of wrap_metric function, which is a wrapper for crps_fun
+#' and wilker_fun. Add t_ax, scale metrics by tslm metrics, convert penalty to
+#' factor.
+#' @param .metrics Tibble of metrics
+process_metrics <- # data wrangling
+  function(.metrics) {
+    n_split <- # number of splits 
+      .metrics$split %>% unique() %>% tail(1) %>% as.numeric()
+    
+    .metrics <- # add joint time axis
+      .metrics %>%
+      group_by(split) %>% 
+      mutate(
+        t_ax = as.numeric(index),
+        t_ax = t_ax - (t_ax[1]),
+        t_ax = t_ax + 7 * (n_split - as.numeric(split))
+      ) %>% 
+      ungroup()
+    
+    .metrics <- # scale by tslm model score
+      .metrics %>% 
+      group_by(site, penalty, metric, index) %>%
+      mutate(
+        value_s = value / value[models == "tslm"]
+      ) %>% 
+      ungroup()
+    
+    .metrics <-   
+      .metrics %>% 
+      mutate(
+        penalty = factor(penalty) %>% fct_rev()
+      )
+  }
+
+
+
+#' Fc linear combination
+#' Combine forecasts using weighted linear combination to generate a
+#' distribution mixture. Combination is weighted, using either equal, crps or
+#' wilker scores (.method).
+#' @param .fc Original fc from different models
+#' @param .weights Tibble of metrics summaries containing weights
+#' @param .method Type of scoring methods used for generating weights
+lcomb_fun <- 
+  function(.fc, .weights, .list_m, .method) {
+    .fc %>%
+      group_by(split, site, h) %>%
+      summarise(
+        occ = 
+          dist_mixture(
+            occ[.model == "es"],
+            occ[.model == "rf_int"],
+            occ[.model == "tslm"],
+            occ[.model == "var_ad"],
+            occ[.model == "var_ad2"],
+            occ[.model == "var_h"],
+            occ[.model == "xgb"],
+            weights = .weights %>% 
+              filter(
+                site == as.character(site)[1], 
+                penalty == "upper", 
+                h == h[1], 
+                metric == .method
+              ) %>% pull(metric_avg)
+          )
+        # do.call(
+        # dist_mixture,
+        # c(
+        #   as.list(occ[.model %in% .list_m]), 
+        #   list(weights = 
+        #          .weights %>% 
+        #          filter(
+        #            site == site %>% as.character() %>% .[1], 
+        #            penalty == "upper", 
+        #            models %in% .list_m,
+        #            h == h[1], 
+        #            metric == .method
+        #            ) %>% pull(metric_avg)
+        #        )
+        #   )
+        # )
+      ) %>% 
+      mutate(.model = .method) %>%
+      ungroup()
+  }
+
+
+
+#' Fc combination wrapper
+#' Wrapper function to generate weighted linearly combined fc.
+#' @param .fc Original fc to combine.
+#' @param .metrics Original metrics to use for fc weighting.
+fc_comb_wrap <- 
+  function(.fc, .metrics) {
+    # Data wrangling
+    n_split <- # number of splits 
+      .fc$split %>% unique() %>% tail(1) %>% as.numeric()
+    
+    
+    .fc <- # add fc horizon (need redo t_ax!)
+      .fc %>%
+      group_by(split) %>% 
+      mutate(
+        t_ax = as.numeric(index),
+        t_ax = t_ax - (t_ax[1]),
+        t_ax = t_ax + 7 * (n_split - as.numeric(split)),
+        h = t_ax - min(t_ax) + 1
+      ) %>% 
+      ungroup()
+    
+    
+    # List models
+    list_best_metric <- 
+      c("es", "rf_int", "tslm", "var_ad", "var_ad2", "var_h", "xgb")
+    
+    # Compute avg scores
+    metric_avg <-
+      .metrics %>% #pluck("metrics") %>%
+      filter(models %in% list_best_metric) %>% 
+      group_by(split) %>% 
+      mutate(h = t_ax - min(t_ax) + 1) %>% # create horizon idx for grouping
+      group_by(site, penalty, metric, models, h) %>% # not by split
+      summarise(metric_avg = mean(value)) %>% # average metric by group
+      ungroup() 
+    
+    metric_avg <- # add equal weights for linear pooling
+      metric_avg %>% group_by(site, penalty, models, h) %>% 
+      group_modify(~ add_row(.x, metric = "equal", metric_avg = 1)) %>% 
+      ungroup()
+    
+    metric_avg <- 
+      metric_avg %>% # normalise weights
+      group_by(site, penalty, h, metric) %>% 
+      mutate(
+        metric_avg = metric_avg / sum(metric_avg)
+      ) %>% 
+      ungroup()
+    
+    
+    
+    fc_comb_lp <- 
+      lcomb_fun(.fc, metric_avg, list_best_metric, "equal")
+    
+    fc_comb_crps <- 
+      lcomb_fun(.fc, metric_avg, list_best_metric, "crps")
+    
+    fc_comb_wilker <- 
+      lcomb_fun(.fc, metric_avg, list_best_metric, "wilker")
+    
+    
+    dimnames(fc_comb_lp$occ) <- "occ"
+    dimnames(fc_comb_crps$occ) <- "occ"
+    dimnames(fc_comb_wilker$occ) <- "occ"
+    .fc <- 
+      list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_wilker) %>% 
+      reduce(bind_rows) %>%  as_fable(".mean", "occ")
+  }

@@ -15,7 +15,7 @@ source("src/colour-mapping.R")
 
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
-fc_path <- here("output/fits/forecasts_short.RDS")
+fc_path <- here("output/fits/forecasts_short_comb.RDS")
 
 split_data_cv <- readRDS(split_path)
 fc_all <- readRDS(fc_path)
@@ -34,8 +34,6 @@ split_data_cv <-
 fc_all <-
   fc_all %>% rec_fun()
 
-fc_all %>% pull(`.model`) %>% unique()
-
 
 
 # Generate plots ---------------------------------------------------------------
@@ -51,7 +49,10 @@ list_models_f <- # select models for forecast plot
     "es",
     "rf",
     "rf_int",
-    "xgb"
+    "xgb",
+    "crps",
+    "equal",
+    "wilker"
     )
 
 

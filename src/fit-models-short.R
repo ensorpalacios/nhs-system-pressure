@@ -306,7 +306,8 @@ fc_fable_var_h <-
   fit_fable_var_h %>% 
   forecast(h = horizon)
 
-
+# Attention: in contrast to all other models, fc_var contains only 
+# split, site, .mode, index, .mean (e.g., no t_ax)
 fc_var <- # bind VAR fc
   map(
     list(fc_fable_var_ad, fc_fable_var_ad2),
@@ -404,6 +405,7 @@ fc_ese <- # convert to tsibble
 
 
 # Random forest
+# (select_model fun from es)
 rf_forecast = 
   function(.data) {
     # Function to harmonise fc to fable data structure

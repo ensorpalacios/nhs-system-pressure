@@ -18,7 +18,7 @@ metric_path = here("output/metrics/metrics.RDS")
 metric_data = readRDS(metric_path)
 
 # Unpack from list
-metrics <- metric_data$metrics
+metrics <- metric_data$metrics_comb # use metrics with combined models
 metrics_summary <- metric_data$metrics_summary
 sites <- metrics$site %>% unique()
 metric_names <- metrics$metric %>% unique()

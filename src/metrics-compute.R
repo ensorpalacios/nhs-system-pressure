@@ -41,125 +41,9 @@ fc_all <-
 
 
 
-# Helper functions -------------------------------------------------------------
-crps_func <-  # Compute crps
-  function(.obs, .fc, .penalty) {
-    # .obs: observed value
-    # .fc: forecast distribution
-    # .penalty: 
-    tmp_alpha = seq(0.01, 0.99, 0.01) # alpha level ([0, 1])
-    tmp_weight =
-      .penalty %>% 
-      case_match(
-        "upper" ~ expr("tmp_alpha ** 2"),
-        "none" ~ expr("1"),
-        "lower" ~ expr("(1 - tmp_alpha) ** 2")
-      )
-    
-    map2(.fc, .obs, \(.dist, .obs_) {
-      tmp_qf = # quantile forecast
-        quantile(.dist, tmp_alpha)[[1]]
-      case_when(
-        .obs_ > tmp_qf ~ 
-          -tmp_alpha * (tmp_qf - .obs_) * eval(parse(text = tmp_weight)),
-        .obs_ <= tmp_qf ~ 
-          (1 - tmp_alpha) * (tmp_qf - .obs_) * eval(parse(text = tmp_weight))
-      ) %>% 
-        sum() * 2 / (length(tmp_alpha))
-    }) %>% 
-      list_c()
-    # tmp_domain = seq(0, 2000, 1) # ATTENTION: ad hoc domain common to BRI/Southmead
-    # crps_p =
-    #   map2(.fc, .obs, \(.dist, .obs_) {
-    #   case_when(
-    #     tmp_domain < .obs_ ~  cdf(.dist, tmp_domain)[[1]] ** 2,
-    #     tmp_domain >= .obs_  ~ (cdf(.dist, tmp_domain)[[1]] - 1) ** 2
-    #   ) %>% 
-    #     sum() * 
-    #        ((tail(tmp_domain, 1) - head(tmp_domain, 1)) /
-    #           (length(tmp_domain) - 1))
-    # }) %>% 
-    #   list_c()
-  }
-
-wilker_func <- # compute Wilker score - used in wilker_wrap()
-  function(.obs, .fc, .penalty) {
-    # .obs: observed value
-    # .fc: forecast distribution
-    # .penalty: penalise more observations above or below prediction interval
-    ci_width = seq(0.05, 0.95, 0.05) # width of the confidence interval
-    map(ci_width, \(.width) {
-      upper = .fc %>% quantile(0.5 + .width / 2) # (upper interval)
-      lower = .fc %>% quantile(0.5 - .width / 2) # (lower interval)
-      ci_width = upper - lower # width confidence interval
-      .penalty =
-        case_when(
-          .penalty == "upper" ~ 2,
-          .penalty == "none" ~ 1,
-          .penalty == "lower" ~ .5
-        )
-      case_when(
-        .obs > upper ~ ci_width + (2 * .penalty) /.width * (.obs - upper),
-        .obs < lower ~ ci_width + (2 / .penalty) /.width * (lower - .obs),
-        .default = ci_width
-      ) %>% 
-        as_tibble_col(.width %>% as.character())
-    }) %>% 
-      list_cbind() %>% 
-      rowMeans()
-  }
-
-wrap_metric <- # general wrapper over metric function - used in cv_wrap()
-  function(.data) {
-    # Organise obs and fc distributions in one tibble
-    tmp_data =
-      .data$all %>% 
-      filter(type == "test") %>% 
-      select(split, site, index, occ) %>% 
-      left_join(
-        .data$test %>%
-          as_tibble() %>%
-          select(index, .model, occ) %>% 
-          pivot_wider(names_from = .model, values_from = occ),
-        by = "index"
-      )
-    
-    # Compute metric for each model and penalty
-    ls_models = tmp_data %>% names %>% tail(-4)
-    penalty = c("upper", "none", "lower")
-    map(penalty, \(.penalty) {
-      map(ls_models, \(.model_name) {
-        tmp_obs = tmp_data[["occ"]]
-        tmp_fc = tmp_data[[.model_name]] # forecast distribution
-        tibble(
-          split = tmp_data$split,
-          site = tmp_data$site,
-          penalty = .penalty,
-          index = tmp_data$index,
-          wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
-          crps = crps_func(tmp_obs, tmp_fc, .penalty)
-        ) %>% pivot_longer(
-          cols = where(is.numeric), 
-          names_to = "metric",
-          values_to = .model_name)
-      }) %>% 
-        reduce(
-          left_join, 
-          by = c("split", "site", "penalty", "index", "metric")
-        ) %>% 
-        pivot_longer(
-          cols = where(is.numeric),
-          names_to = "models"
-        )
-    }) %>% 
-      list_rbind()
-  }
-
-
-
-# Compute/summarise metrics ----------------------------------------------------
+# Compute metrics --------------------------------------------------------------
 # Compute
-list_models_m <- # select models
+list_models <- # select models
   c(
     "arima",
     "var_ad",
@@ -179,42 +63,55 @@ metrics <- # compute metrics
     list("all" = split_data_cv , "fc" = fc_all), 
     select_fc,
     wrap_metric,
-    list_models_m
+    list_models
   ) %>% 
   flatten() %>%
   bind_rows()
 
+metrics <- process_metrics(metrics)
 
-# Wrangling
-n_split <- # number of splits 
-  metrics$split %>% unique() %>% tail(1) %>% as.numeric()
 
-metrics <- # add joint time axis
-  metrics %>%
-  group_by(split) %>% 
-  mutate(
-    t_ax = as.numeric(index),
-    t_ax = t_ax - (t_ax[1]),
-    t_ax = t_ax + 7 * (n_split - as.numeric(split))
-  ) %>% 
-  ungroup()
 
-metrics <- # scale by tslm model score
-  metrics %>% 
-  group_by(site, penalty, metric, index) %>%
-  mutate(
-    value_s = value / value[models == "tslm"]
-  ) %>% 
-  ungroup()
+# Combine forecasts and recompute metrics --------------------------------------
+# Combine fc
+fc_all_c <- 
+  fc_comb_wrap(fc_all, metrics)
 
-metrics <-   
-  metrics %>% 
-  mutate(
-    penalty = factor(penalty) %>% fct_rev()
+
+# Compute metrics
+list_models_comb <- # select models (including combined)
+  c(
+    "arima",
+    "var_ad",
+    "var_ad2",
+    "var_h",
+    "nn",
+    "es",
+    "rf",
+    "rf_int",
+    "xgb",
+    "tslm",
+    "snaive",
+    "equal",
+    "crps",
+    "wilker"
   )
 
-# Summarise (not all models included for clarity)
-var_summary <- 
+
+metrics_c <- # compute metrics
+  cv_wrap(
+    list("all" = split_data_cv , "fc" = fc_all_c), 
+    select_fc,
+    wrap_metric,
+    list_models_comb
+  ) %>% 
+  flatten() %>%
+  bind_rows()
+
+metrics_c <- process_metrics(metrics_c)
+
+# Summarise metrics ------------------------------------------------------------
+var_summary <- # not all models included for clarity
   c(
     "tslm",
     "snaive",
@@ -225,11 +122,14 @@ var_summary <-
     "arima_dad_rec",
     "nn",
     "rf_int",
-    "xgb"
+    "xgb",
+    "equal",
+    "crps",
+    "wilker"
   )
 
 tmp_metrics <- 
-  metrics %>%  
+  metrics_c %>%  
   filter(models %in% var_summary) # select variables for summary
 
 metrics_summary <- 
@@ -272,6 +172,7 @@ if (!file.exists(save_path)) {
 metric_data =
   list(
   "metrics" = metrics,
+  "metrics_comb" = metrics_c,
   "metrics_summary" = metrics_summary
 )
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))
