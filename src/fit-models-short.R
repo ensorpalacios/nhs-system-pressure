@@ -517,6 +517,7 @@ if (!file.exists(save_path)) {
 }
 
 
+saveRDS(split_data_tt, file = paste0(save_path, "tt_short.RDS"))
 saveRDS(split_data_cv, file = paste0(save_path, "splits_short.RDS"))
 saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
