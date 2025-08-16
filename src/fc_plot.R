@@ -21,18 +21,10 @@ split_data_cv <- readRDS(split_path)
 fc_all <- readRDS(fc_path)
 
 # Recode sites
-rec_fun <- 
-  function(.tbl) {
-    .tbl %>% 
-      mutate(
-        site = if_else(is_aggregated(site), "aggregate", site),
-        site = site %>% as.character()
-      )
-  }
 split_data_cv <- 
-  split_data_cv %>% rec_fun()
+  split_data_cv %>% rec_site()
 fc_all <-
-  fc_all %>% rec_fun()
+  fc_all %>% rec_site()
 
 
 

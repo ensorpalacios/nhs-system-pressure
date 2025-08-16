@@ -500,6 +500,21 @@ xpredict_fun <-
   }
 
 
+#' Recode sites
+#' Recode from aggregate (yes/no) to simple character
+#' @param .tbl Tibble containing data organised by site
+rec_site <- 
+  function(.tbl) {
+    .tbl %>% 
+      mutate(
+        site = if_else(is_aggregated(site), "aggregate", site),
+        site = site %>% as.character()
+      )
+  }
+
+
+
+# Functions to fit models and produce fc ---------------------------------------
 #' Random forest fit and predict
 #' Random forest for forecast. Train RF on data in wide format: lagged data have
 #' their own column. Additionally predict bed occupancy for the next 7 days;
@@ -739,7 +754,6 @@ crps_func <-  # Compute crps
   }
 
 
-
 #' Wilker function
 #' Compute average wilker score over discretized alpha (predictive interval)
 #' values for all cv fc.
@@ -772,7 +786,6 @@ wilker_func <- # compute Wilker score - used in wilker_wrap()
       list_cbind() %>% 
       rowMeans()
   }
-
 
 
 #' Wrap metrics
@@ -825,7 +838,6 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
   }
 
 
-
 #' Process metrics 
 #' Post-process output of wrap_metric function, which is a wrapper for crps_fun
 #' and wilker_fun. Add t_ax, scale metrics by tslm metrics, convert penalty to
@@ -860,7 +872,6 @@ process_metrics <- # data wrangling
         penalty = factor(penalty) %>% fct_rev()
       )
   }
-
 
 
 #' Fc linear combination
@@ -912,7 +923,6 @@ lcomb_fun <-
       mutate(.model = .method) %>%
       ungroup()
   }
-
 
 
 #' Fc combination wrapper
