@@ -148,7 +148,7 @@ es_model <- # define esx fit
       es(model = "ZXZ",  lags = c(1, 1, 7))
   }
 
-list_var_ese <- 
+list_var_esx <- 
   c("occ", 
     "ad_diff_f_lag3", "ad_diff2_f_lag3", 
     "ad_diff_f_lag6", "ad_diff2_f_lag6"
