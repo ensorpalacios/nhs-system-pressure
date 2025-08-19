@@ -148,18 +148,15 @@ es_model <- # define esx fit
       es(model = "ZXZ",  lags = c(1, 1, 7))
   }
 
-list_var_ese <- 
-  c("occ", 
-    "ad_diff_f_lag3", "ad_diff2_f_lag3", 
-    "ad_diff_f_lag6", "ad_diff2_f_lag6"
-    )
+list_var_esx <- 
+  c("occ", "ad_diff_f_lag6", "ad_diff2_f_lag3")
 
 fit_es <- # fit es
   cv_wrap(
     data_xpredict %>% filter(type == "train" & !is_aggregated(site)),
     select_training,  
     es_model, 
-    list_var_ese)
+    list_var_esx)
 
 
 # Random forest
@@ -394,11 +391,11 @@ es_forecast <- # define esx forecast
       )
   }
 
-fc_ese <- # forecast with esx model
+fc_esx <- # forecast with esx model
   cv_wrap(fit_es, select_model, es_forecast)
 
-fc_ese <- # convert to tsibble
-  fc_ese %>% 
+fc_esx <- # convert to tsibble
+  fc_esx %>% 
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
@@ -497,14 +494,14 @@ fc_xgb <- # convert to tsibble
 
 # Join fc
 dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
-dimnames(fc_ese$occ) <- "occ" 
+dimnames(fc_esx$occ) <- "occ" 
 dimnames(fc_rf$occ) <- "occ"
 dimnames(fc_rf_int$occ) <- "occ"
 dimnames(fc_xgb$occ) <- "occ"
 fc_all <- 
   list(
     fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
-    fc_ese, fc_rf, fc_rf_int, fc_xgb
+    fc_esx, fc_rf, fc_rf_int, fc_xgb
     ) %>% 
   reduce(bind_rows)
 
