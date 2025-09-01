@@ -874,6 +874,17 @@ process_metrics <- # data wrangling
   }
 
 
+# Function to re-normalise weights in case of floating point issue; check
+# wether weights sum to 1 when renormalising.
+renorm <- function(.weight) {
+  if (!(identical(sum(.weight), 1))) {
+    cat("Weights sum to:", sum(.weight), "- normalizing...\n") 
+    .weight / sum(.weight)} else {
+      .weight
+    }
+}
+
+
 #' Fc linear combination
 #' Combine forecasts using weighted linear combination to generate a
 #' distribution mixture. Combination is weighted, using either equal, crps or
@@ -886,39 +897,64 @@ lcomb_fun <-
     .fc %>%
       group_by(split, site, h) %>%
       summarise(
-        occ = 
-          dist_mixture(
-            occ[.model == "es"],
-            occ[.model == "rf_int"],
-            occ[.model == "tslm"],
-            occ[.model == "var_ad"],
-            occ[.model == "var_ad2"],
-            occ[.model == "var_h"],
-            occ[.model == "xgb"],
-            weights = .weights %>% 
-              filter(
-                site == as.character(site)[1], 
-                penalty == "upper", 
-                h == h[1], 
-                metric == .method
-              ) %>% pull(metric_avg)
-          )
-        # do.call(
-        # dist_mixture,
-        # c(
-        #   as.list(occ[.model %in% .list_m]), 
-        #   list(weights = 
-        #          .weights %>% 
-        #          filter(
-        #            site == site %>% as.character() %>% .[1], 
-        #            penalty == "upper", 
-        #            models %in% .list_m,
-        #            h == h[1], 
-        #            metric == .method
-        #            ) %>% pull(metric_avg)
-        #        )
-        #   )
+        # occ = 
+          # dist_mixture(
+          #   occ[.model == "arima_dad_l"],
+          #   occ[.model == "arima_dad_rec"],
+          #   occ[.model == "es"],
+          #   occ[.model == "rf_int"],
+          #   occ[.model == "var_ad"],
+          #   occ[.model == "var_ad2"],
+          #   occ[.model == "var_h"],
+          #   occ[.model == "xgb"],
+          #   weights = .weights %>% 
+          #     filter(
+          #       site == as.character(site)[1], 
+          #       penalty == "upper", 
+          #       h == h[1], 
+          #       metric == .method
+          #     ) %>% pull(metric_avg)
         # )
+        
+        # Get weight and correct floating point error
+        # new_weight = .weights %>%
+        #   filter(
+        #     .site == site %>% as.character() %>% .[1],
+        #     .penalty == "upper",
+        #     .models  %in%
+        #       c(.list_m %>% pluck(as.character(site)[1])),
+        #     .h == h[1],
+        #     .metric == .method
+        #   ) %>%
+        #   pull(metric_avg),
+        # renorm <- function(.new_weight) {
+          # if (identical(sum(.new_weight), 1)) {
+          # .new_weight / sum(.new_weight)} else {
+            # stop()
+          # }}
+        
+        occ =
+          tryCatch({
+          do.call(
+            dist_mixture,
+            c(
+              # as.list(occ[.model %in% tmp_list_m]),
+              as.list(occ[.model %in% 
+                            c(.list_m %>% pluck(as.character(site)[1]))]),
+              list(weights = #new_weight
+                     .weights %>%
+                     filter(
+                       .site == site %>% as.character() %>% .[1],
+                       .penalty == "upper",
+                       .models  %in%
+                         c(.list_m %>% pluck(as.character(site)[1])),
+                       .h == h[1],
+                       .metric == .method
+                     ) %>% pull(metric_avg) %>% 
+                     renorm()
+              )
+            )
+          )}, error = function(e) {browser()})
       ) %>% 
       mutate(.model = .method) %>%
       ungroup()
@@ -926,7 +962,8 @@ lcomb_fun <-
 
 
 #' Fc combination wrapper
-#' Wrapper function to generate weighted linearly combined fc.
+#' Wrapper function to generate weighted linearly combined fc. Take reciprocal
+#' of crps/wilker as higher is worse
 #' @param .fc Original fc to combine.
 #' @param .metrics Original metrics to use for fc weighting.
 fc_comb_wrap <- 
@@ -949,41 +986,57 @@ fc_comb_wrap <-
     
     
     # List models
-    list_best_metric <- 
-      c("es", "rf_int", "tslm", "var_ad", "var_ad2", "var_h", "xgb")
+    list_best_southmead <- 
+      c("es", "rf_int", "var_ad2", "xgb", "tslm") # save2
+      # c("es", "rf_int", "var_ad", "var_ad2", "var_h", "xgb", "tslm") # save1
+    list_best_bri <- 
+      c("arima_dad_l", "arima_dad_rec", "rf_int", "var_ad", "var_h") # save2
+      # c("arima_dad_l", "arima_dad_rec", "rf_int", "var_ad", "var_ad2",
+        # "var_h", "xgb") # save1
+    list_best_metric <-
+      list("BRI" = list_best_bri, "Southmead" = list_best_southmead)
     
-    # Compute avg scores
+    # Compute avg scores for each model
     metric_avg <-
       .metrics %>% #pluck("metrics") %>%
-      filter(models %in% list_best_metric) %>% 
       group_by(split) %>% 
       mutate(h = t_ax - min(t_ax) + 1) %>% # create horizon idx for grouping
       group_by(site, penalty, metric, models, h) %>% # not by split
       summarise(metric_avg = mean(value)) %>% # average metric by group
       ungroup() 
     
+    metric_avg <- # add "." to names to avoid confusion with fc
+      metric_avg %>% rename_with(~ paste0(".", .x), everything())
+    
     metric_avg <- # add equal weights for linear pooling
-      metric_avg %>% group_by(site, penalty, models, h) %>% 
-      group_modify(~ add_row(.x, metric = "equal", metric_avg = 1)) %>% 
+      metric_avg %>% group_by(.site, .penalty, .models, .h) %>% 
+      group_modify(~ add_row(.x, .metric = "equal", .metric_avg = 1)) %>% 
       ungroup()
     
-    metric_avg <- 
-      metric_avg %>% # normalise weights
-      group_by(site, penalty, h, metric) %>% 
+    metric_avg <- # take reciprocal of crps and wilker
+      metric_avg %>% 
+      mutate(.metric_avg = 1 / .metric_avg)
+    
+    metric_avg <- # normalise weights
+      metric_avg %>% 
+      group_by(.site, .penalty, .h, .metric) %>% 
       mutate(
-        metric_avg = metric_avg / sum(metric_avg)
+        metric_avg = if_else( # site-specific normalisation factor 
+            .site == "BRI",
+              .metric_avg / sum(.metric_avg[.models %in% list_best_bri]),
+              .metric_avg / sum(.metric_avg[.models %in% list_best_southmead])
+          )
       ) %>% 
       ungroup()
-    
-    
-    
-    fc_comb_lp <- 
+      
+     
+    fc_comb_lp <-
       lcomb_fun(.fc, metric_avg, list_best_metric, "equal")
     
-    fc_comb_crps <- 
+    fc_comb_crps <-
       lcomb_fun(.fc, metric_avg, list_best_metric, "crps")
     
-    fc_comb_wilker <- 
+    fc_comb_wilker <-
       lcomb_fun(.fc, metric_avg, list_best_metric, "wilker")
     
     
