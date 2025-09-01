@@ -35,6 +35,6 @@ names(col_models) =
     "crps",
     "equal",
     "wilker"
-  )
+  ) %>% as.factor()
 
 

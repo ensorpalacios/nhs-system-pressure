@@ -46,6 +46,8 @@ fc_all <-
 list_models <- # select models
   c(
     "arima",
+    "arima_dad_l",
+    "arima_dad_rec",
     "var_ad",
     "var_ad2",
     "var_h",
@@ -82,6 +84,8 @@ fc_all_c <-
 list_models_comb <- # select models (including combined)
   c(
     "arima",
+    "arima_dad_l",
+    "arima_dad_rec",
     "var_ad",
     "var_ad2",
     "var_h",
@@ -120,7 +124,7 @@ var_summary <- # not all models included for clarity
     "var_h",
     "arima_dad_l",
     "arima_dad_rec",
-    "nn",
+    "es",
     "rf_int",
     "xgb",
     "equal",
