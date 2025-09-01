@@ -16,9 +16,11 @@ source("src/colour-mapping.R")
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
 fc_path <- here("output/fits/forecasts_short_comb.RDS")
+thr_path <- here("output/fits/thresholds.RDS")
 
 split_data_cv <- readRDS(split_path)
 fc_all <- readRDS(fc_path)
+alarm_thr <- readRDS(thr_path)
 
 # Recode sites
 split_data_cv <- 
@@ -33,18 +35,18 @@ fc_all <-
 list_models_f <- # select models for forecast plot
   c(
     "tslm",
-    "var_ad2",
+    # "var_ad2",
     "var_h",
     "arima_dad_l",
     "arima_dad_rec",
-    "nn",
-    "es",
-    "rf",
+    # "nn",
+    # "es",
+    # "rf",
     "rf_int",
-    "xgb",
-    "crps",
-    "equal",
-    "wilker"
+    # "xgb",
+    "crps"#,
+    # "equal",
+    # "wilker"
     )
 
 
@@ -89,13 +91,23 @@ plt_fc <- # generate plots
   )
 
 
+# Add alarm threshold
+sites <- alarm_thr[, site]
+plt_fc <- 
+  map(sites, \(.site){
+    map(plt_fc[[.site]], 
+        ~ .x + geom_hline(yintercept = alarm_thr[site == .site, thr], lty = 2)
+    )
+  }) %>% set_names(sites)
+
+
+
 # Save plots -------------------------------------------------------------------
 save_path <- here("output/plots/forecasts/")
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
 
-sites = fc_all$site %>% unique() %>% as.character()
 splits = fc_all$split %>% unique() %>% as.character()
 
 walk(sites, \(.site) {

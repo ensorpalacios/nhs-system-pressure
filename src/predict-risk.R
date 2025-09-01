@@ -15,13 +15,16 @@ data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 tt_path <- here("output/fits/tt_split.RDS")
 split_path <- here("output/fits/splits_short.RDS")
 fc_path <- here("output/fits/forecasts_short_comb.RDS")
+thr_path <- here("output/fits/thresholds.RDS")
 
 ts_occ <- readRDS(file = data_path)
 split_data_tt <- readRDS(file = tt_path)
 split_data_cv <- readRDS(split_path)
 fc_all <- readRDS(fc_path)
+alarm_thr <- readRDS(thr_path)
 
 
+# Preprocessing ----------------------------------------------------------------
 # Recode sites
 ts_occ <- 
   ts_occ %>% rec_site()
@@ -33,21 +36,14 @@ fc_all <-
   fc_all %>% rec_site()
 
 
-
-# Compute alarm threshold ------------------------------------------------------
-alarm_thr <- # compute threshold on (all) training data
-  split_data_tt %>% as.data.table() %>%
-  .[
-    type == "train" & site != "aggregate",
-    .(thr = quantile(occ, probs = 0.9)), by = site
-    ]
-
-fc_threshold <- # fc table with thresholds
+# Add alarm thresholds to fc
+fc_threshold <-
   alarm_thr[
     fc_all %>% select(split, site, .model, index, occ, .mean, h),  on = "site"
     ]
 
-fc_threshold <- # Join observed and fc occ
+# Join observed and fc occ
+fc_threshold <-
   split_data_cv %>% # observed
   filter(type == "test", site != "aggregate") %>% 
   select(split, site, index, occ) %>% 
@@ -99,10 +95,13 @@ risk_w <-
 # Plot risk --------------------------------------------------------------------
 list_models <- # select models
   c(
-    "crps",
-    "equal",
-    "wilker",
-    "tslm")
+    "tslm",
+    # "var_h",
+    # "arima_dad_l",
+    # "arima_dad_rec",
+    # "rf_int",
+    "crps"
+    )
 
 splits <- risk_h$split %>% unique()
 sites <- risk_h$site %>% unique()
@@ -147,7 +146,9 @@ plt_risk <-
         ylim(0, 1) +
         annotate("text", x = x_close, y = 0.6, label = risk_close) +
         annotate("text", x = x_far, y = 0.6, label = risk_far) +
-        annotate("text", x = x_week, y = 0.8, label = risk_week)
+        annotate("text", x = x_week, y = 0.8, label = risk_week)+
+        scale_colour_manual(name = "models", values = col_models) + 
+        scale_fill_manual(name = "models", values = col_models)
         
       p2 = 
         tmp_tb[.model == tmp_tb$.model[1]] %>% 
@@ -180,7 +181,7 @@ if (!file.exists(save_path)) {
 
 walk(sites, \(.site) {
   walk(splits, \(.split) {
-    tmp_path = str_glue("{save_path}{.site}_split{.split}.png")
+    tmp_path = str_glue("{save_path}{.site}_split{.split}.eps")
     plt_risk %>% pluck(.split, .site) %>% 
       ggsave(file = tmp_path, width = 6, height = 3)
   })
