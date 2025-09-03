@@ -39,11 +39,12 @@ list_models_f <- # select models for forecast plot
     "var_h",
     "arima_dad_l",
     "arima_dad_rec",
+    "arima_dadpl_rec",
     # "nn",
     # "es",
     # "rf",
     "rf_int",
-    # "xgb",
+    "xgb",
     "crps"#,
     # "equal",
     # "wilker"
