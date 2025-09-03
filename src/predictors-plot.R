@@ -161,13 +161,47 @@ plot_escal <-
   facet_wrap(vars(site), ncol = 1, scales = "free")
 
 
+# A&E paediatric - missing
+plot_paed_miss <-
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "BRI") %>%  .$paed_m,
+    title = "A&E paediatric",
+    subtitle = "BRI"
+    ) +
+  ggplot_na_imputations(
+    ts_occ %>% filter(site == "Southmead") %>% .$paed_m,
+    ts_occ %>% filter(site == "Southmead") %>% .$paed,
+    size_imputations = 5,
+    title = NULL,
+    subtitle = "Southmead"
+    ) +
+  plot_layout(ncol = 1, axis = "collect_x")
+
+plot_paed_acf = plot_cf(ts_occ, .var = "paed", .lag = 100)
+
+
+# Length of stay (+21) - missing
+plot_los_miss <-
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "BRI") %>%  .$los_m,
+    title = "Length of stay (+21)",
+    subtitle = "BRI"
+    ) +
+  ggplot_na_imputations(
+    ts_occ %>% filter(site == "Southmead") %>% .$los_m,
+    ts_occ %>% filter(site == "Southmead") %>% .$los,
+    size_imputations = 5,
+    title = NULL,
+    subtitle = "Southmead"
+    ) +
+  plot_layout(ncol = 1, axis = "collect_x")
+
+plot_los_acf = plot_cf(ts_occ, .var = "los", .lag = 100)
+
+
 
 # Plot bed occupancy and predictors -------------------------------------------
-ex_var = c(
-  "ad_diff", "ad_diff2", "ad_diff3", 
-  "ad_diff_f", "ad_diff2_f", "ad_diff3_f",
-  "occ_other"
-  )
+ex_var = c("ad_diff_f", "ad_diff2_f", "paed", "los")
 
 
 # Time series - all bed data
@@ -204,6 +238,10 @@ ts_occ_l <- # convert in long format
 plot_together <- # plot
   ts_occ_l |>
   as.data.frame() |> 
+  mutate(
+    var = factor(var, 
+                 levels = c("occ", "ad_diff_f", "ad_diff2_f", "los", "paed"))
+    ) %>% 
   ggplot(aes(x = index, y = value, colour = site)) +
   geom_line() +
   facet_wrap(vars(var), ncol = 1, scales = "free")
@@ -283,6 +321,8 @@ plot_lags =
   }) %>% 
   set_names(sites)
 
+
+
 # Save plots ------------------------------------------------------------------
 save_path <- here("output/plots/predictors/")
 
@@ -305,6 +345,10 @@ ls_plots <- list(
   "ad_diff2_f_acf" = plot_ad_diff2_f_acf,
   "ad_diff3_f_acf" = plot_ad_diff3_f_acf,
   "escal" = plot_escal,
+  "paed_miss" = plot_paed_miss,
+  "paed_acf" = plot_paed_acf,
+  "los_miss" = plot_los_miss,
+  "los_acf" = plot_los_acf,
   "beds" = plot_beds,
   "together" = plot_together
   )

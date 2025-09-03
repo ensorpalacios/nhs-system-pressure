@@ -30,6 +30,7 @@ ts_occ <-
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
     -adm, -dis,
     -escal, -core,
+    -ad_diff3, -ad_diff3_f
     )
 
 
@@ -60,8 +61,8 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 xpredict_method = "pull" # include tslm, arima, ets
 data_xpredict <- 
   xpredict_fun(
-    split_data_cv %>% select(-contains("occ_other"), -contains("ad_diff3")), 
-    c("occ", "ad_diff"), 
+    split_data_cv %>% select(-contains("occ_other")), 
+    c("occ", "ad_diff", "paed", "los"), 
     idx_start_test, 
     xpredict_method
     )
@@ -87,6 +88,23 @@ fit_fable <- # fit models
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6
       ),
+    arima_dadp_l = 
+      ARIMA(
+        occ ~ 
+          days_ +
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1
+      ),
+    arima_dadpl_l = 
+      ARIMA(
+        occ ~ 
+          days_ +
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1 +
+          los + los_lag1
+      ),
     # NN autoregressive models
     nn = NNETAR(occ)
   )
@@ -103,7 +121,9 @@ fit_fable_agg <-
         occ ~ 
           days_ + 
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
-          ad_diff_f_lag6 + ad_diff2_f_lag6
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1 +
+          los + los_lag1
       )
   )
 
@@ -126,6 +146,26 @@ fit_fable_var_ad2 <- # diff(adm - dis)
   tsibble(index = index, key = c(split, site)) %>%
   model(
     var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
+  )
+
+
+fit_fable_var_paed <- # A&E paed
+  data_xpredict %>% 
+  filter(type == "train", !is_aggregated(site)) %>%
+  mutate(site = site %>% as.character()) %>% 
+  tsibble(index = index, key = c(split, site)) %>%
+  model(
+    var_paed = VAR(vars(occ, paed) ~ season(period = "week"))
+  )
+
+
+fit_fable_var_los <- # Length of stay (+21)
+  data_xpredict %>% 
+  filter(type == "train", !is_aggregated(site)) %>%
+  mutate(site = site %>% as.character()) %>% 
+  tsibble(index = index, key = c(split, site)) %>%
+  model(
+    var_los = VAR(vars(occ, los) ~ season(period = "week"))
   )
 
 
@@ -164,14 +204,15 @@ fit_es <- # fit es
 
 # Random forest
 # Attention: here excluding same-day predictors, but including lagged
-# occ_other because not predicted; also including all laggs because 
+# occ_other because not predicted; also including all lags because 
 # collinearity not a problem here.
 list_var_rf <-
   data_xpredict %>%
   select(
     contains("occ"),
+    contains("paed"), -paed,
+    contains("los"), -los,
     matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
-    -contains("ad_diff3"), # put after previous line to not override!
     contains("days_"), -days_) %>%
   names()
 
@@ -197,15 +238,11 @@ ls_rf_par <- # extract parameters fc distribution
 
 
 # Random forest - interaction
-# Attention: same as rf but also excluding occ_other (would have to predict it)
-list_var_rf <- # exclude occ_other
-  list_var_rf[!grepl("occ_other*.", list_var_rf)]
-
 data_xpredict_int <- # long format data with lag column
   data_xpredict %>%
   select(split, type, site, index, all_of(list_var_rf)) %>%
   rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
-  rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>% 
+  rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>%
   pivot_longer(
     cols = c(contains("lag")),
     names_to = c(".value", "lag"),
@@ -236,11 +273,13 @@ ls_rf_int_par <- # extract parameters fc distribution
 
 
 # XGBoosting - interaction
-# Same predictors as rf interaction
+# Same predictors as rf interaction but without paed and los
+list_var_xgb <- list_var_rf_int[!grepl("paed|los", list_var_rf_int)]
+
 ls_xgb_par <- # parameters fc distribution (mean and sd)
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)),
-    select_training,  xgb_reg_int,  list_var_rf_int, "all"
+    select_training,  xgb_reg_int,  list_var_xgb, "all"
   )
 
 
@@ -251,6 +290,8 @@ fit_all =
     "fable_agg" = fit_fable_agg,
     "fable_var_ad" = fit_fable_var_ad,
     "fable_var_ad2" = fit_fable_var_ad2,
+    "fable_var_paed" = fit_fable_var_paed,
+    "fable_var_los" = fit_fable_var_los,
     "fable_var_h" = fit_fable_var_h,
     "es" = fit_es,
     "rf_par" = ls_rf_par,
@@ -302,6 +343,14 @@ fc_fable_var_ad2 <-
   fit_fable_var_ad2 %>% 
   forecast(h = horizon)
 
+fc_fable_var_paed <- 
+  fit_fable_var_paed %>% 
+  forecast(h = horizon)
+
+fc_fable_var_los <- 
+  fit_fable_var_los %>% 
+  forecast(h = horizon)
+
 fc_fable_var_h <- 
   fit_fable_var_h %>% 
   forecast(h = horizon)
@@ -310,7 +359,9 @@ fc_fable_var_h <-
 # split, site, .mode, index, .mean (e.g., no t_ax)
 fc_var <- # bind VAR fc
   map(
-    list(fc_fable_var_ad, fc_fable_var_ad2),
+    list(
+      fc_fable_var_ad, fc_fable_var_ad2, fc_fable_var_paed, fc_fable_var_los
+      ),
     \(.x) {
       .x %>% 
         as_tibble() %>% 
@@ -321,7 +372,6 @@ fc_var <- # bind VAR fc
               sigma = .distribution %>% variance() %>% sqrt() %>% .[, "occ"]
             ),
           .mean = occ %>% mean(),
-          # .mean = NULL,
           .distribution = NULL
         ) %>% 
         as_tsibble(index = index, key = c(split, site, .model))
@@ -350,6 +400,7 @@ fc_var <- # bind VAR fc
     ) %>% 
       bind_rows()
   )
+
 
 # Exponential smoothing with predictors (esx)
 select_model <- # select model fit (by site and split)

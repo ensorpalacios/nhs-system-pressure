@@ -38,7 +38,7 @@ split_data_cv <-
   split_data_cv %>% filter(!is_aggregated(site))
 fc_all <- 
   fc_all %>% filter(!is_aggregated(site))
-
+fc_all$`.model` %>% unique
 
 
 # Compute metrics --------------------------------------------------------------
@@ -47,9 +47,13 @@ list_models <- # select models
   c(
     "arima",
     "arima_dad_l",
+    "arima_dadp_l",
+    "arima_dadpl_l",
     "arima_dad_rec",
     "var_ad",
     "var_ad2",
+    "var_paed",
+    "var_los",
     "var_h",
     "nn",
     "es",
@@ -85,9 +89,13 @@ list_models_comb <- # select models (including combined)
   c(
     "arima",
     "arima_dad_l",
+    "arima_dadp_l",
+    "arima_dadpl_l",
     "arima_dad_rec",
     "var_ad",
     "var_ad2",
+    "var_paed",
+    "var_los",
     "var_h",
     "nn",
     "es",
@@ -114,6 +122,8 @@ metrics_c <- # compute metrics
 
 metrics_c <- process_metrics(metrics_c)
 
+
+
 # Summarise metrics ------------------------------------------------------------
 var_summary <- # not all models included for clarity
   c(
@@ -121,8 +131,12 @@ var_summary <- # not all models included for clarity
     "snaive",
     "var_ad",
     "var_ad2",
+    "var_los",
+    "var_paed",
     "var_h",
     "arima_dad_l",
+    "arima_dadp_l",
+    "arima_dadpl_l",
     "arima_dad_rec",
     "es",
     "rf_int",

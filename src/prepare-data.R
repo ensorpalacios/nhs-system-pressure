@@ -20,13 +20,23 @@ data_path <- paste0(here(), "/data/raw/")
 
 # Admissions/discharges, acute bed occupancy, escalation beds - 2024
 # Urgent care data
-df_occ <- read_excel(
-                  paste0(
-                         data_path,
-                         "2022-01-01-to-2025-01-31-acute-occupancy.xlsx"
-                         ),
-                  sheet = 2
-)
+df_occ <- 
+  read_excel(
+    paste0(data_path, "2022-01-01-to-2025-01-31-acute-occupancy.xlsx"),
+    sheet = 2
+  )
+
+# A&E pediatric & length of stay variables
+df_pl <- 
+  read_excel(
+    paste0(data_path, "2022-01-01-to-2025-01-31-los-pead-attends.xlsx"),
+    sheet = 2
+  )
+
+
+# Join data
+df_occ <- df_occ %>% bind_rows(df_pl)
+
 
 
 # Fully balanced panel ---------------------------------------------------------
@@ -48,13 +58,17 @@ df_occ <-
       escal = `Escalation beds open`,
       core = `Core stock open`,
       occ = `Bed occupancy`,
+      paed = `A&E attends - paediatrics`,
+      los = `Beds with 21+ days LOS`,
       provider = NULL,
       `Number of Admissions` = NULL,
       `Number of Discharges` = NULL,
       `Escalation beds open` = NULL,
       `Bed occupancy` = NULL,
       `Core stock open` = NULL,
-      report_date = NULL
+      report_date = NULL,
+      `A&E attends - paediatrics` = NULL,
+      `Beds with 21+ days LOS` = NULL
     ) |>
     relocate(c(index, site)) |>
     arrange(index, site)
@@ -86,12 +100,15 @@ ts_occ <- # impute
     adm_m = adm,
     escal_m = escal,
     core_m = core,
+    paed_m = paed,
+    los_m = los,
     # Impute (simple moving average, window=7)
-    # occ_i = occ %>% na_ma(k = 3, weighting = "simple"),
     occ = occ %>% na_ma(k = 3, weighting = "simple"),
     core = core %>% na_ma(k = 3, weighting = "simple"),
     dis = dis %>% na_ma(k = 3, weighting = "simple"),
     adm = adm %>% na_ma(k = 3, weighting = "simple"),
+    paed = paed %>% na_ma(k = 3, weighting = "simple"),
+    los = los %>% na_ma(k = 3, weighting = "simple"),
   ) %>% 
   ungroup()
 
@@ -139,11 +156,15 @@ ts_occ <-
     dis = sum(dis),
     escal = sum(escal),
     core = sum(core),
+    paed = sum(paed),
+    los = sum(los),
     occ_m = sum(occ_m),
     adm_m = sum(adm_m),
     dis_m = sum(dis_m),
     escal_m = sum(escal_m),
     core_m = sum(core_m),
+    paed_m = sum(paed_m),
+    los_m = sum(los_m)
   )
 
 
@@ -172,6 +193,36 @@ ts_occ <-
     # ad_diff_f = zs_fun(ad_diff_f),
     # ad_diff2_f = zs_fun(ad_diff2_f),
     # ad_diff3_f = zs_fun(ad_diff3_f),
+  ) %>% 
+  ungroup()
+
+
+# Length of stay (+21)
+ts_occ <- 
+  ts_occ %>% 
+  group_by(site) %>% 
+  mutate(
+    # Remove sudden drops from BRI (replace with moving avg)
+    mask = # iqr rule to detect (left-tail) outliers 
+      los < quantile(los)[2] - 1.5 * (quantile(los)[4] - quantile(los)[2]),
+    mavg = slide_dbl(los, mean, .before = 5, .after = 5),
+    los = if_else(mask, mavg, los),
+    mask = NULL,
+    mavg = NULL,
+    # Filter
+    los = # stabilise (-holidays/week days effect)
+      stabilise(los, index, .xdays = TRUE, .wdays = TRUE),
+  ) %>% 
+  ungroup()
+
+
+# Process A&E paediatric
+ts_occ <- 
+  ts_occ %>% 
+  group_by(site) %>% 
+  mutate(
+    paed = # stabilise (-holidays/week days effect)
+      stabilise(paed, index, .xdays = TRUE, .wdays = TRUE),
   ) %>% 
   ungroup()
 

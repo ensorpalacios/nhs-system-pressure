@@ -670,7 +670,7 @@ xgb_reg_int <-
               objective = "reg:squarederror", # for mean forecasting
               eta = 0.3, # default learning rate
               gamma = 0, # default min loss reduction for leaf split
-              lambda = 1, # default L2 regularisation
+              lambda = 3, # L2 regularisation (default 1)
               alpha = 0, # default L1 regularisation
               base_score = # initialise predictions based on sample mean
                 getinfo(data_train, "label") %>% mean()
@@ -681,7 +681,7 @@ xgb_reg_int <-
               objective = qreg(.alpha), # for quantile forecasting
               eta = 0.3, # default learning rate
               gamma = 0, # default min loss reduction for leaf split
-              lambda = 1, # default L2 regularisation
+              lambda = 3, # L2 regularisation (default 1)
               alpha = 0, # default L1 regularisation
               base_score = # initialise predictions based on sample mean
                 getinfo(data_train, "label") %>% mean()
@@ -987,10 +987,9 @@ fc_comb_wrap <-
     
     # List models
     list_best_southmead <- 
-      c("es", "rf_int", "var_ad2", "xgb", "tslm") # save2
-      # c("es", "rf_int", "var_ad", "var_ad2", "var_h", "xgb", "tslm") # save1
+      c("arima_dadpl_l", "arima_dad_rec", "rf_int", "var_ad2", "xgb", "tslm")
     list_best_bri <- 
-      c("arima_dad_l", "arima_dad_rec", "rf_int", "var_ad", "var_h") # save2
+      c("arima_dadp_l", "arima_dad_rec", "es", "rf_int", "var_ad", "var_h") # save2
       # c("arima_dad_l", "arima_dad_rec", "rf_int", "var_ad", "var_ad2",
         # "var_h", "xgb") # save1
     list_best_metric <-

@@ -15,14 +15,18 @@ source(here("src/packages.R"))
 # show_col(hue_pal()(12))
 # show_col(viridis_pal(option="turbo")(12))
 
-col_models = viridis_pal(option = "turbo")(17) # Colour mapping
+col_models = viridis_pal(option = "turbo")(21) # Colour mapping
 names(col_models) = 
   c(
     "arima",
     "arima_dad_l",
+    "arima_dadp_l",
+    "arima_dadpl_l",
     "arima_dad_rec",
     "var_ad",
     "var_ad2",
+    "var_paed",
+    "var_los",
     "var_h",
     "nn",
     "es",
