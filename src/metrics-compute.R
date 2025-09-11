@@ -1,6 +1,7 @@
-#' Metrics
+#' Metrics computations
 #'
-#' Compute Wilker and crps scores on cross-validated forecasts for each model:
+#'  This scrips does two things:
+#' 1) Compute Wilker and crps scores on cross-validated forecasts for each model:
 #' - the modified Wilker score is the average score across different ci width
 #' (100(1-\alpha)% confidence) for a specific time point interval. Compute the 
 #' wilker score for different penalties, namely upper, symmetric and lower, 
@@ -12,6 +13,10 @@
 #' and the Heaviside step function.
 #' Use different bias for errors on the left/right side of the forecast
 #' distributions.
+#' 
+#' 2) Combine forecasts from different models and (re-)compute metrics including
+#' fc_comb; this is done here because combination depends on CRPS and average 
+#' Wilker scores from individual models.
 #'
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles 
 # and Practice; https: //www.lokad.com/continuous-ranked-probability-score/;
@@ -182,7 +187,7 @@ metrics_summary <-
  
 
 # Save -------------------------------------------------------------------------
-save_path = here("output/metrics/")
+save_path = here("output/fits/")
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
@@ -193,4 +198,5 @@ metric_data =
   "metrics_comb" = metrics_c,
   "metrics_summary" = metrics_summary
 )
+saveRDS(fc_all_c, file = paste0(save_path, "forecasts_short_comb.RDS"))
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))

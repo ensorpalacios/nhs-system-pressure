@@ -14,7 +14,7 @@ source("src/colour-mapping.R")
 
 
 # Load data --------------------------------------------------------------------
-metric_path = here("output/metrics/metrics.RDS")
+metric_path = here("output/fits/metrics.RDS")
 metric_data = readRDS(metric_path)
 
 # Unpack from list
