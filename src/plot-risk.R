@@ -1,0 +1,236 @@
+# Plot risk predictions & metrics
+#'
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
+#' @date 2025-07-02
+
+# Import packages --------------------------------------------------------------
+source("src/packages.R")
+source("src/split-data.R")
+source("src/colour-mapping.R")
+
+
+
+# Load data --------------------------------------------------------------------
+path_risk <- here("output/fits/risk.RDS")
+path_curves <- here("output/fits/risk_curves.RDS")
+path_auc <- here("output/fits/risk_auc.RDS")
+
+
+list_risk <- readRDS(path_risk)
+list_curves <- readRDS(path_curves)
+list_auc <- readRDS(path_auc)
+
+
+
+# Plot risk fc (for each splits) -----------------------------------------------
+risk_d <- list_risk$risk_d
+risk_ws <- list_risk$risk_ws
+risk_w <- list_risk$risk_w
+
+list_models <- # select models
+  c(
+    "tslm",
+    # "var_h",
+    # "arima_dad_l",
+    # "arima_dad_rec",
+    # "rf_int",
+    "crps"
+    )
+
+splits <- risk_d$split %>% unique()
+sites <- risk_d$site %>% unique()
+
+plt_risk <- 
+  map(splits, \(.split) {
+    map(sites, \(.site) {
+      # Prepare data
+      tmp_tbl = # daily risks
+        risk_d[
+          split == .split & site == .site & .model %in% list_models
+        ][
+          , index := factor(index, ordered = TRUE)]
+      
+      tmp_thr = tmp_tbl[1, thr] # threshold (all equals)
+      
+      risk_close = # week split close risk
+        risk_ws[
+          split == .split & site == .site & .model %in% list_models &
+          week_split == "close"
+          ][ # add x-axis position
+            , index := ..tmp_tbl[2, index]
+          ]
+      risk_far = # week split far risk
+        risk_ws[
+          split == .split & site == .site & .model %in% list_models &
+          week_split == "far"
+          ][ # add x-axis position
+            , index := ..tmp_tbl[6, index]
+          ]
+      risk_weeks = # join close/far
+        rbind(risk_close, risk_far)
+
+      risk_week = # week (whole) risk
+        risk_w[
+          split == .split & site == .site & .model %in% list_models
+          ][ # add x-axis position
+            , index := ..tmp_tbl[4, index]
+          ]
+      
+      # Plot
+      p1 = # predicted risk weekly (split and whole)
+        ggplot() +
+        geom_col(
+          data = risk_weeks,
+          aes(x = index, y = risk_ws, fill = .model),
+          position = "dodge"
+          ) +
+        geom_col(
+          data = risk_week,
+          aes(x = index, y = risk_w, fill = .model),
+          position = "dodge"
+          ) +
+        geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
+        # ylim(0, .8) +
+        scale_colour_manual(name = "models", values = col_models) + 
+        scale_fill_manual(name = "models", values = col_models)
+        
+      p2 = # predicted risk daily
+        tmp_tbl %>% 
+        ggplot(aes(x = index, y = risk_day, fill = .model)) + 
+        geom_col(position = "dodge", width = 0.5) +
+        geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
+        # ylim(0, .8) +
+        scale_colour_manual(name = "models", values = col_models) + 
+        scale_fill_manual(name = "models", values = col_models)
+        
+      p3 = # time series
+        tmp_tbl[.model == tmp_tbl$.model[1]] %>% 
+        ggplot(aes(x = index, y = occ_obs, group = 1)) + 
+        geom_line(linewidth = 2) +
+        geom_hline(yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2)
+      
+      # Join
+      p1 / p2 / p3 + 
+        plot_layout(
+          ncol = 1, axes = "collect_x", guides = "collect")
+    }) %>% 
+      set_names(sites)
+  }) %>% 
+  set_names(splits)
+
+
+
+# Plot curves (aggregate splits) -----------------------------------------------
+pcurve_fun <- 
+  function(.ax_data, .auc_data) {
+    .names = names(.ax_data)
+    .y = .names[ncol(.ax_data) - 1]
+    .x = .names[ncol(.ax_data)]
+    
+    if ("week_split" %in% .names) {
+      .auc_data[ # filter by top auc 
+        .ax_data, on = c("nboot", "site", ".model", "week_split")][
+          ,
+          {
+            lapply(.SD, \(.c) {
+              mean = mean(.c)
+              q20 = quantile(.c, 0.2)
+              q80 = quantile(.c, 0.8)
+              c(mean = mean, q20, q80)
+            }) %>% 
+              unlist(, use.names = T) %>% 
+              as.list()
+          },
+          by = c("site", ".model", "week_split", "db"),
+          .SDcols = !"nboot" 
+        ][
+          ,
+          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
+          # .SD[auc >= 0],
+          by = c("site", "week_split")
+        ] %>% # plot
+        ggplot(
+          aes(
+            x = .data[[sprintf("%s.mean", .x)]], 
+            y = .data[[sprintf("%s.mean", .y)]],
+            colour = .model, fill = .model)) +
+        geom_ribbon(
+          aes(
+            ymin = .data[[sprintf("%s.20%%", .y)]], 
+            ymax = .data[[sprintf("%s.80%%", .y)]]),
+          colour = NA,
+          alpha = 0.3,
+        ) +
+        geom_line(linewidth = 1) +
+        scale_colour_manual(name = ".model", values = col_models) + 
+        scale_fill_manual(name = ".model", values = col_models) + 
+        facet_wrap(vars(site, week_split), ncol = 2)
+    } else {
+      .auc_data[ # filter by top auc 
+        .ax_data, on = c("nboot", "site", ".model")][
+          ,
+          {
+            lapply(.SD, \(.c) {
+              mean = mean(.c)
+              q20 = quantile(.c, 0.2)
+              q80 = quantile(.c, 0.8)
+              c(mean = mean, q20, q80)
+            }) %>% 
+              unlist(, use.names = T) %>% 
+              as.list()
+          },
+          by = c("site", ".model", "db"),
+          .SDcols = !"nboot"
+        ][
+          ,
+          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
+          # .SD[auc.mean >= 0],
+          by = site
+        ] %>% # plot
+        ggplot(
+          aes(
+            x = .data[[sprintf("%s.mean", .x)]], 
+            y = .data[[sprintf("%s.mean", .y)]],
+            colour = .model, fill = .model)) +
+        geom_ribbon(
+          aes(
+            ymin = .data[[sprintf("%s.20%%", .y)]], 
+            ymax = .data[[sprintf("%s.80%%", .y)]]),
+          colour = NA,
+          alpha = 0.3,
+        ) +
+        geom_line(linewidth = 1) +
+        scale_colour_manual(name = ".model", values = col_models) + 
+        scale_fill_manual(name = ".model", values = col_models) + 
+        facet_wrap(vars(site), ncol = 1)
+    }
+  }
+  
+plt_curves <- 
+  map2(list_curves, list_auc, pcurve_fun)
+
+
+
+# Save plots -------------------------------------------------------------------
+save_path <- here("output/plots/risk_fc/")
+if (!file.exists(save_path)) {
+  dir.create(save_path, recursive = TRUE)
+}
+
+# Single fc
+walk(sites, \(.site) {
+  walk(splits, \(.split) {
+    tmp_path = str_glue("{save_path}{.site}_split{.split}.eps")
+    plt_risk %>% pluck(.split, .site) %>% 
+      ggsave(file = tmp_path, width = 6, height = 3)
+  })
+})
+
+
+# Aggregated measures
+iwalk(plt_curves, \(.plt, .name) {
+  tmp_path = paste0(save_path, .name, ".eps")
+  plt_curves[[.name]] %>% 
+    ggsave(file = tmp_path, width = 6, height = 5, device = cairo_ps)
+  
+})
