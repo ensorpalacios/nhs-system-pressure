@@ -1046,3 +1046,76 @@ fc_comb_wrap <-
       list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_wilker) %>% 
       reduce(bind_rows) %>%  as_fable(".mean", "occ")
   }
+
+
+
+# Functions for risk prediction ------------------------------------------------
+#' Curve axes
+#' Function to compute the axes of the ROC/PR curves from risk prediction
+#' classifier. Curves represent x/y values for different decision boundaries
+#' (db), that is, probability above which classifier sets threshold-crossing as
+#' true, based on forecasted probability of crossing the allarm threshold. If
+#' denominator is 0, set ROC/PR value for that db to 0.
+#' @param .SD Subset of data, from data.table.
+#' @param .type Whether to compute axis for ROC or PR curve.
+ax_curve_fun <- 
+  function(.SD, .type) {
+    .db <- seq(0.99, 0.01, -0.01)
+    .obs_cross = .SD[, obs_cross]
+    
+    if (.type == "roc") { # for ROC curve
+      res <- lapply(.db, function(.x) {
+        .x = sprintf("db_%.2f", .x)
+        pos = .SD[[.x]]
+        TP = sum(.obs_cross & pos)
+        FP = sum(!.obs_cross & pos)
+        FN = sum(.obs_cross & !pos)
+        TN = sum(!.obs_cross & !pos)
+        
+        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
+        FPR = if ((FP + TN) > 0) round(FP / (FP + TN), 2) else 0
+        
+        return(data.table(db = .x, TPR = TPR, FPR = FPR))
+      })
+    } else { # for PR curve
+      res <- lapply(.db, function(.x) {
+        .x = sprintf("db_%.2f", .x)
+        pos = .SD[[.x]]
+        TP = sum(.obs_cross & pos)
+        FP = sum(!.obs_cross & pos)
+        FN = sum(.obs_cross & !pos)
+        TN = sum(!.obs_cross & !pos)
+        
+        PPV = if ((TP + FP) > 0) round(TP / (TP + FP), 2) else 0
+        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
+        
+        return(data.table(db = .x, PPV = PPV, TPR = TPR))
+      })
+    }
+    rbindlist(res) 
+  }
+
+
+#' Bootstrap curves
+#' Bootstrap decision boundary (db) dataset, namely, a table containing for each
+#' split, site and model a classification of threshold crossing as T/F based on
+#' the forecasted risk of threshold crossing and a db (prob above which classify
+#' threshold-crossing as T), ranging from 1-99%. Bootstrapping takes random
+#' "augmented" sample of splits, n times; "augmented" because n splits for each
+#' sample is higher that original number of splits - done to try reduce noise
+#' in bootstrap confidence intervals.
+#' @param .SD Subset of data, from data.table.
+#' @param .type Whether to compute axis for ROC or PR curve.
+boots_curves <- 
+  function(.dt_tbl, .nboot = 25) {
+    .splits = .dt_tbl[, unique(split)]
+    .nsplits = length(.splits) + 5 # increase (artificially) number of splits
+    
+    set.seed(35)
+    .dt_tbl =
+      map(seq(1, .nboot), \(.x) {
+        .boots = sample(.splits, .nsplits, replace = T)
+        rbindlist(lapply(.boots, \(.s) {.dt_tbl[split == .s]}))[, nboot := .x]
+      }) %>% 
+      rbindlist()
+  }

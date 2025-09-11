@@ -75,59 +75,6 @@ risk_w <-
 
 
 # Compute ROC/PR curves --------------------------------------------------------
-# Helper functions ---------------
-ax_curve_fun <- 
-  function(.SD, .type) {
-    .db <- seq(0.99, 0.01, -0.01)
-    .obs_cross = .SD[, obs_cross]
-    
-    if (.type == "roc") { # for ROC curve
-      res <- lapply(.db, function(.x) {
-        .x = sprintf("db_%.2f", .x)
-        pos = .SD[[.x]]
-        TP = sum(.obs_cross & pos)
-        FP = sum(!.obs_cross & pos)
-        FN = sum(.obs_cross & !pos)
-        TN = sum(!.obs_cross & !pos)
-        
-        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
-        FPR = if ((FP + TN) > 0) round(FP / (FP + TN), 2) else 0
-        
-        return(data.table(db = .x, TPR = TPR, FPR = FPR))
-      })
-    } else { # for PR curve
-      res <- lapply(.db, function(.x) {
-        .x = sprintf("db_%.2f", .x)
-        pos = .SD[[.x]]
-        TP = sum(.obs_cross & pos)
-        FP = sum(!.obs_cross & pos)
-        FN = sum(.obs_cross & !pos)
-        TN = sum(!.obs_cross & !pos)
-        
-        PPV = if ((TP + FP) > 0) round(TP / (TP + FP), 2) else 0
-        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
-        
-        return(data.table(db = .x, PPV = PPV, TPR = TPR))
-      })
-    }
-    rbindlist(res) 
-  }
-
-boots_curves <- 
-  function(.dt_tbl, .nboot = 25) {
-    .splits = .dt_tbl[, unique(split)]
-    .nsplits = length(.splits) + 5 # increase (artificially) number of splits
-    
-    set.seed(35)
-    .dt_tbl =
-      map(seq(1, .nboot), \(.x) {
-        .boots = sample(.splits, .nsplits, replace = T)
-        rbindlist(lapply(.boots, \(.s) {.dt_tbl[split == .s]}))[, nboot := .x]
-      }) %>% 
-      rbindlist()
-  }
-#--------------------
-    
 # Set decision boundary (db) from 1-99% prob
 risk_d_db <- 
   risk_d[ 
