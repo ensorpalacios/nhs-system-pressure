@@ -8,9 +8,9 @@
 # Load packages ----------------------------------------------------------------
 # Full package
 library(conflicted)
-# library(data.table)
 library(tibble)
 library(dplyr)
+library(data.table)
 library(purrr)
 library(fable)
 library(tsibble)
@@ -36,13 +36,11 @@ import::from(imputeTS, na_ma, na_kalman)
 import::from(randomForest, randomForest)
 import::from(stringr, str_glue)
 import::from(mltools, one_hot)
-import::from(data.table, as.data.table)
+# import::from(data.table, as.data.table, ":=", data.table, rbindlist, copy)
 import::from(astsa, LagReg, pre.white)
 import::from(readr, parse_number)
-import::from(data.table, ":=")
 import::from(xgboost, xgb.train, xgb.DMatrix, getinfo)
 import::from(Matrix, sparse.model.matrix)
-import::from(data.table, copy)
 
 
 # Resolve conflicts (using conflicted package)

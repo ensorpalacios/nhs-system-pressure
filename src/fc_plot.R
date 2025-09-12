@@ -40,7 +40,7 @@ list_models_f <- # select models for forecast plot
     "arima_dad_l",
     "arima_dad_rec",
     "arima_dadpl_rec",
-    # "nn",
+    "nn",
     # "es",
     # "rf",
     "rf_int",
