@@ -144,7 +144,7 @@ split_cv <-
       relocate(site, .before = 3)
   }
 
-#' extract site-, split- and model-specific forecast set from cross-validated
+#' extract site- and split-specific training data from cross-validated
 #' train-validation sets (split_data_cv)
 #' @param .data_sel Data 
 #' @param .site List of hospitals
@@ -171,6 +171,23 @@ select_training <- # select training set (by site and split)
       select(all_of(.vars))
     }
   }
+
+
+#' extract site- and split-specific trained models from cross-validated
+#' train-validation sets (split_data_cv)
+#' @param .data Data 
+#' @param .site List of hospitals
+#' @param .split List of cv splits
+select_model <- # select model fit (by site and split)
+  function(.data, .site, .split, ...)  {
+    # .data is list (site) of list (split) of model fits
+    # attention: data_xpredict defined globally; leave this here!
+    list(
+      "model" = .data[[.site]][[.split]],
+      "index" = data_xpredict %>% filter(site == .site, split == .split)
+    )
+  }
+
 
 
 #' extract site-, split- and model-specific forecast set from cross-validated
@@ -220,9 +237,125 @@ cv_wrap <-
     map(sites, \(.site) {
       map(splits, \(.split) {
         .select(.data, .site, .split, ...) %>% 
-          .function()
+          .function(...)
       }) %>% set_names(splits)
     }) %>% set_names(sites)
+  }
+
+
+
+# Functions to compute/harmonise fc to fable data structure --------------------
+#' Compute ETS fc
+#' Compute forecasts for error trend seasonal model and harmonise fc to fable
+#' data structure.
+#' @param .data Includes observed occ and es models
+es_forecast <- # define esx forecast
+  function(.data, ...) {
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    tmp_fc = # compute forecasts
+      forecast(
+        .data$model, h = horizon,
+        interval = "prediction",
+        level = .95,
+        newdata = .data$index
+      )
+    tmp_fc = # add forecast distributions
+      reduce(
+        list(
+          # .data$index %>% select(split, site, type, index),
+          .data$index,
+          tmp_fc$mean %>% as.data.frame() %>% set_names("mean"), 
+          tmp_fc$lower %>% as.data.frame(), 
+          tmp_fc$upper %>% as.data.frame()
+        ),
+        cbind
+      ) %>% 
+      mutate( # create forecast distribution (assuming nid error)
+        .model = "es",
+        occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 2),
+        .mean = mean, # necessary for fable::autoplot
+        mean = NULL,
+        `Lower bound (2.5%)` = NULL,
+        `Upper bound (97.5%)` = NULL
+      )
+  }
+
+ 
+#' Harmonise rf fc
+#' Harmonise forecasts for random forest model to fable data structure.
+#' @param .data Includes observed occ and rf fc parameters.
+#' @param ... Includes name of model for saving fc.
+rf_forecast = 
+  function(.data, ...) {
+    # Function to harmonise fc to fable data structure
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    .data$model = 
+      .data$model %>% map_dfr(~ as.data.frame(.x)) %>% as_tibble()
+    tmp_fc =
+      bind_cols(.data$model, .data$index) %>% 
+      mutate(
+        .model = "rf",
+        .mean = mean, # necessary for fable::autoplot
+        occ = dist_normal(mu = mean, sd = sd),
+        mean = NULL,
+        sd = NULL
+      ) %>%
+      relocate(c(.model, occ, .mean), .after = index)
+  }
+
+
+#' Harmonise rf-interaction fc
+#' Harmonise forecasts for random forest with interaction model to fable data
+#' structure.
+#' @param .data Includes observed occ and rf fc parameters.
+#' @param ... Includes name of model for saving fc.
+rf_forecast_int =
+  function(.data, ...) {
+    # Function to harmonise fc to fable data structure
+    nmodel = list(...)$nmodel # name of model
+    
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    .data$model = 
+      .data$model %>% as_tibble()
+    tmp_fc =
+      bind_cols(.data$model, .data$index) %>% 
+      mutate(
+        .model = nmodel,
+        .mean = mean, # necessary for fable::autoplot
+        occ = dist_normal(mu = mean, sd = sd),
+        mean = NULL,
+        sd = NULL
+      ) %>%
+      relocate(c(.model, occ, .mean), .after = index)
+  }
+
+
+#' Harmonise xgb fc
+#' Harmonise forecasts for XGB model to fable data structure.
+#' @param .data Includes observed occ and rf fc parameters.
+#' @param ... Includes name of model for saving fc.
+xgb_forecast =
+  function(.data, ...) {
+    # Function to harmonise fc to fable data structure
+    nmodel = list(...)$nmodel # name of model
+    
+    .data$index = # get test data
+      .data$index %>% filter(type == "test")
+    .data$model = 
+      .data$model %>% as_tibble()
+    tmp_fc =
+      bind_cols(.data$model, .data$index) %>% 
+      mutate(
+        .model = nmodel,
+        .mean = mean, # necessary for fable::autoplot
+        occ = dist_normal(mu = mean, sd = sd),
+        mean = NULL,
+        sd = NULL
+      ) %>%
+      relocate(c(.model, occ, .mean), .after = index)
   }
 
 
@@ -525,7 +658,7 @@ rec_site <-
 #' @param .data_rf tibble of data
 #' @param .horizon forecast horizon
 rf_reg <- 
-  function(.data_rf, .horizon = horizon) {
+  function(.data_rf, .horizon = horizon, ...) {
     # Train set
     data_train = 
       .data_rf %>% filter(type == "train")
@@ -586,7 +719,7 @@ rf_reg <-
 #' @param .data_rf tibble of data
 #' @param .horizon forecast horizon
 rf_reg_int <- 
-  function(.data_rf, .horizon = horizon) {
+  function(.data_rf, .horizon = horizon, ...) {
     # Train set
     data_train = 
       .data_rf %>% filter(type == "train") %>% select(-type)
@@ -625,7 +758,7 @@ rf_reg_int <-
 #' @param .data_rf tibble of data
 #' @param .horizon forecast horizon
 xgb_reg_int <- 
-  function(.data_rf, .horizon = horizon) {
+  function(.data_rf, .horizon = horizon, ...) {
     # Quantile loss function (grad and hess)
     qreg = 
       function(.alpha) {
@@ -1050,6 +1183,7 @@ fc_comb_wrap <-
 
 
 # Functions for risk prediction ------------------------------------------------
+
 #' Curve axes
 #' Function to compute the axes of the ROC/PR curves from risk prediction
 #' classifier. Curves represent x/y values for different decision boundaries
@@ -1118,4 +1252,42 @@ boots_curves <-
         rbindlist(lapply(.boots, \(.s) {.dt_tbl[split == .s]}))[, nboot := .x]
       }) %>% 
       rbindlist()
+  }
+
+
+
+# Functions for temperature variable -------------------------------------------
+#' Discretise temperature
+#' Make temperature variable a factor, inspired by Rizmie et al., 2022 (Impact
+#' of extreme temperatures on emergency hospital admissions by age and socio-
+#' economic status in England): used both tmax and tmin to better capture 
+#' extremes in daily temperature (picks and troughs), instead of tmean; take as
+#' reference level days with 7<tmax & tmin <22, then compute 5-degree bins, and
+#' use t<2 and t>27 as min and max levels; used these levels after inspecting
+#' quartile distribution of t available. Function called within a for loop
+#' looping across lags (0-7).
+#' @param .tbl Tibble with lagged tmax and tmin
+#' @param .lag Specific lag of data to factorise
+factorise_temp <- 
+  function(.tbl, .lag) {
+    # Var names
+    .lname = if (.lag == 0) "" else paste0("_lag", .lag)
+    .newvar = paste0("tvar", .lname)
+    .tmin = paste0("tmin", .lname)
+    .tmax = paste0("tmax", .lname)
+    # Transform
+    .tbl %>%
+      mutate(
+        !!.newvar := 
+          case_when(
+            !!sym(.tmin) > 7 & !!sym(.tmax) < 22 ~ "7-22", # reference
+            !!sym(.tmin) > 2 & !!sym(.tmin) <= 7 ~ "2-7",
+            !!sym(.tmin) <= 2 ~ "less-2",
+            !!sym(.tmax) >= 22 & !!sym(.tmax) < 27 ~ "20-25",
+            !!sym(.tmax) >= 27 ~ "more-27",
+            .default = "largetdiff"
+          ) %>% factor() %>% relevel(ref = "7-22"),
+        !!sym(.tmin) := NULL,
+        !!sym(.tmax) := NULL
+      )
   }

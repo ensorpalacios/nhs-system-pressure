@@ -43,7 +43,7 @@ split_data_cv <-
   split_data_cv %>% filter(!is_aggregated(site))
 fc_all <- 
   fc_all %>% filter(!is_aggregated(site))
-fc_all$`.model` %>% unique
+
 
 
 # Compute metrics --------------------------------------------------------------
@@ -53,8 +53,13 @@ list_models <- # select models
     "arima",
     "arima_dad_l",
     "arima_dadp_l",
+    "arima_dadpt_l",
     "arima_dadpl_l",
+    "arima_dadplt_l",
     "arima_dad_rec",
+    "arima_dadp_rec",
+    "arima_dadpl_rec",
+    "arima_dadplt_rec",
     "var_ad",
     "var_ad2",
     "var_paed",
@@ -64,7 +69,9 @@ list_models <- # select models
     "es",
     "rf",
     "rf_int",
+    "rf_int_not",
     "xgb",
+    "xgb_not",
     "tslm",
     "snaive")
 
@@ -95,8 +102,13 @@ list_models_comb <- # select models (including combined)
     "arima",
     "arima_dad_l",
     "arima_dadp_l",
+    "arima_dadpt_l",
     "arima_dadpl_l",
+    "arima_dadplt_l",
     "arima_dad_rec",
+    "arima_dadp_rec",
+    "arima_dadpl_rec",
+    "arima_dadplt_rec",
     "var_ad",
     "var_ad2",
     "var_paed",
@@ -106,7 +118,9 @@ list_models_comb <- # select models (including combined)
     "es",
     "rf",
     "rf_int",
+    "rf_int_not",
     "xgb",
+    "xgb_not",
     "tslm",
     "snaive",
     "equal",
@@ -141,11 +155,19 @@ var_summary <- # not all models included for clarity
     "var_h",
     "arima_dad_l",
     "arima_dadp_l",
+    "arima_dadpt_l",
     "arima_dadpl_l",
+    "arima_dadplt_l",
     "arima_dad_rec",
+    "arima_dadp_rec",
+    "arima_dadpl_rec",
+    "arima_dadplt_rec",
     "es",
+    "rf",
     "rf_int",
+    "rf_int_not",
     "xgb",
+    "xgb_not",
     "equal",
     "crps",
     "wilker"

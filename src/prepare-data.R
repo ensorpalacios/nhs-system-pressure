@@ -34,8 +34,38 @@ df_pl <-
   )
 
 
+# Temperature data
+tmp_max <- 
+  read.table(
+  paste0(data_path, "maxtemp_daily_totals.txt")
+) %>% data.table() %>% 
+  .[, .(report_date = V1[-1], tmax = as.numeric(V2[-1]))]
+
+tmp_min <- 
+  read.table(
+  paste0(data_path, "mintemp_daily_totals.txt")
+) %>% data.table() %>% 
+  .[, .(report_date = V1[-1], tmin = as.numeric(V2[-1]))]
+
+df_t <- # join tmax/tmin and melt
+  tmp_min[tmp_max, on = "report_date"] %>%
+  melt(
+    id.vars = "report_date", 
+    variable.name = "metric_name", 
+    value.name = "value",
+    variable.factor = F
+  ) %>% .[ # Temporary code to allign temperature data with hospital data
+    as.Date(report_date) <= as.Date("2025-01-29")
+  ]
+
+
 # Join data
-df_occ <- df_occ %>% bind_rows(df_pl)
+df_occ <- 
+  df_occ %>% 
+  bind_rows(
+    df_pl, 
+    copy(df_t)[, provider := "BRI"], 
+    copy(df_t)[, provider := "NBT"])
 
 
 
@@ -109,6 +139,8 @@ ts_occ <- # impute
     adm = adm %>% na_ma(k = 3, weighting = "simple"),
     paed = paed %>% na_ma(k = 3, weighting = "simple"),
     los = los %>% na_ma(k = 3, weighting = "simple"),
+    tmin = tmin %>% na_ma(k = 3, weighting = "simple"), # shouldn't be necessary
+    tmax = tmax %>% na_ma(k = 3, weighting = "simple") # shouldn't be necessary
   ) %>% 
   ungroup()
 
@@ -158,6 +190,8 @@ ts_occ <-
     core = sum(core),
     paed = sum(paed),
     los = sum(los),
+    tmax = unique(tmax), # = across sites; necessary to return 1 value
+    tmin = unique(tmin), # = across sites; necessary to return 1 value
     occ_m = sum(occ_m),
     adm_m = sum(adm_m),
     dis_m = sum(dis_m),
@@ -183,7 +217,7 @@ ts_occ <-
     # Filter
     ad_diff_f = slide_dbl(ad_diff, mean, .before = 2),
     ad_diff2_f = slide_dbl(ad_diff2, mean, .before = 2),
-    ad_diff3_f = slide_dbl(ad_diff3, mean, .before = 2),
+    ad_diff3_f = slide_dbl(ad_diff3, mean, .before = 2)
     
     # # Z-score
     # core = (1 - mean(occ)) / sd(occ), # as 100% ref for new occ

@@ -26,7 +26,7 @@ sites <- ts_occ$site |> unique()
 # Select relevant variables ----------------------------------------------------
 ts_occ <- 
   ts_occ %>%
-  select(
+  select( # exclude
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
     -adm, -dis,
     -escal, -core,
@@ -56,16 +56,22 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 
 
-# Predict test exogenous -------------------------------------------------------
-# Exclude occ_other (possibly add too much noise)
+# Process exogenous variables --------------------------------------------------
+# Predict and substitute real exogenous variables when unobserved (T + h).
+# Predict occ for rf_int/xgboost; not using occ_other as adds noise instead.
+# Observed t-data not replaces - online MET office predictions should be good.
 xpredict_method = "pull" # include tslm, arima, ets
 data_xpredict <- 
   xpredict_fun(
     split_data_cv %>% select(-contains("occ_other")), 
-    c("occ", "ad_diff", "paed", "los"), 
+    c("occ", "ad_diff", "paed", "los"),
     idx_start_test, 
     xpredict_method
     )
+
+
+# Factorise temperature data
+for (.lag in seq(0, 7)) data_xpredict = factorise_temp(data_xpredict, .lag)
 
 
 
@@ -81,34 +87,52 @@ fit_fable <- # fit models
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
     arima = ARIMA(occ),
-    arima_dad_l = 
+    arima_dad_l =
       ARIMA(
-        occ ~ 
+        occ ~
           days_ +
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6
       ),
-    arima_dadp_l = 
+    arima_dadp_l =
       ARIMA(
-        occ ~ 
+        occ ~
           days_ +
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6 +
           paed + paed_lag1
       ),
-    arima_dadpl_l = 
+    arima_dadpl_l =
       ARIMA(
-        occ ~ 
+        occ ~
           days_ +
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6 +
           paed + paed_lag1 +
           los + los_lag1
       ),
+    arima_dadpt_l = 
+      ARIMA(
+        occ ~ 
+          days_ +
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1 +
+          tvar_lag1 + tvar_lag4
+      ),
+    arima_dadplt_l = 
+      ARIMA(
+        occ ~ 
+          days_ +
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1 +
+          los + los_lag1 +
+          tvar_lag1 + tvar_lag4
+      ),
     # NN autoregressive models
     nn = NNETAR(occ)
   )
-
 
 # ARIMA aggregated (exclude occ_other!)
 fit_fable_agg <- 
@@ -121,9 +145,34 @@ fit_fable_agg <-
         occ ~ 
           days_ + 
           ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6
+      ),
+    arima_dadp_agg = 
+      ARIMA(
+        occ ~ 
+          days_ + 
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1
+      ),
+    arima_dadpl_agg = 
+      ARIMA(
+        occ ~ 
+          days_ + 
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
           ad_diff_f_lag6 + ad_diff2_f_lag6 +
           paed + paed_lag1 +
           los + los_lag1
+      ),
+    arima_dadplt_agg = 
+      ARIMA(
+        occ ~ 
+          days_ + 
+          ad_diff_f_lag3 + ad_diff2_f_lag3 +
+          ad_diff_f_lag6 + ad_diff2_f_lag6 +
+          paed + paed_lag1 +
+          los + los_lag1 +
+          tvar_lag1 + tvar_lag3
       )
   )
 
@@ -183,7 +232,7 @@ fit_fable_var_h <- # BRI vs Southmead
 
 # Exponential smoothing with predictors (bed escalation)
 es_model <- # define esx fit
-  function(.data_es) {
+  function(.data_es, ...) {
     .data_es %>% as.ts() %>% 
       es(model = "ZXZ",  lags = c(1, 1, 7))
   }
@@ -212,6 +261,7 @@ list_var_rf <-
     contains("occ"),
     contains("paed"), -paed,
     contains("los"), -los,
+    contains("tvar"), -tvar,
     matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
     contains("days_"), -days_) %>%
   names()
@@ -249,24 +299,29 @@ data_xpredict_int <- # long format data with lag column
     names_sep = "-"
   )
 
-list_var_rf_int <- # list predictors 
+list_var_rf_int <- # list predictors ...
   data_xpredict_int %>% select(-c(split, type, site, index)) %>% names()
+list_var_rf_int_not <- # ... no temperature
+  list_var_rf_int[!grepl("tvar", list_var_rf_int)]
 
-
-ls_rf_int <- # fits + fc + parameters fc distribution
+ls_rf_int <- # fits + fc + parameters fc distribution ...
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)), 
     select_training,  rf_reg_int,  list_var_rf_int, "all"
   )
+ls_rf_int_not <- # ... no temperature
+  cv_wrap(
+    data_xpredict_int %>% filter(!is_aggregated(site)), 
+    select_training,  rf_reg_int,  list_var_rf_int_not, "all"
+  )
 
-fit_rf_int <-  # extract fits
+ls_rf_int_par <- # extract parameters fc distribution ...
   ls_rf_int %>% 
   map(., ~ # site
         map(.x, ~ # split
-              pluck(.x, "fit")))
-
-ls_rf_int_par <- # extract parameters fc distribution
-  ls_rf_int %>% 
+              pluck(.x, "par")))
+ls_rf_int_par_not <- # ... no temperature
+  ls_rf_int_not %>% 
   map(., ~ # site
         map(.x, ~ # split
               pluck(.x, "par")))
@@ -274,12 +329,20 @@ ls_rf_int_par <- # extract parameters fc distribution
 
 # XGBoosting - interaction
 # Same predictors as rf interaction but without paed and los
-list_var_xgb <- list_var_rf_int[!grepl("paed|los", list_var_rf_int)]
+list_var_xgb <- # list predictors ...
+  list_var_rf_int[!grepl("paed|los", list_var_rf_int)]
+list_var_xgb_not <- # ... no temperature
+  list_var_rf_int_not[!grepl("paed|los", list_var_rf_int_not)]
 
-ls_xgb_par <- # parameters fc distribution (mean and sd)
+ls_xgb_par <- # parameters fc distribution (mean and sd) ...
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)),
     select_training,  xgb_reg_int,  list_var_xgb, "all"
+  )
+ls_xgb_par_not <- # ... no temperature
+  cv_wrap(
+    data_xpredict_int %>% filter(!is_aggregated(site)),
+    select_training,  xgb_reg_int,  list_var_xgb_not, "all"
   )
 
 
@@ -296,7 +359,9 @@ fit_all =
     "es" = fit_es,
     "rf_par" = ls_rf_par,
     "rf_int_par" = ls_rf_int_par,
-    "xgb_par" = ls_xgb_par
+    "rf_int_par_not" = ls_rf_int_par_not,
+    "xgb_par" = ls_xgb_par,
+    "xgb_par_not" = ls_xgb_par_not
     )
 # fit_fable = fit_all$fable
 # fit_fable_agg = fit_all$fable_agg
@@ -335,6 +400,8 @@ fc_fable_xpred_rec <-
   )
 
 # Vector autoregressive models
+# Attention: in contrast to all other models, fc_var contains only 
+# split, site, .mode, index, .mean (e.g., no t_ax)
 fc_fable_var_ad <- 
   fit_fable_var_ad %>% 
   forecast(h = horizon)
@@ -355,8 +422,6 @@ fc_fable_var_h <-
   fit_fable_var_h %>% 
   forecast(h = horizon)
 
-# Attention: in contrast to all other models, fc_var contains only 
-# split, site, .mode, index, .mean (e.g., no t_ax)
 fc_var <- # bind VAR fc
   map(
     list(
@@ -403,48 +468,6 @@ fc_var <- # bind VAR fc
 
 
 # Exponential smoothing with predictors (esx)
-select_model <- # select model fit (by site and split)
-  function(.data, .site, .split, ...)  {
-    # .data is list (site) of list (split) of model fits
-    # attention: data_xpredict defined globally; leave this here!
-    list(
-      "model" = .data[[.site]][[.split]],
-      "index" = data_xpredict %>% filter(site == .site, split == .split)
-    )
-  }
-
-es_forecast <- # define esx forecast
-  function(.data) {
-    .data$index = # get test data
-      .data$index %>% filter(type == "test")
-    tmp_fc = # compute forecasts
-      forecast(
-        .data$model, h = horizon,
-        interval = "prediction",
-        level = .95,
-        newdata = .data$index
-      )
-    tmp_fc = # add forecast distributions
-      reduce(
-        list(
-          # .data$index %>% select(split, site, type, index),
-          .data$index,
-          tmp_fc$mean %>% as.data.frame() %>% set_names("mean"), 
-          tmp_fc$lower %>% as.data.frame(), 
-          tmp_fc$upper %>% as.data.frame()
-        ),
-        cbind
-      ) %>% 
-      mutate( # create forecast distribution (assuming nid error)
-        .model = "es",
-        occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 2),
-        .mean = mean, # necessary for fable::autoplot
-        mean = NULL,
-        `Lower bound (2.5%)` = NULL,
-        `Upper bound (97.5%)` = NULL
-      )
-  }
-
 fc_esx <- # forecast with esx model
   cv_wrap(fit_es, select_model, es_forecast)
 
@@ -457,25 +480,6 @@ fc_esx <- # convert to tsibble
 
 # Random forest
 # (select_model fun from es)
-rf_forecast = 
-  function(.data) {
-    # Function to harmonise fc to fable data structure
-    .data$index = # get test data
-      .data$index %>% filter(type == "test")
-    .data$model = 
-      .data$model %>% map_dfr(~ as.data.frame(.x)) %>% as_tibble()
-    tmp_fc =
-      bind_cols(.data$model, .data$index) %>% 
-      mutate(
-        .model = "rf",
-        .mean = mean, # necessary for fable::autoplot
-        occ = dist_normal(mu = mean, sd = sd),
-        mean = NULL,
-        sd = NULL
-      ) %>%
-      relocate(c(.model, occ, .mean), .after = index)
-  }
-
 fc_rf <- 
   cv_wrap(ls_rf_par, select_model, rf_forecast)
 
@@ -487,60 +491,38 @@ fc_rf <- # convert to tsibble
 
 
 # Random forest - interaction
-rf_forecast_int =
-  function(.data) {
-    # Function to harmonise fc to fable data structure
-    .data$index = # get test data
-      .data$index %>% filter(type == "test")
-    .data$model = 
-      .data$model %>% as_tibble()
-    tmp_fc =
-      bind_cols(.data$model, .data$index) %>% 
-      mutate(
-        .model = "rf_int",
-        .mean = mean, # necessary for fable::autoplot
-        occ = dist_normal(mu = mean, sd = sd),
-        mean = NULL,
-        sd = NULL
-      ) %>%
-      relocate(c(.model, occ, .mean), .after = index)
-  }
+fc_rf_int <- # harmonise fc to fable ...
+  cv_wrap(ls_rf_int_par, select_model, rf_forecast_int, nmodel = "rf_int")
+fc_rf_int_not <- # ... no temperature
+  cv_wrap(
+    ls_rf_int_par_not, select_model, rf_forecast_int, nmodel = "rf_int_not"
+    )
 
-fc_rf_int <- 
-  cv_wrap(ls_rf_int_par, select_model, rf_forecast_int)
-
-fc_rf_int <- # convert to tsibble
+fc_rf_int <- # convert to tsibble ...
   fc_rf_int %>% 
+  flatten() %>% 
+  bind_rows() %>% 
+  as_tsibble(index = index, key = c("split", "site", ".model"))
+fc_rf_int_not <- # ... no temperature
+  fc_rf_int_not %>% 
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
 
 
 # XGBoost
-xgb_forecast =
-  function(.data) {
-    # Function to harmonise fc to fable data structure
-    .data$index = # get test data
-      .data$index %>% filter(type == "test")
-    .data$model = 
-      .data$model %>% as_tibble()
-    tmp_fc =
-      bind_cols(.data$model, .data$index) %>% 
-      mutate(
-        .model = "xgb",
-        .mean = mean, # necessary for fable::autoplot
-        occ = dist_normal(mu = mean, sd = sd),
-        mean = NULL,
-        sd = NULL
-      ) %>%
-      relocate(c(.model, occ, .mean), .after = index)
-  }
+fc_xgb <-  # harmonise fc to fable ...
+  cv_wrap(ls_xgb_par, select_model, xgb_forecast, nmodel = "xgb")
+fc_xgb_not <- # ... no temperature
+  cv_wrap(ls_xgb_par_not, select_model, xgb_forecast, nmodel = "xgb_not")
 
-fc_xgb <- 
-  cv_wrap(ls_xgb_par, select_model, xgb_forecast)
-
-fc_xgb <- # convert to tsibble
+fc_xgb <- # convert to tsibble ...
   fc_xgb %>% 
+  flatten() %>% 
+  bind_rows() %>% 
+  as_tsibble(index = index, key = c("split", "site", ".model"))
+fc_xgb_not <- # ... no temperature
+  fc_xgb_not %>% 
   flatten() %>% 
   bind_rows() %>% 
   as_tsibble(index = index, key = c("split", "site", ".model"))
@@ -551,11 +533,13 @@ dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
 dimnames(fc_esx$occ) <- "occ" 
 dimnames(fc_rf$occ) <- "occ"
 dimnames(fc_rf_int$occ) <- "occ"
+dimnames(fc_rf_int_not$occ) <- "occ"
 dimnames(fc_xgb$occ) <- "occ"
+dimnames(fc_xgb_not$occ) <- "occ"
 fc_all <- 
   list(
     fc_fable_xpred, fc_fable_xpred_rec, fc_var, 
-    fc_esx, fc_rf, fc_rf_int, fc_xgb
+    fc_esx, fc_rf, fc_rf_int, fc_xgb, fc_rf_int_not, fc_xgb_not
     ) %>% 
   reduce(bind_rows)
 
@@ -575,4 +559,4 @@ saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
 # fc_all <- readRDS(paste0(save_path, "fits_short.RDS"))
-# data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))
+data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))

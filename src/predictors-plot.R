@@ -199,9 +199,31 @@ plot_los_miss <-
 plot_los_acf = plot_cf(ts_occ, .var = "los", .lag = 100)
 
 
+# Temperature
+ts_occ <- 
+  ts_occ %>%
+  mutate(
+    tdiff = tmax - tmin,
+    tdiff15 = if_else(tmin < 7 & tmax > 22, T, F)
+    )
+  
+plot_temp <- 
+  ts_occ %>% filter(!is_aggregated(site)) %>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = tmax), colour = "red") +
+  geom_line(aes(y = tmin), colour = "blue") +
+  geom_vline(data = . %>% filter(tdiff15), aes(xintercept = index)) +
+  facet_wrap(vars(site), ncol = 1)
+
+tbl_temp <- 
+  ts_occ %>% as_tibble() %>%  select(tmax, tmin, tdiff) %>% 
+  summary() %>% 
+  kbl() %>%# kable_minimal()
+  kable_styling(full_width = F)
+
 
 # Plot bed occupancy and predictors -------------------------------------------
-ex_var = c("ad_diff_f", "ad_diff2_f", "paed", "los")
+ex_var = c("ad_diff_f", "ad_diff2_f", "paed", "los", "tmax", "tmin")
 
 
 # Time series - all bed data
@@ -240,7 +262,10 @@ plot_together <- # plot
   as.data.frame() |> 
   mutate(
     var = factor(var, 
-                 levels = c("occ", "ad_diff_f", "ad_diff2_f", "los", "paed"))
+                 levels = c("occ", 
+                            "ad_diff_f", "ad_diff2_f", 
+                            "los", "paed",
+                            "tmax", "tmin"))
     ) %>% 
   ggplot(aes(x = index, y = value, colour = site)) +
   geom_line() +
@@ -349,6 +374,7 @@ ls_plots <- list(
   "paed_acf" = plot_paed_acf,
   "los_miss" = plot_los_miss,
   "los_acf" = plot_los_acf,
+  "temperature" = plot_temp,
   "beds" = plot_beds,
   "together" = plot_together
   )
@@ -393,3 +419,6 @@ iwalk(ls_plots_lag, \(.plots, .title) {
       }
   })
 })
+
+tbl_temp %>% save_kable(paste0(save_path, "tbl_temp.pdf"))
+# tbl_temp %>% save_kable(paste0(save_path, "tbl_temp.html"))

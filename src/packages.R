@@ -20,6 +20,8 @@ library(ggplot2)
 library(patchwork)
 library(knitr)
 library(kableExtra)
+library(knitr)
+library(gt)
 
 # Single functions (using import package)
 import::from(here, here)
