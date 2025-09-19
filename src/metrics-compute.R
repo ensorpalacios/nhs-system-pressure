@@ -86,7 +86,8 @@ metrics <- # compute metrics
   flatten() %>%
   bind_rows()
 
-metrics <- process_metrics(metrics)
+metrics <- # add t_ax, scale by TSLM, factor(penalty)
+  process_metrics(metrics)
 
 
 
@@ -97,36 +98,11 @@ fc_all_c <-
 
 
 # Compute metrics
-list_models_comb <- # select models (including combined)
-  c(
-    "arima",
-    "arima_dad_l",
-    "arima_dadp_l",
-    "arima_dadpt_l",
-    "arima_dadpl_l",
-    "arima_dadplt_l",
-    "arima_dad_rec",
-    "arima_dadp_rec",
-    "arima_dadpl_rec",
-    "arima_dadplt_rec",
-    "var_ad",
-    "var_ad2",
-    "var_paed",
-    "var_los",
-    "var_h",
-    "nn",
-    "es",
-    "rf",
-    "rf_int",
-    "rf_int_not",
-    "xgb",
-    "xgb_not",
-    "tslm",
-    "snaive",
+list_models <- # update list with combined
+  c(list_models, 
     "equal",
     "crps",
-    "wilker"
-  )
+    "wilker")
 
 
 metrics_c <- # compute metrics
@@ -134,76 +110,50 @@ metrics_c <- # compute metrics
     list("all" = split_data_cv , "fc" = fc_all_c), 
     select_fc,
     wrap_metric,
-    list_models_comb
+    list_models
   ) %>% 
   flatten() %>%
   bind_rows()
 
-metrics_c <- process_metrics(metrics_c)
+metrics_c <- # add t_ax, scale by TSLM, factor(penalty)
+  process_metrics(metrics_c)
 
 
 
 # Summarise metrics ------------------------------------------------------------
-var_summary <- # not all models included for clarity
-  c(
-    "tslm",
-    "snaive",
-    "var_ad",
-    "var_ad2",
-    "var_los",
-    "var_paed",
-    "var_h",
-    "arima_dad_l",
-    "arima_dadp_l",
-    "arima_dadpt_l",
-    "arima_dadpl_l",
-    "arima_dadplt_l",
-    "arima_dad_rec",
-    "arima_dadp_rec",
-    "arima_dadpl_rec",
-    "arima_dadplt_rec",
-    "es",
-    "rf",
-    "rf_int",
-    "rf_int_not",
-    "xgb",
-    "xgb_not",
-    "equal",
-    "crps",
-    "wilker"
-  )
-
 tmp_metrics <- 
-  metrics_c %>%  
-  filter(models %in% var_summary) # select variables for summary
+  metrics_c
+  # filter(models %in% list_modelvar_summary) # select variables for summary
 
 metrics_summary <- 
-  tmp_metrics %>%  
-  filter(models %in% var_summary) %>%
+  metrics_c %>% 
+  # tmp_metrics %>%  
+  # filter(models %in% var_summary) %>%
   group_by(split, site, penalty, index, metric) %>% 
   summarise( # take best model
     "value_min" = min(value_s),
     "best_model" = 
-      models[which.min(value_s)] %>% 
-      {if (grepl("tslm|snaive", .)) "baseline_min" else .},
+      models[which.min(value_s)]# %>% 
+      # {if (grepl("tslm|snaive", .)) "baseline_min" else .},
   ) %>% 
   ungroup() %>% 
-  inner_join(tmp_metrics) %>% # join to tibble
-  group_by(split, site, penalty, index, metric) %>% 
-  group_modify( # add baseline_model
-    \(.x, .y) {
-      tmp = .x %>% head(1)
-      tmp$models = "baseline_min"
-      tmp$value_s = 
-        min(.x$value_s[grepl("tslm|snaive", .x$models)])
-      .x %>% 
-      add_row(
-        tmp,
-        .before = 0
-      )
-    }
-  ) %>% # remove single baseline models
-  filter(!(models %in% c("tslm", "snaive"))) %>% 
+  inner_join(metrics_c) %>% # join to tibble
+  # inner_join(tmp_metrics) %>% # join to tibble
+  # group_by(split, site, penalty, index, metric) %>% 
+  # group_modify( # add baseline_model
+  #   \(.x, .y) {
+  #     tmp = .x %>% head(1)
+  #     tmp$models = "baseline_min"
+  #     tmp$value_s = 
+  #       min(.x$value_s[grepl("tslm|snaive", .x$models)])
+  #     .x %>% 
+  #     add_row(
+  #       tmp,
+  #       .before = 0
+  #     )
+  #   }
+  # ) %>% # remove single baseline models
+  # filter(!(models %in% c("tslm", "snaive"))) %>% 
   ungroup()
 
  
