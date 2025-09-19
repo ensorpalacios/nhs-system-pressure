@@ -269,15 +269,8 @@ list_var_rf <-
 ls_rf <- # fits + fc + parameters fc distribution
   cv_wrap(
     data_xpredict %>% filter(!is_aggregated(site)), 
-    select_training,  rf_reg,  list_var_rf, "all"
+    select_training,  rf_reg,  list_var_rf, "all", horizon
   )
-
-fit_rf <-  # extract fits
-  ls_rf %>% 
-  map(., ~ # site
-        map(.x, ~ # split
-              map(.x, ~ # horizon
-                    pluck(.x, "fit"))))
 
 ls_rf_par <- # extract parameters fc distribution
   ls_rf %>% 
@@ -390,9 +383,14 @@ fc_fable_xpred <-
 fc_fable_xpred_rec <- 
   fit_fable_agg %>% 
   reconcile(
-    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov")
+    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov"),
+    arima_dadp_rec = min_trace(arima_dadp_agg, method = "mint_cov"),
+    arima_dadpl_rec = min_trace(arima_dadpl_agg, method = "mint_cov"),
+    arima_dadplt_rec = min_trace(arima_dadplt_agg, method = "mint_cov")
     ) %>% 
-  select(-arima_dad_agg) %>%
+  select( # remove non-reconciled models
+    -arima_dad_agg, -arima_dadp_agg, -arima_dadpl_agg, -arima_dadplt_agg
+    ) %>%
   forecast(
     new_data = data_xpredict %>% 
       filter(type == "test") %>% 
@@ -469,7 +467,10 @@ fc_var <- # bind VAR fc
 
 # Exponential smoothing with predictors (esx)
 fc_esx <- # forecast with esx model
-  cv_wrap(fit_es, select_model, es_forecast)
+  cv_wrap(
+    fit_es, select_model, es_forecast, 
+    xpredict = data_xpredict, hrz = horizon
+    )
 
 fc_esx <- # convert to tsibble
   fc_esx %>% 
@@ -558,5 +559,5 @@ saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
-# fc_all <- readRDS(paste0(save_path, "fits_short.RDS"))
-data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))
+# fc_all <- readRDS(paste0(save_path, "fc_all_short.RDS"))
+# data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))

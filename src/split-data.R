@@ -153,7 +153,7 @@ split_cv <-
 #' @param .type Character indicating whether to include all or only train data
 #' @export
 select_training <- # select training set (by site and split)
-  function(.data_sel, .site, .split, .vars = NULL, .type = "train") {
+  function(.data_sel, .site, .split, .vars = NULL, .type = "train", ...) {
     # .data_sel is list (site) of list (split) of training sets 
     # .vrs is list of outcome (..1) and predictors
     # .type specifies filter (only training or training/test data)
@@ -182,9 +182,10 @@ select_model <- # select model fit (by site and split)
   function(.data, .site, .split, ...)  {
     # .data is list (site) of list (split) of model fits
     # attention: data_xpredict defined globally; leave this here!
+    .data_xpredict = list(...)$xpredict
     list(
       "model" = .data[[.site]][[.split]],
-      "index" = data_xpredict %>% filter(site == .site, split == .split)
+      "index" = .data_xpredict %>% filter(site == .site, split == .split)
     )
   }
 
@@ -198,7 +199,7 @@ select_model <- # select model fit (by site and split)
 #' @param .models List of models from which to generate forecasts
 #' @export
 select_fc <- # select forecast (by site and split) - used in cv_wrap()
-  function(.data, .site, .split, .models) {
+  function(.data, .site, .split, .models, ...) {
     # .data is list (site) of list (splits) of list with
     # $all full data and $fc forecast;
     # .model is a list of model whose forecasts are plotted
@@ -249,13 +250,16 @@ cv_wrap <-
 #' Compute forecasts for error trend seasonal model and harmonise fc to fable
 #' data structure.
 #' @param .data Includes observed occ and es models
+#' @param ... Includes horizon (number of h forecasts)
 es_forecast <- # define esx forecast
   function(.data, ...) {
+    .horizon = list(...)$hrz
+    
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     tmp_fc = # compute forecasts
       forecast(
-        .data$model, h = horizon,
+        .data$model, h = .horizon,
         interval = "prediction",
         level = .95,
         newdata = .data$index
@@ -656,9 +660,10 @@ rec_site <-
 #' using average root mean squared error from oob data. Use predictors of
 #' increasing lag to predict bed occupancy with increasing time horizon h.
 #' @param .data_rf tibble of data
+#' @param .temp/tmp1 unused (used in select_training)
 #' @param .horizon forecast horizon
 rf_reg <- 
-  function(.data_rf, .horizon = horizon, ...) {
+  function(.data_rf, .tmp, .tmp1, .horizon) {
     # Train set
     data_train = 
       .data_rf %>% filter(type == "train")
@@ -717,9 +722,10 @@ rf_reg <-
 #' values) and compute confidence interval using average root mean squared 
 #' error from oob data.
 #' @param .data_rf tibble of data
+#' @param .temp/tmp1 unused (used in select_training)
 #' @param .horizon forecast horizon
 rf_reg_int <- 
-  function(.data_rf, .horizon = horizon, ...) {
+  function(.data_rf, .tmp, .tmp1, .horizon) {
     # Train set
     data_train = 
       .data_rf %>% filter(type == "train") %>% select(-type)
@@ -735,7 +741,7 @@ rf_reg_int <-
     # Group fc by lag
     tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
     max_lag = data_test$lag %>% parse_number() %>% max()
-    tmp_fc_individuals$lag = rep(seq(horizon), each = max_lag)
+    tmp_fc_individuals$lag = rep(seq(.horizon), each = max_lag)
     tmp_fc_individuals = 
       map(tmp_fc_individuals$lag %>% unique(), \(.lag) {
         tmp_fc_individuals %>% filter(lag == .lag) %>% select(-lag) %>% 
@@ -756,9 +762,10 @@ rf_reg_int <-
 
 #' XGBoost - interaction
 #' @param .data_rf tibble of data
+#' @param .temp/tmp1 unused (used in select_training)
 #' @param .horizon forecast horizon
 xgb_reg_int <- 
-  function(.data_rf, .horizon = horizon, ...) {
+  function(.data_rf, .tmp, .tmp1, .horizon) {
     # Quantile loss function (grad and hess)
     qreg = 
       function(.alpha) {
@@ -830,7 +837,7 @@ xgb_reg_int <-
         tmp_fc = predict(tmp_fit,  data_test)
         
         # Average forecasts over different lag rows
-        tmp_fc %>% matrix(nrow = max_lag, ncol = horizon) %>% t() %>% 
+        tmp_fc %>% matrix(nrow = max_lag, ncol = .horizon) %>% t() %>% 
           rowMeans()
       }) %>%  
       bind_rows() %>%
@@ -925,7 +932,7 @@ wilker_func <- # compute Wilker score - used in wilker_wrap()
 #' Wrapper for crps_fun and wilker_fun to compute metrics for all cv fc.
 #' @param .data Tibble containing true observations and fc distributions.
 wrap_metric <- # general wrapper over metric function - used in cv_wrap()
-  function(.data) {
+  function(.data, ...) {
     # Organise obs and fc distributions in one tibble
     tmp_data =
       .data$all %>% 
