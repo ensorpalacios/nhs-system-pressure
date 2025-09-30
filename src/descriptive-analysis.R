@@ -18,7 +18,7 @@
 
 # Import packages --------------------------------------------------------------
 source("src/packages.R")
-source("src/split-data.R")
+source("src/functions.R")
 
 
 # Load occupancy data ---------------------------------------------------------

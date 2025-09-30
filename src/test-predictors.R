@@ -18,7 +18,7 @@ library(here)
 library(fable)
 library(tsibble)
 
-source("src/split-data.R")
+source("src/functions.R")
 
 
 # Manage conflicts

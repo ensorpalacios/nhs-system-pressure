@@ -28,7 +28,7 @@
 
 # Import packages --------------------------------------------------------------
 source("src/packages.R")
-source("src/split-data.R")
+source("src/functions.R")
 
 
 # Load data --------------------------------------------------------------------
@@ -121,8 +121,8 @@ metrics_c <- # add t_ax, scale by TSLM, factor(penalty)
 
 
 # Summarise metrics ------------------------------------------------------------
-tmp_metrics <- 
-  metrics_c
+# tmp_metrics <- 
+#   metrics_c
   # filter(models %in% list_modelvar_summary) # select variables for summary
 
 metrics_summary <- 
