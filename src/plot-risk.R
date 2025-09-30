@@ -211,6 +211,58 @@ plt_curves <-
 
 
 
+# Table AUC --------------------------------------------------------------------
+# Generate table
+tbl_auc <- 
+  map(list_auc, \(.tbl){
+    .groups = names(.tbl)[!grepl("nboot|auc|.model",names(.tbl))]
+    tmp = # Get mean (sd) of auc
+      .tbl[
+        , .(.mean = mean(auc), .sd = sd(auc)), by = c(.groups, ".model")
+      ][
+        order(-.mean, .sd), .SD, by = .groups
+      ][
+        , `mean (sd)` := sprintf("%.3f (%.3f)", .mean, .sd)
+      ][
+        , c(".mean", ".sd") := NULL
+      ] 
+    tmp %>% setorderv(.groups) # reorder by group
+    
+    if ("week_split" %in% .groups) { # prepare for table
+      dcast(tmp, ... ~ week_split, value.var = "mean (sd)")
+    }
+    
+    tmp %>% # generate table
+      gt(
+        rowname_col = ".model", groupname_col = "site", row_group_as_column = T
+        )  
+  })
+
+
+# Get lighter colour palette and add to table
+col_models_l <- bright_col(col_models, 0.5)
+
+tbl_auc <-  # add raw colours by model
+  map(tbl_auc, \(.tbl) {
+  for (i in seq_along(col_models_l)) {
+    .color = col_models_l[i]
+    .models = names(col_models_l)[i]
+    .tbl =
+      .tbl %>% 
+      tab_style(
+        style = cell_fill(.color),
+        location = cells_stub(rows = .model == .models)
+      ) %>%
+      tab_style(
+        style = cell_fill(.color),
+        location = cells_body(rows = .model == .models)
+      )
+  }
+  .tbl
+})
+
+
+
 # Save plots -------------------------------------------------------------------
 save_path <- here("output/plots/risk_fc/")
 if (!file.exists(save_path)) {
@@ -234,3 +286,11 @@ iwalk(plt_curves, \(.plt, .name) {
     ggsave(file = tmp_path, width = 6, height = 5, device = cairo_ps)
   
 })
+
+
+# Table auc
+iwalk(tbl_auc, \(.tbl, .name) {
+  file_name = str_glue("{save_path}table_{.name}")
+  html2pdf(.tbl, file_name)
+})
+

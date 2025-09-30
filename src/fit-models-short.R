@@ -46,7 +46,7 @@ split_data_tt <- # Train/test set
 
 initial <- "16 weeks" 
 assess <- "1 weeks"
-skip <- "6 weeks"
+skip <- "9 days"
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
 
@@ -300,12 +300,12 @@ list_var_rf_int_not <- # ... no temperature
 ls_rf_int <- # fits + fc + parameters fc distribution ...
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)), 
-    select_training,  rf_reg_int,  list_var_rf_int, "all"
+    select_training,  rf_reg_int,  list_var_rf_int, "all", horizon
   )
 ls_rf_int_not <- # ... no temperature
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)), 
-    select_training,  rf_reg_int,  list_var_rf_int_not, "all"
+    select_training,  rf_reg_int,  list_var_rf_int_not, "all", horizon
   )
 
 ls_rf_int_par <- # extract parameters fc distribution ...
@@ -330,12 +330,12 @@ list_var_xgb_not <- # ... no temperature
 ls_xgb_par <- # parameters fc distribution (mean and sd) ...
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)),
-    select_training,  xgb_reg_int,  list_var_xgb, "all"
+    select_training,  xgb_reg_int,  list_var_xgb, "all", horizon
   )
 ls_xgb_par_not <- # ... no temperature
   cv_wrap(
     data_xpredict_int %>% filter(!is_aggregated(site)),
-    select_training,  xgb_reg_int,  list_var_xgb_not, "all"
+    select_training,  xgb_reg_int,  list_var_xgb_not, "all", horizon
   )
 
 
@@ -383,10 +383,10 @@ fc_fable_xpred <-
 fc_fable_xpred_rec <- 
   fit_fable_agg %>% 
   reconcile(
-    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_cov"),
-    arima_dadp_rec = min_trace(arima_dadp_agg, method = "mint_cov"),
-    arima_dadpl_rec = min_trace(arima_dadpl_agg, method = "mint_cov"),
-    arima_dadplt_rec = min_trace(arima_dadplt_agg, method = "mint_cov")
+    arima_dad_rec = min_trace(arima_dad_agg, method = "mint_shrink"),
+    arima_dadp_rec = min_trace(arima_dadp_agg, method = "mint_shrink"),
+    arima_dadpl_rec = min_trace(arima_dadpl_agg, method = "mint_shrink"),
+    arima_dadplt_rec = min_trace(arima_dadplt_agg, method = "mint_shrink")
     ) %>% 
   select( # remove non-reconciled models
     -arima_dad_agg, -arima_dadp_agg, -arima_dadpl_agg, -arima_dadplt_agg
@@ -482,7 +482,7 @@ fc_esx <- # convert to tsibble
 # Random forest
 # (select_model fun from es)
 fc_rf <- 
-  cv_wrap(ls_rf_par, select_model, rf_forecast)
+  cv_wrap(ls_rf_par, select_model, rf_forecast, xpredict = data_xpredict)
 
 fc_rf <- # convert to tsibble
   fc_rf %>% 
@@ -493,10 +493,12 @@ fc_rf <- # convert to tsibble
 
 # Random forest - interaction
 fc_rf_int <- # harmonise fc to fable ...
-  cv_wrap(ls_rf_int_par, select_model, rf_forecast_int, nmodel = "rf_int")
+  cv_wrap(ls_rf_int_par, select_model, rf_forecast_int, 
+          xpredict = data_xpredict, nmodel = "rf_int")
 fc_rf_int_not <- # ... no temperature
   cv_wrap(
-    ls_rf_int_par_not, select_model, rf_forecast_int, nmodel = "rf_int_not"
+    ls_rf_int_par_not, select_model, rf_forecast_int, 
+    xpredict = data_xpredict, nmodel = "rf_int_not"
     )
 
 fc_rf_int <- # convert to tsibble ...
@@ -513,9 +515,11 @@ fc_rf_int_not <- # ... no temperature
 
 # XGBoost
 fc_xgb <-  # harmonise fc to fable ...
-  cv_wrap(ls_xgb_par, select_model, xgb_forecast, nmodel = "xgb")
+  cv_wrap(ls_xgb_par, select_model, xgb_forecast, 
+          xpredict = data_xpredict, nmodel = "xgb")
 fc_xgb_not <- # ... no temperature
-  cv_wrap(ls_xgb_par_not, select_model, xgb_forecast, nmodel = "xgb_not")
+  cv_wrap(ls_xgb_par_not, select_model, xgb_forecast, 
+          xpredict = data_xpredict, nmodel = "xgb_not")
 
 fc_xgb <- # convert to tsibble ...
   fc_xgb %>% 

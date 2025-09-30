@@ -24,6 +24,12 @@ sites <- metrics$site %>% unique()
 metric_names <- metrics$metric %>% unique()
 
 
+# Order metrics
+metrics$models <- 
+  metrics$models %>% factor(levels = names(col_models))
+metrics_summary$models <- 
+  metrics_summary$models %>% factor(levels = names(col_models))
+
 
 # Generate plots ---------------------------------------------------------------
 plt_metric <- # boxplot
@@ -80,11 +86,6 @@ plt_metric_time_summary <- # time series (summary data)
 
 
 # Generate tables --------------------------------------------------------------
-# Get lighter colour palette (alpha = 0.6)
-col_models_l <- col_models
-substr(col_models_l, 8, 9) <- "80"
-
-
 # Models' metric mode and iqr
 tbl_metric <- 
   metrics %>% # attention: values not scaled by tslm!
@@ -118,7 +119,11 @@ tbl_metric <-
   ) %>% 
   tab_spanner_delim(delim = "-")
 
-for (i in seq_along(col_models_l)) { # add color to stabl column
+
+# Get lighter colour palette and add to table
+col_models_l <- bright_col(col_models, 0.6)
+
+for (i in seq_along(col_models_l)) { # add colour to table column
   .color = col_models_l[i]
   .model = names(col_models_l)[i]
 
@@ -201,7 +206,9 @@ walk(metric_names, \(.metric) {
     )
 })
 
-tbl_metric %>% 
-  gtsave(filename = str_glue("{save_path_m}table_metrics.png"))
-tbl_freq_best %>% 
-  gtsave(filename = str_glue("{save_path_m}table_freq_best.png"))
+html2pdf(tbl_metric, str_glue("{save_path_m}table_metrics"))
+html2pdf(tbl_freq_best, str_glue("{save_path_m}table_freq_best"))
+# tbl_metric %>% 
+#   gtsave(filename = str_glue("{save_path_m}table_metrics.html"))
+# tbl_freq_best %>% 
+#   gtsave(filename = str_glue("{save_path_m}table_freq_best.html"))

@@ -405,6 +405,38 @@ plot_cf = function(ts_tbl, .var = NULL, .lag = 50, .alpha = 0.05){
 }
 
 
+#' Brighten colours
+#' Fake increase alpha value of colour palette by mixing foreground colours with
+#' background white. Useful to plot in formats that do not support transparency.
+#' @param .palette Original colour palette (for models)
+#' @param .alpha Faked alpha value
+bright_col <- 
+  function(.palette, .alpha) {
+    .palette = col2rgb(.palette) / 255
+    .white = col2rgb("#FFFFFF") / 255
+    
+    apply(.palette, 2, \(.col) {
+      .col = .col * .alpha + .white * (1 - .alpha)
+      # paste0(rgb(.col[1], .col[2], .col[3]), "FF")
+      rgb(.col[1], .col[2], .col[3])
+    })
+  }
+
+
+#' Save html from html
+#' Save tables as html to produce colours, then save pdf from html
+#' @param .file File to save
+#' @param .path Path where to save
+html2pdf <- 
+  function(.file, .path) {
+    html_file <- paste0(.path, ".html")
+    pdf_file <- paste0(.path, ".pdf")
+    .file %>% gtsave(filename = html_file)
+    chrome_print(html_file, pdf_file)
+  }
+
+
+
 # Utility functions ------------------------------------------------------------
 #' Z-score data
 #' @param  .data time series (vector)
@@ -1190,7 +1222,6 @@ fc_comb_wrap <-
 
 
 # Functions for risk prediction ------------------------------------------------
-
 #' Curve axes
 #' Function to compute the axes of the ROC/PR curves from risk prediction
 #' classifier. Curves represent x/y values for different decision boundaries
@@ -1242,16 +1273,13 @@ ax_curve_fun <-
 #' split, site and model a classification of threshold crossing as T/F based on
 #' the forecasted risk of threshold crossing and a db (prob above which classify
 #' threshold-crossing as T), ranging from 1-99%. Bootstrapping takes random
-#' "augmented" sample of splits, n times; "augmented" because n splits for each
-#' sample is higher that original number of splits - done to try reduce noise
-#' in bootstrap confidence intervals.
+#' sample of splits, n times.
 #' @param .SD Subset of data, from data.table.
 #' @param .type Whether to compute axis for ROC or PR curve.
 boots_curves <- 
-  function(.dt_tbl, .nboot = 25) {
+  function(.dt_tbl, .nboot = 100) {
     .splits = .dt_tbl[, unique(split)]
-    .nsplits = length(.splits) + 5 # increase (artificially) number of splits
-    
+    .nsplits = length(.splits)
     set.seed(35)
     .dt_tbl =
       map(seq(1, .nboot), \(.x) {
@@ -1260,6 +1288,21 @@ boots_curves <-
       }) %>% 
       rbindlist()
   }
+
+
+#' AUC function
+#' Compute area under the curve (for both ROC and RP) using rectangle quadrature
+#' rule (sum of rectangle with hight as mean of y between consecutive points)
+#' @param .SD Subset of table, from data.table
+auc_fun <- 
+  function(.SD){
+    .Nr = nrow(.SD)
+    .Nc = ncol(.SD) # 2nd to last is y, last is x
+    dx <- diff(.SD[[.Nc]])
+    y <- .SD[[.Nc - 1]]
+    height <- (y[2:.Nr] + y[1:.Nr - 1]) / 2
+    list(auc = sum(dx * height))
+  } 
 
 
 

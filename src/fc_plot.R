@@ -29,6 +29,11 @@ fc_all <-
   fc_all %>% rec_site()
 
 
+# Order forecasts
+fc_all$.model <- 
+  fc_all$.model %>% factor(levels = names(col_models))
+
+
 
 # Generate plots ---------------------------------------------------------------
 # Plot forecasts

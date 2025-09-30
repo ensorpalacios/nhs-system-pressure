@@ -141,32 +141,22 @@ risk_w_pr <-
 
 
 # ROC AUC ----------------------------------------------------------------------
-curve_fun <- 
-  function(.SD){
-    .Nr = nrow(.SD)
-    .Nc = ncol(.SD) # 2nd to last is y, last is x
-    dx <- diff(.SD[[.Nc]])
-    y <- .SD[[.Nc - 1]]
-    height <- (y[2:.Nr] + y[1:.Nr - 1]) / 2
-    list(auc = sum(dx * height))
-  } 
-
 risk_d_roc_auc <- 
-  risk_d_roc[, curve_fun(.SD), by = .(nboot, site, .model)][
+  risk_d_roc[, auc_fun(.SD), by = .(nboot, site, .model)][
     order(nboot, site, -auc)]
 risk_ws_roc_auc <- 
-  risk_ws_roc[, curve_fun(.SD), by = .(nboot, site, .model, week_split)][
+  risk_ws_roc[, auc_fun(.SD), by = .(nboot, site, .model, week_split)][
   order(site, week_split, -auc)]
 risk_w_roc_auc <- 
-  risk_w_roc[, curve_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
+  risk_w_roc[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 
 risk_d_pr_auc <- 
-  risk_d_pr[, curve_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
+  risk_d_pr[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 risk_ws_pr_auc <- 
-  risk_ws_pr[, curve_fun(.SD), by = .(nboot, site, .model, week_split)][
+  risk_ws_pr[, auc_fun(.SD), by = .(nboot, site, .model, week_split)][
   order(site, week_split, -auc)]
 risk_w_pr_auc <- 
-  risk_w_pr[, curve_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
+  risk_w_pr[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 
 
 

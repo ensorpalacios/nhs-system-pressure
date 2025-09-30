@@ -43,6 +43,7 @@ import::from(astsa, LagReg, pre.white)
 import::from(readr, parse_number)
 import::from(xgboost, xgb.train, xgb.DMatrix, getinfo)
 import::from(Matrix, sparse.model.matrix)
+import::from(pagedown, chrome_print)
 
 
 # Resolve conflicts (using conflicted package)

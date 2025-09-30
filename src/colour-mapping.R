@@ -16,7 +16,8 @@ source(here("src/packages.R"))
 # show_col(viridis_pal(option="turbo")(12))
 
 col_models = viridis_pal(option = "turbo")(28) # Colour mapping
-names(col_models) = 
+
+names(col_models) =
   c(
     "arima",
     "arima_dad_l",
@@ -46,6 +47,4 @@ names(col_models) =
     "crps",
     "equal",
     "wilker"
-  ) %>% as.factor()
-
-
+  )
