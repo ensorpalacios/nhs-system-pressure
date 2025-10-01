@@ -1,10 +1,11 @@
-#' Fit models
+#' Fit and forecast
 #'
 #' Fit different models, including baseline (TSLM, snaive),
 #' ARIMA, exponential smoothing and random forests; use different 
 #' exogenous predictors such as days of the week, escalation beds, discharges 
-#' and admissions.
-
+#' and admissions, A&E paediatric, lengt of stay (+21 days), central England 
+#' temperature.
+#'
 #' Ref: Shumway, Time-series analysis book; Hyndman, Forecasting: Principles 
 #' and Practice.
 #'
