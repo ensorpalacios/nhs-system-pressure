@@ -16,10 +16,12 @@ source("src/packages.R")
 source("src/functions.R")
 
 
-# Load data --------------------------------------------------------------------
+# Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
 sites <- ts_occ$site |> unique()
+
+set.seed(123) # reproducible analysis for rf and xgb
 
 
 

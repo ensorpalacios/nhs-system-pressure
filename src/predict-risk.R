@@ -19,6 +19,9 @@ fc_all <- readRDS(fc_path)
 alarm_thr <- readRDS(thr_path)
 
 
+set.seed(321) # reproducible analysis for bootstrapping splits
+
+
 # Preprocessing ----------------------------------------------------------------
 # Recode sites
 split_data_cv <- 
