@@ -138,7 +138,7 @@ pcurve_fun <-
               q80 = quantile(.c, 0.8)
               c(mean = mean, q20, q80)
             }) %>% 
-              unlist(, use.names = T) %>% 
+              unlist(use.names = T) %>% 
               as.list()
           },
           by = c("site", ".model", "week_split", "db"),

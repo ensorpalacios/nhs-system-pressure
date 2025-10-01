@@ -64,7 +64,7 @@ tbl_data <-
     data_xpredict <- 
       xpredict_fun(
         split_data_cv, 
-        c("occ", "ad_diff"), 
+        c("occ", "ad_diff", "paed", "los"), 
         idx_start_test, 
         .xmod
       ) %>% 
@@ -74,7 +74,7 @@ tbl_data <-
   }) %>% 
   list_rbind() %>%
   mutate(
-    across(c(contains(c("occ", "ad_diff")), -contains("lag")),
+    across(c(contains(c("occ", "ad_diff", "paed", "los")), -contains("lag")),
       ~ {
         obs = split_data_cv %>% pull(cur_column())
         abs(obs - .x)

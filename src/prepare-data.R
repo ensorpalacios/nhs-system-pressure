@@ -172,8 +172,8 @@ ts_occ <-
     escal = # threshold above core
       (occ - core) %>% if_else(. < 0, 0, .),
     # Occupancy
-    occ = # stabilise (- holidays effect & detrend)
-      stabilise(occ, index, .xdays = TRUE, .detrend = TRUE)
+    occ = # stabilise (- holidays effect)
+      stabilise(occ, index, .xdays = TRUE)
   ) %>% 
   ungroup()
 
