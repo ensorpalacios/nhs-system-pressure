@@ -842,7 +842,7 @@ xgb_reg_int <-
               objective = "reg:squarederror", # for mean forecasting
               eta = 0.3, # default learning rate
               gamma = 0, # default min loss reduction for leaf split
-              lambda = 3, # L2 regularisation (default 1)
+              lambda = 1, # default L2 regularisation
               alpha = 0, # default L1 regularisation
               base_score = # initialise predictions based on sample mean
                 getinfo(data_train, "label") %>% mean()
@@ -853,7 +853,7 @@ xgb_reg_int <-
               objective = qreg(.alpha), # for quantile forecasting
               eta = 0.3, # default learning rate
               gamma = 0, # default min loss reduction for leaf split
-              lambda = 3, # L2 regularisation (default 1)
+              lambda = 1, # default L2 regularisation
               alpha = 0, # default L1 regularisation
               base_score = # initialise predictions based on sample mean
                 getinfo(data_train, "label") %>% mean()
@@ -1047,7 +1047,7 @@ process_metrics <- # data wrangling
 
 
 # Function to re-normalise weights in case of floating point issue; check
-# wether weights sum to 1 when renormalising.
+# whether weights sum to 1 when renormalising.
 renorm <- function(.weight) {
   if (!(identical(sum(.weight), 1))) {
     cat("Weights sum to:", sum(.weight), "- normalizing...\n") 
@@ -1069,64 +1069,29 @@ lcomb_fun <-
     .fc %>%
       group_by(split, site, h) %>%
       summarise(
-        # occ = 
-          # dist_mixture(
-          #   occ[.model == "arima_dad_l"],
-          #   occ[.model == "arima_dad_rec"],
-          #   occ[.model == "es"],
-          #   occ[.model == "rf_int"],
-          #   occ[.model == "var_ad"],
-          #   occ[.model == "var_ad2"],
-          #   occ[.model == "var_h"],
-          #   occ[.model == "xgb"],
-          #   weights = .weights %>% 
-          #     filter(
-          #       site == as.character(site)[1], 
-          #       penalty == "upper", 
-          #       h == h[1], 
-          #       metric == .method
-          #     ) %>% pull(metric_avg)
-        # )
-        
-        # Get weight and correct floating point error
-        # new_weight = .weights %>%
-        #   filter(
-        #     .site == site %>% as.character() %>% .[1],
-        #     .penalty == "upper",
-        #     .models  %in%
-        #       c(.list_m %>% pluck(as.character(site)[1])),
-        #     .h == h[1],
-        #     .metric == .method
-        #   ) %>%
-        #   pull(metric_avg),
-        # renorm <- function(.new_weight) {
-          # if (identical(sum(.new_weight), 1)) {
-          # .new_weight / sum(.new_weight)} else {
-            # stop()
-          # }}
-        
         occ =
           tryCatch({
-          do.call(
-            dist_mixture,
-            c(
-              # as.list(occ[.model %in% tmp_list_m]),
-              as.list(occ[.model %in% 
-                            c(.list_m %>% pluck(as.character(site)[1]))]),
-              list(weights = #new_weight
-                     .weights %>%
-                     filter(
-                       .site == site %>% as.character() %>% .[1],
-                       .penalty == "upper",
-                       .models  %in%
-                         c(.list_m %>% pluck(as.character(site)[1])),
-                       .h == h[1],
-                       .metric == .method
-                     ) %>% pull(metric_avg) %>% 
-                     renorm()
+            do.call(
+              dist_mixture,
+              c(
+                as.list(occ[.model %in% 
+                              c(.list_m %>% pluck(as.character(site)[1]))]),
+                list(weights = #new_weight
+                       .weights %>%
+                       filter(
+                         .site == site %>% as.character() %>% .[1],
+                         .penalty == "upper",
+                         .models  %in%
+                           c(.list_m %>% pluck(as.character(site)[1])),
+                         .h == h[1],
+                         .metric == .method
+                       ) %>% pull(metric_avg) %>% 
+                       renorm()
+                )
               )
-            )
-          )}, error = function(e) {browser()})
+            )}, error = function(e) {
+              message("model weights not summint to 1 when combining fc")
+            })
       ) %>% 
       mutate(.model = .method) %>%
       ungroup()
@@ -1273,14 +1238,13 @@ ax_curve_fun <-
 #' split, site and model a classification of threshold crossing as T/F based on
 #' the forecasted risk of threshold crossing and a db (prob above which classify
 #' threshold-crossing as T), ranging from 1-99%. Bootstrapping takes random
-#' sample of splits, n times.
+#' sample of splits, n times. Seed set in parent script.
 #' @param .SD Subset of data, from data.table.
 #' @param .type Whether to compute axis for ROC or PR curve.
 boots_curves <- 
   function(.dt_tbl, .nboot = 100) {
     .splits = .dt_tbl[, unique(split)]
     .nsplits = length(.splits)
-    set.seed(35)
     .dt_tbl =
       map(seq(1, .nboot), \(.x) {
         .boots = sample(.splits, .nsplits, replace = T)
