@@ -208,12 +208,22 @@ select_fc <- # select forecast (by site and split) - used in cv_wrap()
         .data$all %>% 
         filter(site == .site, split == .split) %>% 
         as_tsibble(index = index),
-      "test" =
+      "fc" =
         .data$fc %>% 
         filter(site == .site, .model %in% .models, split == .split)
     )
   }
 
+
+#' Select smoothed dataset
+#' Used in fit-fc-trend.R.
+#' @param .data List of smoothed bed occupancy training sets per site and split.
+#' @param .site Site of split.
+#' @param .split Cv split of split.
+select_smooth <- 
+  function(.data_, .site, .split, ...) {
+    modifyList(pluck(.data_, .site, .split), list(site = .site, split = .split))
+  }
 
 
 #' wrapper over site- and cv split-specific data
@@ -277,7 +287,7 @@ es_forecast <- # define esx forecast
       ) %>% 
       mutate( # create forecast distribution (assuming nid error)
         .model = "es",
-        occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 2),
+        occ = dist_normal(mean, sd = (`Upper bound (97.5%)` - mean) / 1.96),
         .mean = mean, # necessary for fable::autoplot
         mean = NULL,
         `Lower bound (2.5%)` = NULL,
@@ -436,6 +446,45 @@ html2pdf <-
   }
 
 
+#' Plot forecasts
+#' Plot fc for each site and split
+#' @param .data Data containing observed ("all") and fc occ ("fc").
+plot_forecast <- # plot forecast function
+  function(.data, ...) {
+    # Reduce length observations (x axis)
+    .data$all = 
+      .data$all %>% 
+      group_by(split, type, site) %>% 
+      mutate(
+        start_index = 
+          case_when(
+            type == "train" ~
+              head(index, 1) + 
+              (tail(index, 1) - head(index, 1)) / 1.7,
+            type == "test" ~
+              head(index, 1)
+          )
+      ) %>% 
+      ungroup() %>% 
+      filter(index >= start_index)
+    
+    # Plot
+    if (!list(...)$trend) { # for normal fc
+      .data$fc %>%
+        autoplot() +
+        autolayer(.data$all, .vars = occ) +
+        scale_colour_manual(name = "models", values = col_models) + 
+        scale_fill_manual(name = "models", values = col_models) + 
+        scale_y_continuous(breaks = c(600, 700)) +
+        facet_wrap(vars(.model), ncol = 1, strip.position = "right")
+    } else { # for trend fc
+      .data$fc %>% as_fable("occ_wm", "occ_wm") %>% 
+        autoplot() +
+        autolayer(.data$all, .vars = occ_wt) +
+        autolayer(.data$fc %>% as_tsibble(), .vars = occ_s)
+    }
+  }
+
 
 # Utility functions ------------------------------------------------------------
 #' Z-score data
@@ -454,13 +503,9 @@ zs_fun <-
 #' @param .xdays whether to remove effect of special days (e.g., Christmus)
 #' @param .wdays whether to remove effect of week days
 #' @param .stationary whether to make .var stationary
-#' @param .detrend whether to detrend .var (LOESS) - only if .stationary = FALSE
 #' @export
 stabilise <- 
-  function(
-    .var, .index, 
-    .xdays = FALSE, .wdays = FALSE, .stationary = FALSE, .detrend = FALSE
-  ) {
+  function(.var, .index, .xdays = FALSE, .wdays = FALSE, .stationary = FALSE) {
     # Prepare data
     tmp_data = 
       tibble(index = .index, var = .var) %>% 
@@ -515,17 +560,6 @@ stabilise <-
         tmp_data %>% 
         mutate(var = fit_wdays + var_mean, # add back the mean 
                var_demean = fit_wdays) # new mean-subtracted data 
-    }
-    
-    # Detrend
-    if (.detrend) {
-      tmp_loess = 
-        tmp_data %>% 
-        mutate(index = index %>% as.numeric()
-        ) %>% # fit mean-subtracted .var
-        loess(var ~ index, data = ., span = 0.3) %>% 
-        predict()
-      tmp_loess = tmp_loess - mean(tmp_loess) # mean-subtracted loess fit
     }
     
     # Make stationary
@@ -971,7 +1005,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
       filter(type == "test") %>% 
       select(split, site, index, occ) %>% 
       left_join(
-        .data$test %>%
+        .data$fc %>%
           as_tibble() %>%
           select(index, .model, occ) %>% 
           pivot_wider(names_from = .model, values_from = occ),
@@ -1197,12 +1231,12 @@ fc_comb_wrap <-
 #' @param .type Whether to compute axis for ROC or PR curve.
 ax_curve_fun <- 
   function(.SD, .type) {
-    .db <- seq(0.99, 0.01, -0.01)
+    .db <- seq(0.995, 0, -0.005)
     .obs_cross = .SD[, obs_cross]
     
     if (.type == "roc") { # for ROC curve
       res <- lapply(.db, function(.x) {
-        .x = sprintf("db_%.2f", .x)
+        .x = sprintf("db_%.3f", .x)
         pos = .SD[[.x]]
         TP = sum(.obs_cross & pos)
         FP = sum(!.obs_cross & pos)
@@ -1216,7 +1250,7 @@ ax_curve_fun <-
       })
     } else { # for PR curve
       res <- lapply(.db, function(.x) {
-        .x = sprintf("db_%.2f", .x)
+        .x = sprintf("db_%.3f", .x)
         pos = .SD[[.x]]
         TP = sum(.obs_cross & pos)
         FP = sum(!.obs_cross & pos)
@@ -1242,7 +1276,7 @@ ax_curve_fun <-
 #' @param .SD Subset of data, from data.table.
 #' @param .type Whether to compute axis for ROC or PR curve.
 boots_curves <- 
-  function(.dt_tbl, .nboot = 100) {
+  function(.dt_tbl, .nboot = 50) {
     .splits = .dt_tbl[, unique(split)]
     .nsplits = length(.splits)
     .dt_tbl =
@@ -1305,3 +1339,69 @@ factorise_temp <-
         !!sym(.tmax) := NULL
       )
   }
+
+
+
+# Functions for trend prediction -----------------------------------------------
+#' Smooth var
+#' Use cubic spline to smooth training set for each split. Parameters nknows and
+#' spar selected to give balance between data point fidelty and smooth function.
+#' @param .data_ Data for each site and cv split.
+smooth_fun <- 
+  function(.y) {
+    a0 = c(.y[1], 0) # initial value estimate
+    P0 = 
+      matrix(c(100, 0, 0, 100), ncol = 2) # initial uncertainty estimate
+    .dt = matrix(c(0, 0)) # intercept of transition equation
+    ct = matrix(0) # intercept of measurement equation
+    Tt = matrix(c(1, 1, 0, 1), ncol = 2) # factor of transition equation
+    Zt = matrix(c(1, 0), ncol =2) # factor of measurement equation
+    HHt = 
+      matrix(c(.1, 0, 0, 200), ncol = 2) # variance of transition innovations
+    GGt = matrix(100) # variance of measurement error
+    yt = matrix(.y, nrow = 1) # observed outcome
+    fit = 
+      fkf(
+        a0 = a0, P0 = P0, dt = .dt, ct = ct, Tt = Tt, 
+        Zt = Zt, HHt = HHt, GGt = GGt, yt = yt
+        )
+    fit$att[1, ]
+    # ny = length(.y)
+    # x = seq(1, ny)
+    # .y
+    # tmp_smooth = 
+    #   smooth.spline(x, .y, nknots = ceiling(sqrt(ny)), spar = 0.2)
+    # tmp_smooth$y
+  }
+
+
+#' Fit trend
+#' Fit smoothed bed occupancy with structural state space model. Saving fc both
+#' with and without mean.
+#' @param .data_ Data including smoothed occ
+fit_trend <- 
+  function(.data_, ...) {
+    # Training data
+    train = .data_ %>% filter(type == "train") %>% pull(occ_s)
+    train_mean = mean(train)
+    
+    # Fit/fc STS model
+    ss = AddLocalLinearTrend(list(), train)
+    ss = AddSeasonal(ss, train, nseasons = 7)
+    model = bsts(train, ss, niter = 500)
+    fc = predict(model, horizon = 7, burn = 100)
+    
+    # Organise data
+    fc =
+      .data_ %>% filter(type == "test") %>%
+      mutate( # create forecast distribution (assuming nid error)
+        .model = "sts_trend",
+        occ = # trend fc without mean
+          dist_normal(fc$mean - train_mean, sd = apply(fc$distribution, 2, sd)),
+        occ_wm = # trend fc with mean
+          dist_normal(fc$mean, sd = apply(fc$distribution, 2, sd)),
+        .mean = fc$mean, # necessary for fable::autoplot
+      )
+  }
+
+

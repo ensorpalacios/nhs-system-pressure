@@ -14,7 +14,12 @@ source("src/colour-mapping.R")
 
 
 # Load data --------------------------------------------------------------------
-metric_path = here("output/fits/metrics.RDS")
+occ_with_trend = FALSE
+if (occ_with_trend) { # here occ in split_data_cv has trend
+  metric_path = here("output/fits/withtrend/metrics.RDS")
+} else {
+  metric_path = here("output/fits/metrics.RDS")
+}
 metric_data = readRDS(metric_path)
 
 # Unpack from list
@@ -114,6 +119,7 @@ tbl_metric <-
     ref_iqr = as.numeric(substr(`crps-upper`, 7, 10))
   ) %>% group_by(site) %>% arrange(ref_median, ref_iqr) %>% 
   ungroup() %>% select(-ref_median, -ref_iqr) %>% 
+  arrange(site) %>% 
   gt(
     rowname_col = "models", groupname_col = "site", row_group_as_column = TRUE
   ) %>% 
@@ -183,7 +189,11 @@ for (i in seq_along(col_models_l)) { # add raw colours by model
 
 
 # Save plots -------------------------------------------------------------------
-save_path_m <- here("output/plots/metrics/")
+if (occ_with_trend) {
+  save_path_m <- here("output/plots/metrics/withtrend/")
+} else {
+  save_path_m <- here("output/plots/metrics/")
+}
 if (!file.exists(save_path_m)) {
   dir.create(save_path_m, recursive = TRUE)
 }

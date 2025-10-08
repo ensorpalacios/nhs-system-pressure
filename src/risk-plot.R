@@ -11,9 +11,16 @@ source("src/colour-mapping.R")
 
 
 # Load data --------------------------------------------------------------------
-path_risk <- here("output/fits/risk.RDS")
-path_curves <- here("output/fits/risk_curves.RDS")
-path_auc <- here("output/fits/risk_auc.RDS")
+occ_with_trend = FALSE
+if (occ_with_trend) {
+  path_risk <- here("output/fits/withtrend/risk.RDS")
+  path_curves <- here("output/fits/withtrend/risk_curves.RDS")
+  path_auc <- here("output/fits/withtrend/risk_auc.RDS")
+} else {
+  path_risk <- here("output/fits/risk.RDS")
+  path_curves <- here("output/fits/risk_curves.RDS")
+  path_auc <- here("output/fits/risk_auc.RDS")
+}
 
 
 list_risk <- readRDS(path_risk)
@@ -162,6 +169,9 @@ pcurve_fun <-
           alpha = 0.3,
         ) +
         geom_line(linewidth = 1) +
+        geom_line(
+          data = data.frame(x = c(0, 1), y = c(0, 1)), aes(x = x, y = y)
+        ) +
         scale_colour_manual(name = ".model", values = col_models) + 
         scale_fill_manual(name = ".model", values = col_models) + 
         facet_wrap(vars(site, week_split), ncol = 2)
@@ -200,9 +210,13 @@ pcurve_fun <-
           alpha = 0.3,
         ) +
         geom_line(linewidth = 1) +
+        geom_line(
+          data = data.frame(x = c(0, 1), y = c(0, 1)), aes(x = x, y = y)
+          ) +
         scale_colour_manual(name = ".model", values = col_models) + 
         scale_fill_manual(name = ".model", values = col_models) + 
-        facet_wrap(vars(site), ncol = 1)
+        facet_wrap(vars(site), ncol = 1) +
+        theme(aspect.ratio = 1)
     }
   }
   
@@ -264,7 +278,11 @@ tbl_auc <-  # add raw colours by model
 
 
 # Save plots -------------------------------------------------------------------
-save_path <- here("output/plots/risk_fc/")
+if (occ_with_trend) {
+  save_path <- here("output/plots/risk_fc/withtrend/")
+} else {
+  save_path <- here("output/plots/risk_fc/")
+}
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }

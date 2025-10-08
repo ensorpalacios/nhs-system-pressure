@@ -32,17 +32,49 @@ source("src/functions.R")
 
 
 # Load data --------------------------------------------------------------------
-split_path <- here("output/fits/splits_short.RDS")
-fc_path <- here("output/fits/forecasts_short.RDS")
-
-split_data_cv <- readRDS(file = split_path)
-fc_all <- readRDS(file = fc_path)
-
-# Remove aggregated data
-split_data_cv <- 
-  split_data_cv %>% filter(!is_aggregated(site))
-fc_all <- 
-  fc_all %>% filter(!is_aggregated(site))
+occ_with_trend = FALSE
+if (occ_with_trend) { # use split_data_cv (with trend)
+  split_path <- here("output/fits/withtrend/splits_short.RDS")
+  fc_path <- here("output/fits/withtrend/forecasts_short.RDS")
+  
+  split_data_cv <- readRDS(file = split_path)
+  fc_all <- readRDS(file = fc_path)
+  
+  # Remove aggregated data
+  split_data_cv <- 
+    split_data_cv %>% filter(!is_aggregated(site))
+  fc_all <- 
+    fc_all %>% filter(!is_aggregated(site))
+  
+} else { # use occ_ts instead of split_data_cv (latter is detrended)
+  data_path <- here("data/processed/tbl_occ.RDS") # original data
+  fc_path <- here("output/fits/forecasts_short.RDS")
+  
+  ts_occ <- readRDS(data_path)
+  fc_all <- readRDS(file = fc_path)
+  
+  # Split occupation in cv splits
+  ts_occ_tt <- # Train/test set
+    split_tt(ts_occ)
+  
+  initial <- "16 weeks" 
+  assess <- "1 weeks"
+  skip <- "9 days"
+  ts_occ_cv <- # Cv train/validation sets
+    split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
+  
+  ts_occ_cv <- # aggregated data not present in trend fc
+    ts_occ_cv %>% filter(site != "aggregate")
+  
+  split_data_cv <- # for level plot (using occ)
+    ts_occ_cv %>% mutate(occ = occ_wt)
+  
+  # Remove aggregated data
+  split_data_cv <- 
+    split_data_cv %>% filter(!is_aggregated(site))
+  fc_all <- 
+    fc_all %>% filter(!is_aggregated(site))
+}
 
 
 
@@ -159,7 +191,11 @@ metrics_summary <-
  
 
 # Save -------------------------------------------------------------------------
-save_path = here("output/fits/")
+if (occ_with_trend) {
+  save_path = here("output/fits/withtrend/")
+} else {
+  save_path = here("output/fits/")
+}
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }

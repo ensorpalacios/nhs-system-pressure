@@ -22,6 +22,9 @@ library(knitr)
 library(kableExtra)
 library(knitr)
 library(gt)
+library(FKF)
+library(bsts)
+
 
 # Single functions (using import package)
 import::from(here, here)
@@ -49,5 +52,5 @@ import::from(pagedown, chrome_print)
 # Resolve conflicts (using conflicted package)
 conflicts_prefer(
   dplyr::filter,
-  fabletools::accuracy, # used in computing metrics for fable fc
+  fabletools::accuracy # used in computing metrics for fable fc
 )

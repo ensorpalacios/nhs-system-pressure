@@ -4,7 +4,8 @@
 #' Attention: occ is total number of beds used, whereas escal and 
 #' core are beds open, not used; however, assume that core beds are fully 
 #' used before escalation beds, meaning that core beds open = used, and we can
-#' recover escalation beds from total - core.
+#' recover escalation beds from total - core. 
+#' Attention: final occ is detrended (keeping original mean).
 #'
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-07
@@ -172,10 +173,15 @@ ts_occ <-
     escal = # threshold above core
       (occ - core) %>% if_else(. < 0, 0, .),
     # Occupancy
-    occ = # stabilise (- holidays effect)
-      stabilise(occ, index, .xdays = TRUE)
+    occ_wx = occ, # 1) save occ with xristmus
+    occ = # 2) stabilise (- xristmus effect)
+      stabilise(occ, index, .xdays = TRUE),
+    occ_wt = occ, # 3) save occ (with trend)
+    occ_s = smooth_fun(occ), # 4) compute smoothed occ (filter)
+    occ = occ - (occ_s - mean(occ_s)) # 4) detrended occ (preserve mean)
   ) %>% 
   ungroup()
+
 
 
 # Aggregate BRI/Southmead
@@ -184,6 +190,9 @@ ts_occ <-
   aggregate_key(
     site, 
     occ = sum(occ),
+    occ_s = sum(occ_s),
+    occ_wt = sum(occ_wt),
+    occ_wx = sum(occ_wx),
     adm = sum(adm),
     dis = sum(dis),
     escal = sum(escal),

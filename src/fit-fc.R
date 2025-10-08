@@ -19,10 +19,24 @@ source("src/functions.R")
 
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
+fc_trend_path <- here("output/fits/forecast_trend.RDS")
+
 ts_occ <- readRDS(file = data_path)
+fc_trend <- readRDS(file = fc_trend_path)
 sites <- ts_occ$site |> unique()
 
-set.seed(123) # reproducible analysis for rf and xgb
+# Reproducible analysis for rf and xgb
+set.seed(123) 
+
+
+
+# Predict occ with/without trend -----------------------------------------------
+occ_with_trend = TRUE # used later to change retrending and save path
+if (occ_with_trend) {
+  ts_occ <- 
+    ts_occ %>% 
+    mutate(occ = occ_wt)
+}
 
 
 
@@ -31,8 +45,10 @@ ts_occ <-
   ts_occ %>%
   select( # exclude
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
+    -occ_s, -occ_wt, -occ_wx,
     -adm, -dis,
     -escal, -core,
+    -ad_diff, -ad_diff2,
     -ad_diff3, -ad_diff3_f
     )
 
@@ -66,7 +82,7 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 xpredict_method = "pull" # include tslm, arima, ets
 data_xpredict <- 
   xpredict_fun(
-    split_data_cv %>% select(-contains("occ_other")), 
+    split_data_cv %>% select(-contains("occ_other")),
     c("occ", "ad_diff", "paed", "los"),
     idx_start_test, 
     xpredict_method
@@ -553,8 +569,50 @@ fc_all <-
 
 
 
+# Add trend (slow) to level (fast) fc ------------------------------------------
+# Recode nn fc (from bootstrap samples to dist_norm)
+if (!occ_with_trend) { # only if fitted de-trended occ
+  fc_nn <-
+    fc_all %>% filter(.model == "nn") %>% 
+    mutate(
+      occ_new = dist_normal(mean(occ), sd = sqrt(variance(occ)))
+    )
+  fc_nn$occ <- fc_nn$occ_new
+  dimnames(fc_nn$occ) <- "occ"
+  
+  fc_all <- 
+    fc_all %>% filter(.model != "nn") %>% 
+    bind_rows(fc_nn) %>% select(!occ_new)
+  
+  # Rename key for use in fc_all %>% mutate()
+  fc_trend <-
+    fc_trend %>% 
+    rename(.site = site, .split = split)
+  
+  # Add trend (with uncertainty)
+  fc_all <-
+    fc_all %>% 
+    group_by(split, site, .model) %>% 
+    mutate(
+      tmp = # get trend fc
+        fc_trend %>% 
+        filter(.site == as.character(site[1]), .split == split[1]) %>% pull(occ),
+      occ = # re-trend occ fc with trend fc
+        occ + tmp,
+      tmp = NULL
+    ) %>% 
+    ungroup() %>% 
+    as_fable("occ", "occ")
+}
+
+
+
 # Save fits and forecasts ------------------------------------------------------
-save_path = here("output/fits/")
+if (occ_with_trend) {
+  save_path = here("output/fits/withtrend/")
+} else {
+  save_path = here("output/fits/")
+}
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
@@ -566,5 +624,5 @@ saveRDS(data_xpredict, file = paste0(save_path, "data_xpredict.RDS"))
 saveRDS(fit_all, file = paste0(save_path, "fits_short.RDS"))
 saveRDS(fc_all, file = paste0(save_path, "forecasts_short.RDS"))
 # fit_all <- readRDS(paste0(save_path, "fits_short.RDS"))
-# fc_all <- readRDS(paste0(save_path, "fc_all_short.RDS"))
+# fc_all <- readRDS(paste0(save_path, "forecasts_short.RDS"))
 # data_xpredict <- readRDS(paste0(save_path, "data_xpredict.RDS"))

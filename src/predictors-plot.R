@@ -48,7 +48,7 @@ plot_occ_miss <-
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$occ_m,
     # ts_occ %>% filter(site == "Southmead") %>% .$occ_i,
-    ts_occ %>% filter(site == "Southmead") %>% .$occ,
+    ts_occ %>% filter(site == "Southmead") %>% .$occ_wx,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -56,10 +56,10 @@ plot_occ_miss <-
   plot_layout(ncol = 1, axis = "collect_x")
 
 
-# Full data
+# Occupancy de-trended
 plot_occ <-
-  ts_occ |> 
-    ggplot(aes( x = index, y = occ, colour=site)) +
+  ts_occ %>% 
+    ggplot(aes(x = index, y = occ, colour = site)) +
     geom_line(linewidth = 1) +
     facet_wrap(
       ~site,
@@ -73,6 +73,23 @@ plot_occ <-
 
 
 plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
+
+
+# Occupancy with trend
+plot_occ_wt <-
+  ts_occ %>% 
+    ggplot(aes(x = index, y = occ_wt, colour = site)) +
+    geom_line(linewidth = 0.5) +
+    geom_line(aes(y = occ_s), linewidth = 1, lty = 2) +
+    facet_wrap(
+      ~site,
+      nrow = 2, 
+      scales = "free_y") +
+    labs(y = "bed occupancy") +
+    theme(
+      legend.position="none",
+      axis.title.x = element_blank()
+    )
 
 
 
@@ -358,6 +375,7 @@ if (!file.exists(save_path)) {
 ls_plots <- list(
   "occ_miss" = plot_occ_miss,
   "occ" = plot_occ,
+  "occ_wt" = plot_occ_wt,
   "occ_acf" = plot_occ_acf,
   "adm_miss" = plot_adm_miss,
   "dis_miss" = plot_dis_miss,
