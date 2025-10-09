@@ -11,12 +11,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-08
 
-
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/descriptive_analysis.RDS")
 ls_descriptive <- readRDS(file = data_path)

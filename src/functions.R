@@ -74,7 +74,7 @@ lag_fun <-
 #' @param .len_test Length of the test set in months as string (leave 5 months)
 #' @export
 split_tt <- 
-  function(.ts_occ, .len_test = "5 months") {
+  function(.ts_occ, .len_test) {
     sites = .ts_occ$site %>% unique()
     map(sites, \(.site) {
       # Split data
@@ -1380,7 +1380,7 @@ smooth_fun <-
 #' with and without mean.
 #' @param .data_ Data including smoothed occ
 fit_trend <- 
-  function(.data_, ...) {
+  function(.data_, .horizon = NULL, ...) {
     # Training data
     train = .data_ %>% filter(type == "train") %>% pull(occ_s)
     train_mean = mean(train)
@@ -1389,7 +1389,7 @@ fit_trend <-
     ss = AddLocalLinearTrend(list(), train)
     ss = AddSeasonal(ss, train, nseasons = 7)
     model = bsts(train, ss, niter = 500)
-    fc = predict(model, horizon = 7, burn = 100)
+    fc = predict(model, horizon = .horizon, burn = 100)
     
     # Organise data
     fc =

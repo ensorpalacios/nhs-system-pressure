@@ -9,11 +9,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-14
 
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
 # Load data --------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -34,17 +29,11 @@ ts_occ <-
 
 
 # Lag/split dataset ------------------------------------------------------------
-horizon = 7
 ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
 
 
 split_data_tt <- # Train/test set
-  split_tt(ts_occ_lag)
-
-
-initial <- "16 weeks" 
-assess <- "1 weeks"
-skip <- "6 weeks"
+  split_tt(ts_occ_lag, len_test)
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
 

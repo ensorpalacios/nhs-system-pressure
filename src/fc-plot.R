@@ -8,14 +8,7 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-01
 
-# Import packages ----------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-source("src/colour-mapping.R")
-
-
 # Load/prepare data ------------------------------------------------------------
-occ_with_trend = FALSE
 if (occ_with_trend) { # here occ in split_data_cv has trend
   fc_path <- here("output/fits/withtrend/forecasts_short_comb.RDS")
   split_path <- here("output/fits/withtrend/splits_short.RDS")
@@ -52,11 +45,8 @@ if (occ_with_trend) { # here occ in split_data_cv has trend
   
   # Split occupation in cv splits
   ts_occ_tt <- # Train/test set
-    split_tt(ts_occ)
+    split_tt(ts_occ, len_test)
   
-  initial <- "16 weeks" 
-  assess <- "1 weeks"
-  skip <- "9 days"
   ts_occ_cv <- # Cv train/validation sets
     split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
   

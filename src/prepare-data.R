@@ -10,12 +10,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-07
 
-
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/raw/")
 

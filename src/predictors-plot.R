@@ -21,12 +21,6 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-08
 
-# Import libraries ------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
-
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -35,6 +29,7 @@ ts_occ <-
   filter(!is_aggregated(site)) %>% 
   mutate(site = site %>% as.character())
 sites <- ts_occ$site %>% unique()
+
 
 
 # Plot bed occupancy -----------------------------------------------------------

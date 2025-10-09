@@ -5,14 +5,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-10-01
 
-
-
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
-
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -27,12 +19,7 @@ ts_occ <-
 
 # Split dataset ------------------------------------------------------------
 split_data_tt <- # Train/test set
-  split_tt(ts_occ)
-
-
-initial <- "16 weeks" 
-assess <- "1 weeks"
-skip <- "9 days"
+  split_tt(ts_occ, len_test)
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
 
@@ -64,7 +51,8 @@ invisible(
         select_training,
         fit_trend,
         .vars = c("index", "t_ax", "occ_wt", "occ_s", "occ"),
-        .type = "all"
+        .type = "all",
+        .horizon = horizon
       )
   )
 )

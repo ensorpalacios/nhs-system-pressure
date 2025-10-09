@@ -3,15 +3,7 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-02
 
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-source("src/colour-mapping.R")
-
-
-
 # Load data --------------------------------------------------------------------
-occ_with_trend = FALSE
 if (occ_with_trend) {
   path_risk <- here("output/fits/withtrend/risk.RDS")
   path_curves <- here("output/fits/withtrend/risk_curves.RDS")

@@ -12,11 +12,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-01
 
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 fc_trend_path <- here("output/fits/forecast_trend.RDS")
@@ -31,7 +26,6 @@ set.seed(123)
 
 
 # Predict occ with/without trend -----------------------------------------------
-occ_with_trend = TRUE # used later to change retrending and save path
 if (occ_with_trend) {
   ts_occ <- 
     ts_occ %>% 
@@ -55,17 +49,10 @@ ts_occ <-
 
 
 # Lag/split dataset ------------------------------------------------------------
-horizon = 7
 ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
 
-
 split_data_tt <- # Train/test set
-  split_tt(ts_occ_lag)
-
-
-initial <- "16 weeks" 
-assess <- "1 weeks"
-skip <- "9 days"
+  split_tt(ts_occ_lag, len_test)
 split_data_cv <- # Cv train/validation sets
   split_cv(split_data_tt, initial, assess, skip)
 

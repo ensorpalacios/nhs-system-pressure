@@ -3,14 +3,8 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-02
 
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/functions.R")
-
-
 # Load data --------------------------------------------------------------------
 # Original ts, train/test split, cv split, fc (with combined models)
-occ_with_trend = FALSE
 if (occ_with_trend) { # use split_data_cv (with trend)
   split_path <- here("output/fits/withtrend/splits_short.RDS")
   fc_path <- here("output/fits/withtrend/forecasts_short_comb.RDS")
@@ -31,11 +25,7 @@ if (occ_with_trend) { # use split_data_cv (with trend)
   
   # Split occupation in cv splits
   ts_occ_tt <- # Train/test set
-    split_tt(ts_occ)
-  
-  initial <- "16 weeks" 
-  assess <- "1 weeks"
-  skip <- "9 days"
+    split_tt(ts_occ, len_test)
   ts_occ_cv <- # Cv train/validation sets
     split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
   
@@ -45,7 +35,6 @@ if (occ_with_trend) { # use split_data_cv (with trend)
   split_data_cv <- # for level plot (using occ)
     ts_occ_cv %>% mutate(occ = occ_wt)
 }
-
 
 
 # Reproducible analysis for bootstrapping splits

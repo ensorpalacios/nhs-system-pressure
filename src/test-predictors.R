@@ -10,22 +10,6 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-04-23
 
-# Import packages --------------------------------------------------------------
-library(conflicted)
-library(data.table)
-library(tidyverse)
-library(here)
-library(fable)
-library(tsibble)
-
-source("src/functions.R")
-
-
-# Manage conflicts
-conflicts_prefer(
-  dplyr::filter,
-)
-
 # Load data --------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/bed_occupancy.RDS")
 ts_occ <- readRDS(file = data_path)
