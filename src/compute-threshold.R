@@ -5,15 +5,19 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-02
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data --------------------------------------------------------------------
 # Original ts, train/test split, cv split, fc (with combined models)
-data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
-ts_occ <- readRDS(file = data_path)
+tt_path <- here("output/fits/tt_split.RDS")
+split_data_tt <- readRDS(file = tt_path)
 
-split_data_tt <- # Train/test set split
-  split_tt(ts_occ, len_test)
-
-split_data_tt <- # recode sites
+# Recode sites
+split_data_tt <- 
   split_data_tt %>% rec_site()
 
 

@@ -25,43 +25,29 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-14
 
-# Load data --------------------------------------------------------------------
-if (occ_with_trend) { # use split_data_cv (with trend)
-  split_path <- here("output/fits/withtrend/splits_short.RDS")
-  fc_path <- here("output/fits/withtrend/forecasts_short.RDS")
-  
-  split_data_cv <- readRDS(file = split_path)
-  fc_all <- readRDS(file = fc_path)
-  
-  # Remove aggregated data
-  split_data_cv <- 
-    split_data_cv %>% filter(!is_aggregated(site))
-  fc_all <- 
-    fc_all %>% filter(!is_aggregated(site))
-  
-} else { # use occ_ts instead of split_data_cv (latter is detrended)
-  data_path <- here("data/processed/tbl_occ.RDS") # original data
-  fc_path <- here("output/fits/forecasts_short.RDS")
-  
-  ts_occ <- readRDS(data_path)
-  fc_all <- readRDS(file = fc_path)
-  
-  # Split occupation in cv splits
-  ts_occ_tt <- # Train/test set
-    split_tt(ts_occ, len_test)
-  ts_occ_cv <- # Cv train/validation sets
-    split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
-  
-  split_data_cv <- # for level plot (using occ)
-    ts_occ_cv %>% mutate(occ = occ_wt)
-  
-  # Remove aggregated data
-  split_data_cv <- 
-    split_data_cv %>% filter(!is_aggregated(site))
-  fc_all <- 
-    fc_all %>% filter(!is_aggregated(site))
-}
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
 
+
+
+# Load data --------------------------------------------------------------------
+split_path <- here("output/fits/splits_short.RDS")
+fc_path <- here("output/fits/forecasts_short.RDS")
+fc_trend_path <- here("output/fits/forecast_trend.RDS")
+  
+split_data_cv <- readRDS(file = split_path)
+fc_all <- readRDS(file = fc_path)
+fc_trend <- readRDS(file = fc_trend_path)
+  
+# Remove aggregated data
+split_data_cv <- 
+  split_data_cv %>% filter(!is_aggregated(site)) %>% rec_site()
+fc_all <- 
+  fc_all %>% filter(!is_aggregated(site)) %>% rec_site()
+fc_trend <- 
+  fc_trend %>% filter(site != "<aggregated>") %>% relocate(split, site)
+  
 
 
 # Compute metrics --------------------------------------------------------------
@@ -138,12 +124,45 @@ metrics_c <- # add t_ax, scale by TSLM, factor(penalty)
 
 
 
+# Add trend fc to combined forecasts -------------------------------------------
+# Combine level and trend fc
+fc_all_ct <- 
+  fc_comb_trend(fc_all_c, fc_trend, 0.1)
+
+# Compute metrics
+metrics_ct <- # compute metrics
+  cv_wrap(
+    list("all" = split_data_cv , "fc" = fc_all_ct), 
+    select_fc,
+    wrap_metric,
+    list_models
+  ) %>% 
+  flatten() %>%
+  bind_rows()
+
+metrics_ct <- # add t_ax, scale by TSLM, factor(penalty)
+  process_metrics(metrics_ct)
+
+
+# Compare with and without trend
+metrics_diff <- 
+  rbind(
+    metrics_c %>% mutate(comb_with_trend = "no"),
+    metrics_ct %>% mutate(comb_with_trend = "yes")
+  ) %>% 
+  group_by(split, site, penalty, index, metric, models) %>% 
+  summarise(
+    diff = value[comb_with_trend == "no"] - value[comb_with_trend == "yes"]
+  ) %>% 
+  ungroup()
+
+
 # Summarise metrics ------------------------------------------------------------
 # tmp_metrics <- 
 #   metrics_c
   # filter(models %in% list_modelvar_summary) # select variables for summary
 
-metrics_summary <- 
+metrics_summary_c <- # with combined model
   metrics_c %>% 
   # tmp_metrics %>%  
   # filter(models %in% var_summary) %>%
@@ -174,14 +193,26 @@ metrics_summary <-
   # filter(!(models %in% c("tslm", "snaive"))) %>% 
   ungroup()
 
+
+metrics_summary_ct <- # with combined model and trend 
+  metrics_ct %>% 
+  # tmp_metrics %>%  
+  # filter(models %in% var_summary) %>%
+  group_by(split, site, penalty, index, metric) %>% 
+  summarise( # take best model
+    "value_min" = min(value_s),
+    "best_model" = 
+      models[which.min(value_s)]# %>% 
+      # {if (grepl("tslm|snaive", .)) "baseline_min" else .},
+  ) %>% 
+  ungroup() %>% 
+  inner_join(metrics_c) %>% # join to tibble
+  ungroup()
  
 
 # Save -------------------------------------------------------------------------
-if (occ_with_trend) {
-  save_path = here("output/fits/withtrend/")
-} else {
-  save_path = here("output/fits/")
-}
+save_path = here("output/fits/")
+
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
@@ -190,7 +221,11 @@ metric_data =
   list(
   "metrics" = metrics,
   "metrics_comb" = metrics_c,
-  "metrics_summary" = metrics_summary
+  "metrics_comb_trend" = metrics_ct,
+  "metrics_diff" = metrics_diff,
+  "metrics_summary_c" = metrics_summary_c,
+  "metrics_summary_ct" = metrics_summary_ct
 )
 saveRDS(fc_all_c, file = paste0(save_path, "forecasts_short_comb.RDS"))
+saveRDS(fc_all_ct, file = paste0(save_path, "forecasts_short_comb_trend.RDS"))
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))

@@ -3,42 +3,27 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-02
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data --------------------------------------------------------------------
-# Original ts, train/test split, cv split, fc (with combined models)
-if (occ_with_trend) { # use split_data_cv (with trend)
-  split_path <- here("output/fits/withtrend/splits_short.RDS")
-  fc_path <- here("output/fits/withtrend/forecasts_short_comb.RDS")
-  thr_path <- here("output/fits/thresholds.RDS")
-  
-  split_data_cv <- readRDS(split_path)
-  fc_all <- readRDS(fc_path)
-  alarm_thr <- readRDS(thr_path)
-  
-} else { # use occ_ts instead of split_data_cv (latter is detrended)
-  data_path <- here("data/processed/tbl_occ.RDS") # original data
-  fc_path <- here("output/fits/forecasts_short_comb.RDS")
-  thr_path <- here("output/fits/thresholds.RDS")
-  
-  ts_occ <- readRDS(data_path)
-  fc_all <- readRDS(fc_path)
-  alarm_thr <- readRDS(thr_path)
-  
-  # Split occupation in cv splits
-  ts_occ_tt <- # Train/test set
-    split_tt(ts_occ, len_test)
-  ts_occ_cv <- # Cv train/validation sets
-    split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
-  
-  ts_occ_cv <- # aggregated data not present in trend fc
-    ts_occ_cv %>% filter(site != "aggregate")
-  
-  split_data_cv <- # for level plot (using occ)
-    ts_occ_cv %>% mutate(occ = occ_wt)
-}
+split_path <- here("output/fits/splits_short.RDS")
+fc_path <- here("output/fits/forecasts_short_comb.RDS")
+# fc_path_ct <- here("output/fits/forecasts_short_comb_trend.RDS")
+thr_path <- here("output/fits/thresholds.RDS")
+
+split_data_cv <- readRDS(split_path)
+fc_all <- readRDS(fc_path)
+# fc_all_ct <- readRDS(fc_path_ct)
+alarm_thr <- readRDS(thr_path)
 
 
 # Reproducible analysis for bootstrapping splits
 set.seed(321)
+
 
 
 # Preprocessing ----------------------------------------------------------------
@@ -53,7 +38,7 @@ fc_all <-
 fc_threshold <-
   alarm_thr[
     fc_all %>% select(split, site, .model, index, occ, .mean, h),  on = "site"
-    ]
+  ]
 
 # Join observed and fc occ
 fc_threshold <-
@@ -66,48 +51,48 @@ fc_threshold <-
 
 
 
-# Compute threshold-crossing probabilities -------------------------------------
+# Compute threshold-crossing probabilities -----------------------------------
 # Risk by days
 risk_d <-  # compute risk
   copy(fc_threshold)[
-  , risk_day := 1 - cdf(occ, thr), by = .(split, site, .model, h)
+    , risk_day := 1 - cdf(occ, thr), by = .(split, site, .model, h)
   ]
-risk_d[ # add observer threshold-crossing indicator (for roc curve)
+risk_d[ # add observed threshold-crossing indicator (for roc/pr curve)
   , obs_cross := thr < occ_obs]
 
 
 # Risk by week split (1-3h, 4-7h)
 risk_d[ # split week in two
   , week_split := ifelse(h <= 3, "close", "far")
-  ]
+]
 risk_ws <- 
   risk_d[ # compute risk & add observer threshold-crossing indicator
-  , .(risk_ws = 1 - prod(1 - risk_day), obs_cross = any(obs_cross)), 
-  by = .(split, site, .model, week_split) 
+    , .(risk_ws = 1 - prod(1 - risk_day), obs_cross = any(obs_cross)), 
+    by = .(split, site, .model, week_split) 
   ]
 
 
 # Risk by week
 risk_w <- 
   risk_d[ # compute risk & add thr-crossing indicator
-  , .(risk_w = 1 - prod(1 - risk_day), obs_cross = any(obs_cross)), 
-  by = .(split, site, .model)
+    , .(risk_w = 1 - prod(1 - risk_day), obs_cross = any(obs_cross)), 
+    by = .(split, site, .model)
   ]
 
 
 
-# Compute ROC/PR curves --------------------------------------------------------
+# Compute ROC/PR curves ------------------------------------------------------
 # Set decision boundary (db) from 1-99% prob
 risk_d_db <- 
   risk_d[ 
-  , 
-  c(.SD,
-    setNames(lapply(seq(0.995, 0, -0.005), function(.x) {risk_day >= .x}),
-      sprintf("db_%.3f", seq(0.995, 0, -0.005)))
-  ),
-  by = .(split, site, .model),
-  .SDcols = "obs_cross"
-]
+    , 
+    c(.SD,
+      setNames(lapply(seq(0.995, 0, -0.005), function(.x) {risk_day >= .x}),
+               sprintf("db_%.3f", seq(0.995, 0, -0.005)))
+    ),
+    by = .(split, site, .model),
+    .SDcols = "obs_cross"
+  ]
 
 risk_ws_db <- 
   risk_ws[ # set threshold crossing by decision boundary (db)
@@ -162,13 +147,13 @@ risk_w_pr <-
 
 
 
-# ROC AUC ----------------------------------------------------------------------
+# ROC AUC --------------------------------------------------------------------
 risk_d_roc_auc <- 
   risk_d_roc[, auc_fun(.SD), by = .(nboot, site, .model)][
     order(nboot, site, -auc)]
 risk_ws_roc_auc <- 
   risk_ws_roc[, auc_fun(.SD), by = .(nboot, site, .model, week_split)][
-  order(site, week_split, -auc)]
+    order(site, week_split, -auc)]
 risk_w_roc_auc <- 
   risk_w_roc[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 
@@ -176,18 +161,14 @@ risk_d_pr_auc <-
   risk_d_pr[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 risk_ws_pr_auc <- 
   risk_ws_pr[, auc_fun(.SD), by = .(nboot, site, .model, week_split)][
-  order(site, week_split, -auc)]
+    order(site, week_split, -auc)]
 risk_w_pr_auc <- 
   risk_w_pr[, auc_fun(.SD), by = .(nboot, site, .model)][order(site, -auc)]
 
 
+# Save -----------------------------------------------------------------------
+save_path <- here("output/fits/")
 
-# Save -------------------------------------------------------------------------
-if (occ_with_trend) {
-  save_path <- here("output/fits/withtrend/")
-} else {
-  save_path <- here("output/fits/")
-}
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }

@@ -478,10 +478,10 @@ plot_forecast <- # plot forecast function
         scale_y_continuous(breaks = c(600, 700)) +
         facet_wrap(vars(.model), ncol = 1, strip.position = "right")
     } else { # for trend fc
-      .data$fc %>% as_fable("occ_wm", "occ_wm") %>% 
+      .data$fc %>%# as_fable("occ_wm", "occ_wm") %>% 
         autoplot() +
-        autolayer(.data$all, .vars = occ_wt) +
-        autolayer(.data$fc %>% as_tsibble(), .vars = occ_s)
+        autolayer(.data$all, .vars = occ)# +
+        # autolayer(.data$fc %>% as_tsibble(), .vars = occ_s)
     }
   }
 
@@ -1109,14 +1109,14 @@ lcomb_fun <-
               dist_mixture,
               c(
                 as.list(occ[.model %in% 
-                              c(.list_m %>% pluck(as.character(site)[1]))]),
+                              c(.list_m %>% pluck(site[1]))]),
                 list(weights = #new_weight
                        .weights %>%
                        filter(
-                         .site == site %>% as.character() %>% .[1],
+                         .site == site[1],
                          .penalty == "upper",
                          .models  %in%
-                           c(.list_m %>% pluck(as.character(site)[1])),
+                           c(.list_m %>% pluck(site[1])),
                          .h == h[1],
                          .metric == .method
                        ) %>% pull(metric_avg) %>% 
@@ -1125,7 +1125,8 @@ lcomb_fun <-
               )
             )}, error = function(e) {
               message("model weights not summint to 1 when combining fc")
-            })
+            }),
+        .mean = mean(occ)
       ) %>% 
       mutate(.model = .method) %>%
       ungroup()
@@ -1216,6 +1217,42 @@ fc_comb_wrap <-
     .fc <- 
       list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_wilker) %>% 
       reduce(bind_rows) %>%  as_fable(".mean", "occ")
+  }
+
+
+
+#' Combine trend
+#' Add trend forecast to individual models trend
+#' @param .fc Individual models forecast
+#' @param .fc_trend Trend forecast
+#' @param .tw Relative weight to give to trend forecast when combining
+fc_comb_trend <- 
+  function(.fc, .fc_trend, .tw){
+    .weight = c(1 - .tw, .tw)
+    .fc_trend = 
+      .fc_trend %>% rename(.split = split, .site = site, .index = index)
+    
+    .fc_ct = 
+      .fc %>%
+      group_by(split, site, .model) %>% index_by() %>% 
+      mutate(
+        occ = 
+          dist_mixture(
+            occ, 
+            .fc_trend %>%
+              filter(.split == split, .site == site, .index == index) %>% 
+              pull(occ), 
+            weights = .weight
+            ),
+        .mean = mean(occ)
+      ) %>% 
+      ungroup()
+    
+    dimnames(.fc_ct$occ) = "occ"
+    fc_ct = 
+      .fc_ct %>% as_fable(response = "occ", distribution = occ)
+    
+    return(fc_ct)
   }
 
 
@@ -1357,14 +1394,15 @@ smooth_fun <-
     Tt = matrix(c(1, 1, 0, 1), ncol = 2) # factor of transition equation
     Zt = matrix(c(1, 0), ncol =2) # factor of measurement equation
     HHt = 
-      matrix(c(.1, 0, 0, 200), ncol = 2) # variance of transition innovations
-    GGt = matrix(100) # variance of measurement error
+      matrix(c(1.5, 0, 0, 200), ncol = 2) # variance of transition innovations
+    GGt = matrix(50) # variance of measurement error
     yt = matrix(.y, nrow = 1) # observed outcome
     fit = 
       fkf(
         a0 = a0, P0 = P0, dt = .dt, ct = ct, Tt = Tt, 
         Zt = Zt, HHt = HHt, GGt = GGt, yt = yt
         )
+    cat("var ration:", var(fit$att[1, ]) / var(.y))
     fit$att[1, ]
     # ny = length(.y)
     # x = seq(1, ny)
@@ -1383,11 +1421,11 @@ fit_trend <-
   function(.data_, .horizon = NULL, ...) {
     # Training data
     train = .data_ %>% filter(type == "train") %>% pull(occ_s)
-    train_mean = mean(train)
     
     # Fit/fc STS model
     ss = AddLocalLinearTrend(list(), train)
-    ss = AddSeasonal(ss, train, nseasons = 7)
+    ss = AddTrig(ss, train, period = 7, frequencies = 1)
+    ss = AddTrig(ss, train, period = 30.44, frequencies = c(1, 2, 3))
     model = bsts(train, ss, niter = 500)
     fc = predict(model, horizon = .horizon, burn = 100)
     
@@ -1396,9 +1434,7 @@ fit_trend <-
       .data_ %>% filter(type == "test") %>%
       mutate( # create forecast distribution (assuming nid error)
         .model = "sts_trend",
-        occ = # trend fc without mean
-          dist_normal(fc$mean - train_mean, sd = apply(fc$distribution, 2, sd)),
-        occ_wm = # trend fc with mean
+        occ = # normally distributed fc
           dist_normal(fc$mean, sd = apply(fc$distribution, 2, sd)),
         .mean = fc$mean, # necessary for fable::autoplot
       )

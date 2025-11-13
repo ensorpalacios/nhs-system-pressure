@@ -12,6 +12,12 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-01
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 fc_trend_path <- here("output/fits/forecast_trend.RDS")
@@ -25,21 +31,12 @@ set.seed(123)
 
 
 
-# Predict occ with/without trend -----------------------------------------------
-if (occ_with_trend) {
-  ts_occ <- 
-    ts_occ %>% 
-    mutate(occ = occ_wt)
-}
-
-
-
 # Select relevant variables ----------------------------------------------------
 ts_occ <- 
   ts_occ %>%
   select( # exclude
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
-    -occ_s, -occ_wt, -occ_wx,
+    -occ_s, -occ_wx,
     -adm, -dis,
     -escal, -core,
     -ad_diff, -ad_diff2,
@@ -556,50 +553,9 @@ fc_all <-
 
 
 
-# Add trend (slow) to level (fast) fc ------------------------------------------
-# Recode nn fc (from bootstrap samples to dist_norm)
-if (!occ_with_trend) { # only if fitted de-trended occ
-  fc_nn <-
-    fc_all %>% filter(.model == "nn") %>% 
-    mutate(
-      occ_new = dist_normal(mean(occ), sd = sqrt(variance(occ)))
-    )
-  fc_nn$occ <- fc_nn$occ_new
-  dimnames(fc_nn$occ) <- "occ"
-  
-  fc_all <- 
-    fc_all %>% filter(.model != "nn") %>% 
-    bind_rows(fc_nn) %>% select(!occ_new)
-  
-  # Rename key for use in fc_all %>% mutate()
-  fc_trend <-
-    fc_trend %>% 
-    rename(.site = site, .split = split)
-  
-  # Add trend (with uncertainty)
-  fc_all <-
-    fc_all %>% 
-    group_by(split, site, .model) %>% 
-    mutate(
-      tmp = # get trend fc
-        fc_trend %>% 
-        filter(.site == as.character(site[1]), .split == split[1]) %>% pull(occ),
-      occ = # re-trend occ fc with trend fc
-        occ + tmp,
-      tmp = NULL
-    ) %>% 
-    ungroup() %>% 
-    as_fable("occ", "occ")
-}
-
-
-
 # Save fits and forecasts ------------------------------------------------------
-if (occ_with_trend) {
-  save_path = here("output/fits/withtrend/")
-} else {
-  save_path = here("output/fits/")
-}
+save_path = here("output/fits/")
+
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }

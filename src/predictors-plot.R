@@ -21,6 +21,12 @@
 #' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
 #' @date 2025-01-08
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -51,7 +57,7 @@ plot_occ_miss <-
   plot_layout(ncol = 1, axis = "collect_x")
 
 
-# Occupancy de-trended
+# Occupancy
 plot_occ <-
   ts_occ %>% 
     ggplot(aes(x = index, y = occ, colour = site)) +
@@ -70,12 +76,12 @@ plot_occ <-
 plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
 
 
-# Occupancy with trend
-plot_occ_wt <-
+# Occupancy & filtered occupancy
+plot_occ_s <-
   ts_occ %>% 
-    ggplot(aes(x = index, y = occ_wt, colour = site)) +
+    ggplot(aes(x = index, y = occ, colour = site)) +
     geom_line(linewidth = 0.5) +
-    geom_line(aes(y = occ_s), linewidth = 1, lty = 2) +
+    geom_line(aes(y = occ_s), linewidth = 1) +
     facet_wrap(
       ~site,
       nrow = 2, 
@@ -370,7 +376,7 @@ if (!file.exists(save_path)) {
 ls_plots <- list(
   "occ_miss" = plot_occ_miss,
   "occ" = plot_occ,
-  "occ_wt" = plot_occ_wt,
+  "occ_s" = plot_occ_s,
   "occ_acf" = plot_occ_acf,
   "adm_miss" = plot_adm_miss,
   "dis_miss" = plot_dis_miss,

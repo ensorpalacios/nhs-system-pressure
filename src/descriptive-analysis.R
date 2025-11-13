@@ -16,6 +16,12 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-10
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load occupancy data ---------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)

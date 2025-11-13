@@ -11,6 +11,12 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-08
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/descriptive_analysis.RDS")
 ls_descriptive <- readRDS(file = data_path)

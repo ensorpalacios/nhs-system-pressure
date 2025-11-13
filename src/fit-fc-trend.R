@@ -5,6 +5,12 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-10-01
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -13,7 +19,7 @@ sites <- ts_occ$site |> unique()
 
 # Select relevant variables
 ts_occ <- 
-  ts_occ %>%  select(occ, occ_s, occ_wt, days_, t_ax)
+  ts_occ %>%  select(occ, occ_s, days_, t_ax)
 
 
 
@@ -26,6 +32,9 @@ split_data_cv <- # Cv train/validation sets
 
 splits <- split_data_cv$split %>% unique() # save cv splits names
 idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
+
+
+
 # # Smooth ts --------------------------------------------------------------------
 # split_data_cv_s <- # smooth train of each split
 #   cv_wrap(
@@ -50,7 +59,7 @@ invisible(
         split_data_cv,
         select_training,
         fit_trend,
-        .vars = c("index", "t_ax", "occ_wt", "occ_s", "occ"),
+        .vars = c("index", "t_ax", "occ_s", "occ"),
         .type = "all",
         .horizon = horizon
       )
@@ -69,6 +78,5 @@ save_path = here("output/fits/")
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
-
 
 saveRDS(fc_trend, file = paste0(save_path, "forecast_trend.RDS"))

@@ -10,6 +10,12 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-01-07
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/raw/")
 
@@ -50,7 +56,7 @@ df_t <- # join tmax/tmin and melt
     value.name = "value",
     variable.factor = F
   ) %>% .[ # Temporary code to allign temperature data with hospital data
-    as.Date(report_date) <= as.Date("2025-01-29")
+    as.Date(report_date) <= as.Date("2025-01-31")
   ]
 
 
@@ -170,9 +176,7 @@ ts_occ <-
     occ_wx = occ, # 1) save occ with xristmus
     occ = # 2) stabilise (- xristmus effect)
       stabilise(occ, index, .xdays = TRUE),
-    occ_wt = occ, # 3) save occ (with trend)
-    occ_s = smooth_fun(occ), # 4) compute smoothed occ (filter)
-    occ = occ - (occ_s - mean(occ_s)) # 4) detrended occ (preserve mean)
+    occ_s = smooth_fun(occ), # 3) compute smoothed occ (filter)
   ) %>% 
   ungroup()
 
@@ -185,7 +189,6 @@ ts_occ <-
     site, 
     occ = sum(occ),
     occ_s = sum(occ_s),
-    occ_wt = sum(occ_wt),
     occ_wx = sum(occ_wx),
     adm = sum(adm),
     dis = sum(dis),
@@ -213,7 +216,7 @@ ts_occ <-
     # New variables
     ad_diff = adm - dis, # difference
     ad_diff = # stabilise (-holidays/week days effect)
-      stabilise(ad_diff, index, .xdays = TRUE, .wdays = TRUE),
+      stabilise(ad_diff, index, .xdays = FALSE, .wdays = TRUE),
     ad_diff2 = c(0, diff(ad_diff)), # rate of change of ad_diff
     ad_diff3 = c(0, 0, diff(ad_diff, differences = 2)), # rate of rate of change
     
@@ -245,23 +248,23 @@ ts_occ <-
     mavg = slide_dbl(los, mean, .before = 5, .after = 5),
     los = if_else(mask, mavg, los),
     mask = NULL,
-    mavg = NULL,
-    # Filter
-    los = # stabilise (-holidays/week days effect)
-      stabilise(los, index, .xdays = TRUE, .wdays = TRUE),
+    mavg = NULL#,
+    # # Filter
+    # los = # stabilise (-holidays/week days effect)
+    #   stabilise(los, index, .xdays = FALSE, .wdays = TRUE),
   ) %>% 
   ungroup()
 
 
 # Process A&E paediatric
-ts_occ <- 
-  ts_occ %>% 
-  group_by(site) %>% 
-  mutate(
-    paed = # stabilise (-holidays/week days effect)
-      stabilise(paed, index, .xdays = TRUE, .wdays = TRUE),
-  ) %>% 
-  ungroup()
+# ts_occ <-
+#   ts_occ %>%
+#   group_by(site) %>%
+#   mutate(
+#   paed = # stabilise (-holidays/week days effect)
+#     stabilise(paed, index, .xdays = TRUE, .wdays = TRUE),
+#   ) %>%
+#   ungroup()
 
 
 # Add bed occupancy from other hospital

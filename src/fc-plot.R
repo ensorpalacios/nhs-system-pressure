@@ -8,55 +8,32 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-05-01
 
-# Load/prepare data ------------------------------------------------------------
-if (occ_with_trend) { # here occ in split_data_cv has trend
-  fc_path <- here("output/fits/withtrend/forecasts_short_comb.RDS")
-  split_path <- here("output/fits/withtrend/splits_short.RDS")
-  thr_path <- here("output/fits/thresholds.RDS")
-  
-  
-  fc_all <- readRDS(fc_path)
-  alarm_thr <- readRDS(thr_path)
-  split_data_cv <- readRDS(split_path)
-  
-  
-  # Recode sites
-  fc_all <-
-    fc_all %>% rec_site()
-  split_data_cv <-
-    split_data_cv %>% rec_site()
-  
-} else { # here occ in split_data_cv does not have trend: need to re-split!
-  fc_path <- here("output/fits/forecasts_short_comb.RDS")
-  thr_path <- here("output/fits/thresholds.RDS")
-  fc_trend_path <- here("output/fits/forecast_trend.RDS") # fitted trend
-  data_path <- here("data/processed/tbl_occ.RDS") # original data
-  
-  fc_all <- readRDS(fc_path)
-  alarm_thr <- readRDS(thr_path)
-  fc_trend <- readRDS(file = fc_trend_path)
-  ts_occ <- readRDS(file = data_path)
-  
-  # Recode sites
-  fc_all <-
-    fc_all %>% rec_site()
-  ts_occ <- 
-    ts_occ %>% rec_site()
-  
-  # Split occupation in cv splits
-  ts_occ_tt <- # Train/test set
-    split_tt(ts_occ, len_test)
-  
-  ts_occ_cv <- # Cv train/validation sets
-    split_cv(ts_occ_tt, initial, assess, skip) # for trend plot (using occ_wt)
-  
-  ts_occ_cv <- # aggregated data not present in trend fc
-    ts_occ_cv %>% filter(site != "aggregate")
-  
-  split_data_cv <- # for level plot (using occ)
-    ts_occ_cv %>% mutate(occ = occ_wt)
-}
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
 
+
+
+# Load/prepare data ------------------------------------------------------------
+fc_path <- here("output/fits/forecasts_short_comb_trend.RDS")
+split_path <- here("output/fits/splits_short.RDS")
+thr_path <- here("output/fits/thresholds.RDS")
+fc_trend_path <- here("output/fits/forecast_trend.RDS") # fitted trend
+
+
+fc_all <- readRDS(fc_path)
+alarm_thr <- readRDS(thr_path)
+split_data_cv <- readRDS(split_path)
+fc_trend <- readRDS(file = fc_trend_path)
+
+
+# Recode sites
+fc_all <-
+  fc_all %>% rec_site()
+split_data_cv <-
+  split_data_cv %>% rec_site() %>% filter(site != "aggregate")
+fc_trend <-
+  fc_trend %>% rec_site() %>% filter(site != "aggregate")
 
 
 # Generate plots ---------------------------------------------------------------
@@ -105,52 +82,33 @@ plt_fc_level <-
 
 
 # Plot trend forecasts
-if (!occ_with_trend) {
-  plt_fc_trend <- # generate plots 
-    cv_wrap(
-      list("all" = ts_occ_cv, "fc" = fc_trend), 
-      select_fc,
-      plot_forecast,
-      c("sts_trend"),
-      trend = TRUE
-    )
-}
+plt_fc_trend <- # generate plots 
+  cv_wrap(
+    list("all" = split_data_cv, "fc" = fc_trend), 
+    select_fc,
+    plot_forecast,
+    c("sts_trend"),
+    trend = TRUE
+  )
 
 
 # Save plots -------------------------------------------------------------------
-if (occ_with_trend) {
-  save_path <- here("output/plots/forecasts/withtrend/")
-  
-  if (!file.exists(save_path)) {
-    dir.create(save_path, recursive = TRUE)
-  }
-  
-  splits = fc_all$split %>% unique() %>% as.character()
-  
-  walk(sites, \(.site) {
-    walk(splits, \(.split) {
-      tmp_path = str_glue("{save_path}{.site}_split{.split}")
-      plt_fc_level[[.site]][[.split]] %>% 
-        ggsave(file = paste0(tmp_path, "_level.eps"), width = 9, height = 5)
-    })
-  })
-} else {
-  save_path <- here("output/plots/forecasts/")
-  
-  if (!file.exists(save_path)) {
-    dir.create(save_path, recursive = TRUE)
-  }
-  
-  splits = fc_all$split %>% unique() %>% as.character()
-  
-  walk(sites, \(.site) {
-    walk(splits, \(.split) {
-      tmp_path = str_glue("{save_path}{.site}_split{.split}")
-      plt_fc_level[[.site]][[.split]] %>% 
-        ggsave(file = paste0(tmp_path, "_level.eps"), width = 9, height = 5)
-      plt_fc_trend[[.site]][[.split]] %>%
-        ggsave(file = paste0(tmp_path, "_trend.eps"), width = 7, height = 3)
-    })
-  })
+save_path <- here("output/plots/forecasts/")
+
+if (!file.exists(save_path)) {
+  dir.create(save_path, recursive = TRUE)
 }
+
+sites = fc_all$site %>% unique() %>% as.character()
+splits = fc_all$split %>% unique() %>% as.character()
+
+walk(sites, \(.site) {
+  walk(splits, \(.split) {
+    tmp_path = str_glue("{save_path}{.site}_split{.split}")
+    plt_fc_level[[.site]][[.split]] %>%
+      ggsave(file = paste0(tmp_path, "_level.svg"), width = 9, height = 5)
+    plt_fc_trend[[.site]][[.split]] %>%
+      ggsave(file = paste0(tmp_path, "_trend.svg"), width = 7, height = 3)
+  })
+})
 

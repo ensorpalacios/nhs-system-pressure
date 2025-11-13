@@ -3,21 +3,23 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-07-02
 
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
+
+
+
 # Load data --------------------------------------------------------------------
-if (occ_with_trend) {
-  path_risk <- here("output/fits/withtrend/risk.RDS")
-  path_curves <- here("output/fits/withtrend/risk_curves.RDS")
-  path_auc <- here("output/fits/withtrend/risk_auc.RDS")
-} else {
-  path_risk <- here("output/fits/risk.RDS")
-  path_curves <- here("output/fits/risk_curves.RDS")
-  path_auc <- here("output/fits/risk_auc.RDS")
-}
+path_risk <- here("output/fits/risk_ct.RDS")
+path_curves <- here("output/fits/risk_curves_ct.RDS")
+path_auc <- here("output/fits/risk_auc_ct.RDS")
+path_fc <- here("output/fits/forecasts_short_comb.RDS")
 
 
 list_risk <- readRDS(path_risk)
 list_curves <- readRDS(path_curves)
 list_auc <- readRDS(path_auc)
+list_fc <- readRDS(path_fc)
 
 
 
@@ -28,7 +30,7 @@ risk_w <- list_risk$risk_w
 
 list_models <- # select models
   c(
-    "tslm",
+    "arima_dadpl_rec",
     # "var_h",
     # "arima_dad_l",
     # "arima_dad_rec",
@@ -46,8 +48,7 @@ plt_risk <-
       tmp_tbl = # daily risks
         risk_d[
           split == .split & site == .site & .model %in% list_models
-        ][
-          , index := factor(index, ordered = TRUE)]
+        ]
       
       tmp_thr = tmp_tbl[1, thr] # threshold (all equals)
       
@@ -56,14 +57,14 @@ plt_risk <-
           split == .split & site == .site & .model %in% list_models &
           week_split == "close"
           ][ # add x-axis position
-            , index := ..tmp_tbl[2, index]
+            , x_axis := 1
           ]
       risk_far = # week split far risk
         risk_ws[
           split == .split & site == .site & .model %in% list_models &
           week_split == "far"
           ][ # add x-axis position
-            , index := ..tmp_tbl[6, index]
+            , x_axis := 2
           ]
       risk_weeks = # join close/far
         rbind(risk_close, risk_far)
@@ -72,26 +73,33 @@ plt_risk <-
         risk_w[
           split == .split & site == .site & .model %in% list_models
           ][ # add x-axis position
-            , index := ..tmp_tbl[4, index]
+            , x_axis := 3
           ]
+
+      tmp_fc =
+        list_fc %>% 
+        filter(split == .split, site == .site, .model %in% list_models)
       
       # Plot
       p1 = # predicted risk weekly (split and whole)
         ggplot() +
         geom_col(
           data = risk_weeks,
-          aes(x = index, y = risk_ws, fill = .model),
+          aes(x = x_axis, y = risk_ws, fill = .model),
           position = "dodge"
           ) +
         geom_col(
           data = risk_week,
-          aes(x = index, y = risk_w, fill = .model),
+          aes(x = x_axis, y = risk_w, fill = .model),
           position = "dodge"
           ) +
         geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
         # ylim(0, .8) +
-        scale_colour_manual(name = "models", values = col_models) + 
-        scale_fill_manual(name = "models", values = col_models)
+        # scale_colour_manual(name = "models", values = col_models) + 
+        scale_fill_manual(name = "models", values = col_models) +
+        scale_x_continuous(
+          breaks = c(1, 2, 3), labels = c("1-3", "4-7", "week")
+          )
         
       p2 = # predicted risk daily
         tmp_tbl %>% 
@@ -99,19 +107,30 @@ plt_risk <-
         geom_col(position = "dodge", width = 0.5) +
         geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
         # ylim(0, .8) +
-        scale_colour_manual(name = "models", values = col_models) + 
+        # scale_colour_manual(name = "models", values = col_models) + 
         scale_fill_manual(name = "models", values = col_models)
         
       p3 = # time series
-        tmp_tbl[.model == tmp_tbl$.model[1]] %>% 
-        ggplot(aes(x = index, y = occ_obs, group = 1)) + 
-        geom_line(linewidth = 2) +
-        geom_hline(yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2)
+        tmp_fc %>% 
+        autoplot() +
+        geom_line(
+          data = tmp_tbl[.model == tmp_tbl$.model[1]],
+          aes(x = index, y = occ_obs, group = 1), linewidth = 2
+        ) +
+        geom_hline(
+          yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2
+          )
+      # p3 = # time series
+        # tmp_tbl[.model == tmp_tbl$.model[1]] %>% 
+        # ggplot(aes(x = index, y = occ_obs, group = 1)) + 
+        # geom_line(linewidth = 2) +
+        # geom_hline(yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2)
       
       # Join
       p1 / p2 / p3 + 
         plot_layout(
-          ncol = 1, axes = "collect_x", guides = "collect")
+          ncol = 1, axes = "collect_x", guides = "collect"
+          )
     }) %>% 
       set_names(sites)
   }) %>% 
@@ -162,7 +181,8 @@ pcurve_fun <-
         ) +
         geom_line(linewidth = 1) +
         geom_line(
-          data = data.frame(x = c(0, 1), y = c(0, 1)), aes(x = x, y = y)
+          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"), 
+          aes(x = x, y = y)
         ) +
         scale_colour_manual(name = ".model", values = col_models) + 
         scale_fill_manual(name = ".model", values = col_models) + 
@@ -203,7 +223,8 @@ pcurve_fun <-
         ) +
         geom_line(linewidth = 1) +
         geom_line(
-          data = data.frame(x = c(0, 1), y = c(0, 1)), aes(x = x, y = y)
+          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"), 
+          aes(x = x, y = y)
           ) +
         scale_colour_manual(name = ".model", values = col_models) + 
         scale_fill_manual(name = ".model", values = col_models) + 
@@ -270,11 +291,8 @@ tbl_auc <-  # add raw colours by model
 
 
 # Save plots -------------------------------------------------------------------
-if (occ_with_trend) {
-  save_path <- here("output/plots/risk_fc/withtrend/")
-} else {
-  save_path <- here("output/plots/risk_fc/")
-}
+save_path <- here("output/plots/risk_fc/")
+
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
@@ -282,7 +300,7 @@ if (!file.exists(save_path)) {
 # Single fc
 walk(sites, \(.site) {
   walk(splits, \(.split) {
-    tmp_path = str_glue("{save_path}{.site}_split{.split}.eps")
+    tmp_path = str_glue("{save_path}{.site}_split{.split}.svg")
     plt_risk %>% pluck(.split, .site) %>% 
       ggsave(file = tmp_path, width = 6, height = 3)
   })
@@ -291,9 +309,9 @@ walk(sites, \(.site) {
 
 # Aggregated measures
 iwalk(plt_curves, \(.plt, .name) {
-  tmp_path = paste0(save_path, .name, ".eps")
+  tmp_path = paste0(save_path, .name, ".svg")
   plt_curves[[.name]] %>% 
-    ggsave(file = tmp_path, width = 6, height = 5, device = cairo_ps)
+    ggsave(file = tmp_path, width = 6, height = 5)
   
 })
 
