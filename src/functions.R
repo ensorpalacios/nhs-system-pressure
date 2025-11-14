@@ -479,10 +479,13 @@ zs_fun <-
 
 
 #' Stabilise time series
-#' regression (optional)
+#' Correct artifacts in data, by removing Christmus and/or week days effects.
+#' For Christmus effects, can either do nothing (xdays = FALSE), remove it by
+#' using gaussian mask by default (xdays = TRUE) or by using 1st derivative of
+#' gaussian as mask when applied to admission-discharge difference (ad-diff).
 #' @param .var variable to detrend (time series/vector)
 #' @param .index time index in y-m-d (time series/vector)
-#' @param .xdays whether to remove effect of special days (e.g., Christmus)
+#' @param .xdays remove Christmus effect; either FALSE, TRUE, or "ad-diff"
 #' @param .wdays whether to remove effect of week days
 #' @param .stationary whether to make .var stationary
 #' @export
@@ -498,7 +501,7 @@ stabilise <-
       as_tsibble(index = index)
     
     # Remove effects of special days
-    if (.xdays) {
+    if (!isFALSE(.xdays)) {
       christmus_period = 
         .index %>% base::format("%Y") %>% unique() %>%  # years in data
         map(\(.year) {
@@ -509,13 +512,20 @@ stabilise <-
         }) %>% 
         purrr::reduce(c)
       
-      tmp_data = 
+      tmp_data = # default gaussian kernel
         tmp_data %>% 
         mutate(
           christmus = 
             case_when(index %in% christmus_period ~ 1, .default = 0) %>%
             ksmooth(index, ., kernel = "normal", bandwidth = 5) %>% .$y
         )
+      
+      if (.xdays == "ad-diff") { # kernel 1st derivative for ad difference
+        tmp_data =
+          tmp_data %>% 
+          mutate(christmus = diff(christmus) %>% c(., 0))
+        cat("use gaussian kernel derivative")
+      }
       
       fit_xdays =
         tmp_data %>% model(TSLM(formula("var ~ christmus"))) %>%

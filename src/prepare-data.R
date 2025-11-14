@@ -211,8 +211,9 @@ ts_occ <-
   mutate(
     # New variables
     ad_diff = adm - dis, # difference
+    ad_diff_original = ad_diff, # save for comparison
     ad_diff = # stabilise (-holidays/week days effect)
-      stabilise(ad_diff, index, .xdays = FALSE, .wdays = TRUE),
+      stabilise(ad_diff, index, .xdays = "ad-diff", .wdays = TRUE),
     ad_diff2 = c(0, diff(ad_diff)), # rate of change of ad_diff
     ad_diff3 = c(0, 0, diff(ad_diff, differences = 2)), # rate of rate of change
     

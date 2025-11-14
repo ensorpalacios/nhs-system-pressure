@@ -39,17 +39,21 @@ sites <- ts_occ$site %>% unique()
 
 
 # Plot bed occupancy -----------------------------------------------------------
+# X-axis labels
+x_data_labels = ts_occ %>%  pull(index) %>% unique()
+
 # With missing values
 plot_occ_miss <- 
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$occ_m,
+    x_axis_labels = x_data_labels,
     title = "Bed occupancy",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$occ_m,
-    # ts_occ %>% filter(site == "Southmead") %>% .$occ_i,
     ts_occ %>% filter(site == "Southmead") %>% .$occ_wx,
+    x_axis_labels = x_data_labels,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -82,12 +86,14 @@ plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
 plot_adm_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$adm_m,
+    x_axis_labels = x_data_labels,
     title = "Admissions",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$adm_m,
     ts_occ %>% filter(site == "Southmead") %>% .$adm,
+    x_axis_labels = x_data_labels,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -99,12 +105,14 @@ plot_adm_miss <-
 plot_dis_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$dis_m,
+    x_axis_labels = x_data_labels,
     title = "Discharges",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$dis_m,
     ts_occ %>% filter(site == "Southmead") %>% .$dis,
+    x_axis_labels = x_data_labels,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -116,18 +124,26 @@ plot_dis_miss <-
 tbl_ad_diff <- 
   ts_occ %>%
   pivot_longer(
-    cols = c(ad_diff, ad_diff2, ad_diff_f, ad_diff2_f),
+    cols = c(ad_diff_original, ad_diff, ad_diff2, ad_diff_f, ad_diff2_f),
     names_to = "var"
   ) %>% 
   mutate(
-    var = factor(var)#, levels = c("ad_diff", "filtered"))
+    var = 
+      factor(
+        var, 
+        levels = 
+          c(
+            "ad_diff_original", "ad_diff", "ad_diff2", "ad_diff_f", "ad_diff2_f"
+            )
+      )
   )
+
 plot_ad_diff <- 
   tbl_ad_diff %>% 
   as.data.frame() %>% 
   ggplot(aes(x = index, y = value, colour = site)) +
   geom_line(linewidth = 0.5) +
-  facet_wrap(vars(var), ncol = 1, scales = "free")
+  facet_wrap(vars(var), ncol = 1, scales = "free_y")
 
 plot_ad_diff_acf = plot_cf(ts_occ, .var = "ad_diff", .lag = 100)
 plot_ad_diff2_acf = plot_cf(ts_occ, .var = "ad_diff2", .lag = 100)
@@ -166,12 +182,14 @@ plot_escal <-
 plot_paed_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$paed_m,
+    x_axis_labels = x_data_labels,
     title = "A&E paediatric",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$paed_m,
     ts_occ %>% filter(site == "Southmead") %>% .$paed,
+    x_axis_labels = x_data_labels,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
@@ -185,12 +203,14 @@ plot_paed_acf = plot_cf(ts_occ, .var = "paed", .lag = 100)
 plot_los_miss <-
   ggplot_na_distribution(
     ts_occ %>% filter(site == "BRI") %>%  .$los_m,
+    x_axis_labels = x_data_labels,
     title = "Length of stay (+21)",
     subtitle = "BRI"
     ) +
   ggplot_na_imputations(
     ts_occ %>% filter(site == "Southmead") %>% .$los_m,
     ts_occ %>% filter(site == "Southmead") %>% .$los,
+    x_axis_labels = x_data_labels,
     size_imputations = 5,
     title = NULL,
     subtitle = "Southmead"
