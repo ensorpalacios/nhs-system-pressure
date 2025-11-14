@@ -76,23 +76,6 @@ plot_occ <-
 plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
 
 
-# Occupancy & filtered occupancy
-plot_occ_s <-
-  ts_occ %>% 
-    ggplot(aes(x = index, y = occ, colour = site)) +
-    geom_line(linewidth = 0.5) +
-    geom_line(aes(y = occ_s), linewidth = 1) +
-    facet_wrap(
-      ~site,
-      nrow = 2, 
-      scales = "free_y") +
-    labs(y = "bed occupancy") +
-    theme(
-      legend.position="none",
-      axis.title.x = element_blank()
-    )
-
-
 
 # Plot row predictors (highlight imputations) ----------------------------------
 # Admissions - missing
@@ -143,7 +126,7 @@ plot_ad_diff <-
   tbl_ad_diff %>% 
   as.data.frame() %>% 
   ggplot(aes(x = index, y = value, colour = site)) +
-  geom_line(linewidth = 1) +
+  geom_line(linewidth = 0.5) +
   facet_wrap(vars(var), ncol = 1, scales = "free")
 
 plot_ad_diff_acf = plot_cf(ts_occ, .var = "ad_diff", .lag = 100)
@@ -322,11 +305,17 @@ plot_together <- # plot
 #     # xlim(0, NA) # causes warning
 
 
+# Preliminary analysis ---------------------------------------------------------
+# Use only test data
+split_data_tt <- # Train/test set
+  split_tt(ts_occ, len_test)
+
 # Lags/spectral analysis
 plot_lags =
   map(sites, \(.site) {
     tmp_data = 
-      ts_occ %>% filter(site == .site) %>% as_tibble() %>% 
+      split_data_tt %>% 
+      filter(type == "train", site == .site) %>% as_tibble() %>% 
       select(c("occ", all_of(ex_var))) %>%
       ts(frequency = 7)
     
@@ -376,7 +365,6 @@ if (!file.exists(save_path)) {
 ls_plots <- list(
   "occ_miss" = plot_occ_miss,
   "occ" = plot_occ,
-  "occ_s" = plot_occ_s,
   "occ_acf" = plot_occ_acf,
   "adm_miss" = plot_adm_miss,
   "dis_miss" = plot_dis_miss,
@@ -406,9 +394,8 @@ ls_plots_lag <- list(
 iwalk(ls_plots, \(.plot, .title) {
   .plot %>% 
     ggsave(
-      filename = paste(save_path, .title, ".eps"),
-      width = 35, height = 20, units = "cm", 
-      device = cairo_ps)
+      filename = paste(save_path, .title, ".svg"),
+      width = 35, height = 20, units = "cm")
 })
 
 iwalk(ls_plots_lag, \(.plots, .title) {

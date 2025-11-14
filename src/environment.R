@@ -11,7 +11,7 @@ source("src/functions.R")
 
 # Lag/split data parameters
 horizon = 7 # Forecast horizon & lag
-len_test = "5 months" # Train/test
+len_test = "9 months" # Train/test
 initial <- "16 weeks" # Cv split - training set
 assess <- "1 weeks" # Cv split - validation set
 skip <- "9 days" # Cv split - separation between training sets

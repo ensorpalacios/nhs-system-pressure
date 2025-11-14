@@ -19,18 +19,17 @@ source("src/environment.R")
 # Load data -------------------------------------------------------------------
 data_path <- paste0(here(), "/data/raw/")
 
-# Admissions/discharges, acute bed occupancy, escalation beds - 2024
-# Urgent care data
+# Hospital data 2022-2025 (November)
+# - bed occupancy
+# - admissions
+# - discharges
+# - acute bed occupancy
+# - escalation beds 
+# - paediatric A&E
+# - 21+ days length of stay
 df_occ <- 
   read_excel(
-    paste0(data_path, "2022-01-01-to-2025-01-31-acute-occupancy.xlsx"),
-    sheet = 2
-  )
-
-# A&E pediatric & length of stay variables
-df_pl <- 
-  read_excel(
-    paste0(data_path, "2022-01-01-to-2025-01-31-los-pead-attends.xlsx"),
+    paste0(data_path, "2022-01-01-to-2025-11-01-acute-occupancy.xlsx"),
     sheet = 2
   )
 
@@ -56,7 +55,7 @@ df_t <- # join tmax/tmin and melt
     value.name = "value",
     variable.factor = F
   ) %>% .[ # Temporary code to allign temperature data with hospital data
-    as.Date(report_date) <= as.Date("2025-01-31")
+    as.Date(report_date) <= as.Date("2025-11-01")
   ]
 
 
@@ -64,7 +63,6 @@ df_t <- # join tmax/tmin and melt
 df_occ <- 
   df_occ %>% 
   bind_rows(
-    df_pl, 
     copy(df_t)[, provider := "BRI"], 
     copy(df_t)[, provider := "NBT"])
 
