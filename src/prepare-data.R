@@ -173,10 +173,9 @@ ts_occ <-
     escal = # threshold above core
       (occ - core) %>% if_else(. < 0, 0, .),
     # Occupancy
-    occ_wx = occ, # 1) save occ with xristmus
-    occ = # 2) stabilise (- xristmus effect)
+    occ_wx = occ, # save occ with xristmus
+    occ = # stabilise (- xristmus effect)
       stabilise(occ, index, .xdays = TRUE),
-    occ_s = smooth_fun(occ), # 3) compute smoothed occ (filter)
   ) %>% 
   ungroup()
 
@@ -188,7 +187,6 @@ ts_occ <-
   aggregate_key(
     site, 
     occ = sum(occ),
-    occ_s = sum(occ_s),
     occ_wx = sum(occ_wx),
     adm = sum(adm),
     dis = sum(dis),

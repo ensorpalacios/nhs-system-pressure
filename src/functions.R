@@ -215,17 +215,6 @@ select_fc <- # select forecast (by site and split) - used in cv_wrap()
   }
 
 
-#' Select smoothed dataset
-#' Used in fit-fc-trend.R.
-#' @param .data List of smoothed bed occupancy training sets per site and split.
-#' @param .site Site of split.
-#' @param .split Cv split of split.
-select_smooth <- 
-  function(.data_, .site, .split, ...) {
-    modifyList(pluck(.data_, .site, .split), list(site = .site, split = .split))
-  }
-
-
 #' wrapper over site- and cv split-specific data
 #' @param .data Data organised by site and splits
 #' @param .select Function to select data to pass to .function
@@ -469,20 +458,13 @@ plot_forecast <- # plot forecast function
       filter(index >= start_index)
     
     # Plot
-    if (!list(...)$trend) { # for normal fc
-      .data$fc %>%
-        autoplot() +
-        autolayer(.data$all, .vars = occ) +
-        scale_colour_manual(name = "models", values = col_models) + 
-        scale_fill_manual(name = "models", values = col_models) + 
-        scale_y_continuous(breaks = c(600, 700)) +
-        facet_wrap(vars(.model), ncol = 1, strip.position = "right")
-    } else { # for trend fc
-      .data$fc %>%# as_fable("occ_wm", "occ_wm") %>% 
-        autoplot() +
-        autolayer(.data$all, .vars = occ)# +
-        # autolayer(.data$fc %>% as_tsibble(), .vars = occ_s)
-    }
+    .data$fc %>%
+      autoplot() +
+      autolayer(.data$all, .vars = occ) +
+      scale_colour_manual(name = "models", values = col_models) + 
+      scale_fill_manual(name = "models", values = col_models) + 
+      scale_y_continuous(breaks = c(600, 700)) +
+      facet_wrap(vars(.model), ncol = 1, strip.position = "right")
   }
 
 
@@ -1221,39 +1203,6 @@ fc_comb_wrap <-
 
 
 
-#' Combine trend
-#' Add trend forecast to individual models trend
-#' @param .fc Individual models forecast
-#' @param .fc_trend Trend forecast
-#' @param .tw Relative weight to give to trend forecast when combining
-fc_comb_trend <- 
-  function(.fc, .fc_trend, .tw){
-    .weight = c(1 - .tw, .tw)
-    .fc_trend = 
-      .fc_trend %>% rename(.split = split, .site = site, .index = index)
-    
-    .fc_ct = 
-      .fc %>%
-      group_by(split, site, .model) %>% index_by() %>% 
-      mutate(
-        occ = 
-          dist_mixture(
-            occ, 
-            .fc_trend %>%
-              filter(.split == split, .site == site, .index == index) %>% 
-              pull(occ), 
-            weights = .weight
-            ),
-        .mean = mean(occ)
-      ) %>% 
-      ungroup()
-    
-    dimnames(.fc_ct$occ) = "occ"
-    fc_ct = 
-      .fc_ct %>% as_fable(response = "occ", distribution = occ)
-    
-    return(fc_ct)
-  }
 
 
 
@@ -1376,68 +1325,3 @@ factorise_temp <-
         !!sym(.tmax) := NULL
       )
   }
-
-
-
-# Functions for trend prediction -----------------------------------------------
-#' Smooth var
-#' Use cubic spline to smooth training set for each split. Parameters nknows and
-#' spar selected to give balance between data point fidelty and smooth function.
-#' @param .data_ Data for each site and cv split.
-smooth_fun <- 
-  function(.y) {
-    a0 = c(.y[1], 0) # initial value estimate
-    P0 = 
-      matrix(c(100, 0, 0, 100), ncol = 2) # initial uncertainty estimate
-    .dt = matrix(c(0, 0)) # intercept of transition equation
-    ct = matrix(0) # intercept of measurement equation
-    Tt = matrix(c(1, 1, 0, 1), ncol = 2) # factor of transition equation
-    Zt = matrix(c(1, 0), ncol =2) # factor of measurement equation
-    HHt = 
-      matrix(c(1.5, 0, 0, 200), ncol = 2) # variance of transition innovations
-    GGt = matrix(50) # variance of measurement error
-    yt = matrix(.y, nrow = 1) # observed outcome
-    fit = 
-      fkf(
-        a0 = a0, P0 = P0, dt = .dt, ct = ct, Tt = Tt, 
-        Zt = Zt, HHt = HHt, GGt = GGt, yt = yt
-        )
-    cat("var ration:", var(fit$att[1, ]) / var(.y))
-    fit$att[1, ]
-    # ny = length(.y)
-    # x = seq(1, ny)
-    # .y
-    # tmp_smooth = 
-    #   smooth.spline(x, .y, nknots = ceiling(sqrt(ny)), spar = 0.2)
-    # tmp_smooth$y
-  }
-
-
-#' Fit trend
-#' Fit smoothed bed occupancy with structural state space model. Saving fc both
-#' with and without mean.
-#' @param .data_ Data including smoothed occ
-fit_trend <- 
-  function(.data_, .horizon = NULL, ...) {
-    # Training data
-    train = .data_ %>% filter(type == "train") %>% pull(occ_s)
-    
-    # Fit/fc STS model
-    ss = AddLocalLinearTrend(list(), train)
-    ss = AddTrig(ss, train, period = 7, frequencies = 1)
-    ss = AddTrig(ss, train, period = 30.44, frequencies = c(1, 2, 3))
-    model = bsts(train, ss, niter = 500)
-    fc = predict(model, horizon = .horizon, burn = 100)
-    
-    # Organise data
-    fc =
-      .data_ %>% filter(type == "test") %>%
-      mutate( # create forecast distribution (assuming nid error)
-        .model = "sts_trend",
-        occ = # normally distributed fc
-          dist_normal(fc$mean, sd = apply(fc$distribution, 2, sd)),
-        .mean = fc$mean, # necessary for fable::autoplot
-      )
-  }
-
-

@@ -12,12 +12,10 @@ source("src/environment.R")
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
 fc_path <- here("output/fits/forecasts_short_comb.RDS")
-# fc_path_ct <- here("output/fits/forecasts_short_comb_trend.RDS")
 thr_path <- here("output/fits/thresholds.RDS")
 
 split_data_cv <- readRDS(split_path)
 fc_all <- readRDS(fc_path)
-# fc_all_ct <- readRDS(fc_path_ct)
 alarm_thr <- readRDS(thr_path)
 
 

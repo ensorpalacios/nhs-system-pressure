@@ -36,7 +36,7 @@ ts_occ <-
   ts_occ %>%
   select( # exclude
     -(ts_occ %>% names %>% grep("_m", .)), # original data with missing values
-    -occ_s, -occ_wx,
+    -occ_wx,
     -adm, -dis,
     -escal, -core,
     -ad_diff, -ad_diff2,

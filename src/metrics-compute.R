@@ -34,19 +34,15 @@ source("src/environment.R")
 # Load data --------------------------------------------------------------------
 split_path <- here("output/fits/splits_short.RDS")
 fc_path <- here("output/fits/forecasts_short.RDS")
-fc_trend_path <- here("output/fits/forecast_trend.RDS")
   
 split_data_cv <- readRDS(file = split_path)
 fc_all <- readRDS(file = fc_path)
-fc_trend <- readRDS(file = fc_trend_path)
   
 # Remove aggregated data
 split_data_cv <- 
   split_data_cv %>% filter(!is_aggregated(site)) %>% rec_site()
 fc_all <- 
   fc_all %>% filter(!is_aggregated(site)) %>% rec_site()
-fc_trend <- 
-  fc_trend %>% filter(site != "<aggregated>") %>% relocate(split, site)
   
 
 
@@ -124,39 +120,6 @@ metrics_c <- # add t_ax, scale by TSLM, factor(penalty)
 
 
 
-# Add trend fc to combined forecasts -------------------------------------------
-# Combine level and trend fc
-fc_all_ct <- 
-  fc_comb_trend(fc_all_c, fc_trend, 0.1)
-
-# Compute metrics
-metrics_ct <- # compute metrics
-  cv_wrap(
-    list("all" = split_data_cv , "fc" = fc_all_ct), 
-    select_fc,
-    wrap_metric,
-    list_models
-  ) %>% 
-  flatten() %>%
-  bind_rows()
-
-metrics_ct <- # add t_ax, scale by TSLM, factor(penalty)
-  process_metrics(metrics_ct)
-
-
-# Compare with and without trend
-metrics_diff <- 
-  rbind(
-    metrics_c %>% mutate(comb_with_trend = "no"),
-    metrics_ct %>% mutate(comb_with_trend = "yes")
-  ) %>% 
-  group_by(split, site, penalty, index, metric, models) %>% 
-  summarise(
-    diff = value[comb_with_trend == "no"] - value[comb_with_trend == "yes"]
-  ) %>% 
-  ungroup()
-
-
 # Summarise metrics ------------------------------------------------------------
 # tmp_metrics <- 
 #   metrics_c
@@ -193,21 +156,6 @@ metrics_summary_c <- # with combined model
   # filter(!(models %in% c("tslm", "snaive"))) %>% 
   ungroup()
 
-
-metrics_summary_ct <- # with combined model and trend 
-  metrics_ct %>% 
-  # tmp_metrics %>%  
-  # filter(models %in% var_summary) %>%
-  group_by(split, site, penalty, index, metric) %>% 
-  summarise( # take best model
-    "value_min" = min(value_s),
-    "best_model" = 
-      models[which.min(value_s)]# %>% 
-      # {if (grepl("tslm|snaive", .)) "baseline_min" else .},
-  ) %>% 
-  ungroup() %>% 
-  inner_join(metrics_c) %>% # join to tibble
-  ungroup()
  
 
 # Save -------------------------------------------------------------------------
@@ -221,11 +169,7 @@ metric_data =
   list(
   "metrics" = metrics,
   "metrics_comb" = metrics_c,
-  "metrics_comb_trend" = metrics_ct,
-  "metrics_diff" = metrics_diff,
-  "metrics_summary_c" = metrics_summary_c,
-  "metrics_summary_ct" = metrics_summary_ct
+  "metrics_summary_c" = metrics_summary_c#,
 )
 saveRDS(fc_all_c, file = paste0(save_path, "forecasts_short_comb.RDS"))
-saveRDS(fc_all_ct, file = paste0(save_path, "forecasts_short_comb_trend.RDS"))
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))
