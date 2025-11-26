@@ -761,7 +761,7 @@ rf_reg <-
         tmp_par = 
           list(
             "mean" = tmp_fc$aggregate, 
-            "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
+            "sd" = sd(tmp_fit$predicted - tmp_train$occ) # from oob errors
           )
         
         # Return as list
@@ -796,7 +796,11 @@ rf_reg_int <-
     tmp_fit = randomForest(occ ~ ., data = data_train, ntree = 1000)
     tmp_fc = predict(tmp_fit,  data_test, predict.all = TRUE)
     
-    # Group fc by lag
+    # Out-of-bag prediction error
+    tmp_fit_pe = (tmp_fit$predicted - data_train$occ) %>% as_tibble() # oob pe
+    
+    
+    # Group by lag
     tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
     max_lag = data_test$lag %>% parse_number() %>% max()
     tmp_fc_individuals$lag = rep(seq(.horizon), each = max_lag)
@@ -810,7 +814,7 @@ rf_reg_int <-
     tmp_par = 
       list(
         "mean" = tmp_fc_individuals %>% rowMeans(), 
-        "sd" = tmp_fit$mse %>% sqrt() %>% mean() # from oob errors
+        "sd" = sd(tmp_fit_pe$value) # from oob errors
       )
     
     tmp_ls = list("fit" = tmp_fit, "fc" = tmp_fc_individuals, "par" = tmp_par)

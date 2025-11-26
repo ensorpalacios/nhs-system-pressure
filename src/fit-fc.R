@@ -137,7 +137,7 @@ fit_fable <- # fit models
     nn = NNETAR(occ)
   )
 
-# ARIMA aggregated (exclude occ_other!)
+# ARIMA aggregated
 fit_fable_agg <- 
   data_xpredict %>% 
   filter(type == "train") %>%
@@ -255,8 +255,7 @@ fit_es <- # fit es
 
 
 # Random forest
-# Attention: here excluding same-day predictors, but including lagged
-# occ_other because not predicted; also including all lags because 
+# Attention: here excluding same-day predictors, but including all lags because 
 # collinearity not a problem here.
 list_var_rf <-
   data_xpredict %>%
