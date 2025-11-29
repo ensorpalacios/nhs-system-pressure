@@ -35,8 +35,10 @@ metrics_summary_c$models <-
 plt_metric_c <- # boxplot metrics with combined models
   map(metric_names, \(.metric) {
     metrics_c %>%
-      filter(metric == .metric, models != "tslm") %>%
-      ggplot(aes(x = models, y = value_s, colour = models)) +
+      # filter(metric == .metric, models != "tslm") %>%
+      filter(metric == .metric) %>%
+      # ggplot(aes(x = models, y = value_s, colour = models)) +
+      ggplot(aes(x = models, y = value, colour = models)) +
       # geom_boxplot(outliers = FALSE) +
       ggdist::stat_interval(
         aes(alpha = after_stat(level),),
@@ -48,7 +50,7 @@ plt_metric_c <- # boxplot metrics with combined models
         color = "black",
         fatten_point = 1,
         .width = c(0)) +
-      geom_hline(yintercept = 1, lty = "dotted") +
+      # geom_hline(yintercept = 1, lty = "dotted") +
       scale_colour_manual(name = "models", values = col_models) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust=1)) +
@@ -87,7 +89,7 @@ plt_metric_time_summary_c <- # time series (summary data)
 
 
 # Generate tables --------------------------------------------------------------
-# Models' metric mode and iqr - with combined models
+# Models' metric median and iqr - with combined models
 tbl_metric_c <- 
   metrics_c %>% # attention: values not scaled by tslm!
   group_by(site, penalty, metric, models) %>%
