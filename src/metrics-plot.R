@@ -129,41 +129,8 @@ for (i in seq_along(col_models_l)) { # add colour to table column
   .color = col_models_l[i]
   .model = names(col_models_l)[i]
 
-  tbl_metric =
-    tbl_metric %>% 
-    tab_style(
-      style = cell_fill(.color),
-      # location = cells_stub(rows = models == .model)
-      location = cells_stub(rows = models == .model[[1]])
-    ) %>% 
-    tab_style(
-      style = cell_fill(.color),
-      location = cells_body(rows = models == .model)
-    )
-  
-  tbl_metric_t =
-    tbl_metric_t %>% 
-    tab_style(
-      style = cell_fill(.color),
-      # location = cells_stub(rows = models == .model)
-      location = cells_stub(rows = models == .model[[1]])
-    ) %>% 
-    tab_style(
-      style = cell_fill(.color),
-      location = cells_body(rows = models == .model)
-    )
-}
-
-
-# Get lighter colour palette and add to table
-col_models_l <- bright_col(col_models, 0.6)
-
-for (i in seq_along(col_models_l)) { # add colour to table column
-  .color = col_models_l[i]
-  .model = names(col_models_l)[i]
-
-  tbl_metric_diff =
-    tbl_metric_diff %>% 
+  tbl_metric_c =
+    tbl_metric_c %>% 
     tab_style(
       style = cell_fill(.color),
       # location = cells_stub(rows = models == .model)

@@ -1010,7 +1010,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
     
     # Compute metric for each model and penalty
     ls_models = tmp_data %>% names %>% tail(-4)
-    penalty = c("upper", "none", "lower")
+    penalty = c("upper", "none")
     map(penalty, \(.penalty) {
       map(ls_models, \(.model_name) {
         tmp_obs = tmp_data[["occ"]]
@@ -1020,7 +1020,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
           site = tmp_data$site,
           penalty = .penalty,
           index = tmp_data$index,
-          wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
+          # wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
           crps = crps_func(tmp_obs, tmp_fc, .penalty)
         ) %>% pivot_longer(
           cols = where(is.numeric), 
@@ -1095,7 +1095,7 @@ renorm <- function(.weight) {
 #' @param .weights Tibble of metrics summaries containing weights
 #' @param .method Type of scoring methods used for generating weights
 lcomb_fun <- 
-  function(.fc, .weights, .list_m, .method) {
+  function(.fc, .weights, .list_m, .penalty_, .method) {
     .fc %>%
       group_by(split, site, h) %>%
       summarise(
@@ -1110,7 +1110,7 @@ lcomb_fun <-
                        .weights %>%
                        filter(
                          .site == site[1],
-                         .penalty == "upper",
+                         .penalty == .penalty_,
                          .models  %in%
                            c(.list_m %>% pluck(site[1])),
                          .h == h[1],
@@ -1120,7 +1120,7 @@ lcomb_fun <-
                 )
               )
             )}, error = function(e) {
-              message("model weights not summint to 1 when combining fc")
+              message("model weights not summing to 1 when combining fc")
             }),
         .mean = mean(occ)
       ) %>% 
@@ -1158,19 +1158,18 @@ fc_comb_wrap <-
       c("arima_dadpl_l", "arima_dad_rec", "rf_int", "var_ad2", "xgb", "tslm")
     list_best_bri <- 
       c("arima_dadp_l", "arima_dad_rec", "es", "rf_int", "var_ad", "var_h") # save2
-      # c("arima_dad_l", "arima_dad_rec", "rf_int", "var_ad", "var_ad2",
-        # "var_h", "xgb") # save1
     list_best_metric <-
       list("BRI" = list_best_bri, "Southmead" = list_best_southmead)
     
-    # Compute avg scores for each model
+    # Compute median scores for each model scaled by iqr
     metric_avg <-
       .metrics %>% #pluck("metrics") %>%
       group_by(split) %>% 
       mutate(h = t_ax - min(t_ax) + 1) %>% # create horizon idx for grouping
       group_by(site, penalty, metric, models, h) %>% # not by split
-      summarise(metric_avg = mean(value)) %>% # average metric by group
+      summarise(metric_avg = median(value) * IQR(value)) %>% # compute
       ungroup() 
+    
     
     metric_avg <- # add "." to names to avoid confusion with fc
       metric_avg %>% rename_with(~ paste0(".", .x), everything())
@@ -1196,22 +1195,22 @@ fc_comb_wrap <-
       ) %>% 
       ungroup()
       
-     
     fc_comb_lp <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "equal")
+      lcomb_fun(.fc, metric_avg, list_best_metric, "none", "equal")
+    
+    fc_comb_crps_u <-
+      lcomb_fun(.fc, metric_avg, list_best_metric, "upper", "crps")
+    fc_comb_crps_u$`.model` = "crps_upper" # rename
     
     fc_comb_crps <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "crps")
-    
-    fc_comb_wilker <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "wilker")
-    
+      lcomb_fun(.fc, metric_avg, list_best_metric, "none", "crps")
     
     dimnames(fc_comb_lp$occ) <- "occ"
     dimnames(fc_comb_crps$occ) <- "occ"
-    dimnames(fc_comb_wilker$occ) <- "occ"
+    dimnames(fc_comb_crps_u$occ) <- "occ"
+    
     .fc <- 
-      list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_wilker) %>% 
+      list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_crps_u) %>% 
       reduce(bind_rows) %>%  as_fable(".mean", "occ")
   }
 

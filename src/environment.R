@@ -50,5 +50,5 @@ names(col_models) =
     "baseline_min",
     "crps",
     "equal",
-    "wilker"
+    "crps_upper"
   )

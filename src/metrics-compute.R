@@ -102,7 +102,7 @@ list_models <- # update list with combined
   c(list_models, 
     "equal",
     "crps",
-    "wilker")
+    "crps_upper")
 
 
 metrics_c <- # compute metrics
@@ -169,7 +169,7 @@ metric_data =
   list(
   "metrics" = metrics,
   "metrics_comb" = metrics_c,
-  "metrics_summary_c" = metrics_summary_c#,
+  "metrics_summary_c" = metrics_summary_c
 )
 saveRDS(fc_all_c, file = paste0(save_path, "forecasts_short_comb.RDS"))
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))
