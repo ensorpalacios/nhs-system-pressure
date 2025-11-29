@@ -15,9 +15,9 @@ source("src/environment.R")
 
 
 # Load/prepare data ------------------------------------------------------------
-fc_path <- here("output/fits/forecasts_short_comb_trend.RDS")
-split_path <- here("output/fits/splits_short.RDS")
+fc_path <- here("output/fits/forecasts_short_comb.RDS")
 thr_path <- here("output/fits/thresholds.RDS")
+split_path <- here("output/fits/splits_short.RDS")
 
 
 fc_all <- readRDS(fc_path)
@@ -38,18 +38,21 @@ split_data_cv <-
 list_models_f <- # select models for forecast plot
   c(
     "tslm",
-    # "var_ad2",
+    "var_paed",
     "var_h",
     "arima_dad_l",
     "arima_dad_rec",
+    "arima_dadp_rec",
     "arima_dadpl_rec",
     "nn",
     # "es",
     # "rf",
     "rf_int",
+    "rf_int_not",
     "xgb",
-    "crps"#,
-    # "equal",
+    "crps",
+    "crps_upper",
+    "equal"
     # "wilker"
     )
 

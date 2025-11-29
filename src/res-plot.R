@@ -2,15 +2,15 @@
 #'
 #' Plot residuals over time, their autocorrelation and distribution
 #'
-#' @author Ensor Palacios, email{ensorrafael.palacios@bristol.ac.uk}
+#' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-06-27
-
-# Import packages --------------------------------------------------------------
-source("src/packages.R")
-source("src/split-data.R")
-
+# Prepare environment ----------------------------------------------------------
+rm(list = ls())
+source("src/environment.R")
 
 
+
+## THIS SHOULD BE SUBSTITUTED WITH loading fits from fit_short.R
 # Load data --------------------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
 ts_occ <- readRDS(file = data_path)
@@ -53,8 +53,7 @@ fit_fable <-
   tsibble(index = index, key = c(split, site)) %>%
   model(
     # Baseline models (for comparison)
-    mean = MEAN(occ),
-    naive = NAIVE(occ),
+    mean = TSLM(occ),
     snaive = SNAIVE(occ ~ lag("week")),
     # Arima models
     arima = ARIMA(occ),
