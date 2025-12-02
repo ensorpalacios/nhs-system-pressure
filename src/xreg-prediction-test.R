@@ -10,8 +10,18 @@
 #' @date 2025-07-14
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
@@ -41,7 +51,7 @@ ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
 split_data_tt <- # Train/test set
   split_tt(ts_occ_lag, len_test)
 split_data_cv <- # Cv train/validation sets
-  split_cv(split_data_tt, initial, assess, skip)
+  split_cv(split_data_tt, initial, assess, skip, type)
 
 splits <- split_data_cv$split %>% unique() # save cv splits names
 idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
@@ -103,7 +113,7 @@ plt_err_sq <- # squared error
   scale_x_discrete(guide = guide_axis(angle = 45))
 
 # Save plot --------------------------------------------------------------------
-save_path = here("output/plots/xreg_predictions/")
+save_path = here(paste0("output/plots/xreg_predictions/", amode, "/"))
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }

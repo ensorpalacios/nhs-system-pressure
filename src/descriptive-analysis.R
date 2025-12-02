@@ -17,8 +17,18 @@
 #' @date 2025-01-10
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
@@ -142,7 +152,7 @@ descriptive <-
     "trend_ma" = trend_ma, 
     "trend_lowess" = trend_lowess, 
     "trend_diff" = trend_diff, 
-    "season_week" = season_week, 
+    # "season_week" = season_week, 
     "season_diff" = season_diff,
     "second_diff" = second_diff
   )

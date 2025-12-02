@@ -9,20 +9,30 @@
 #' @date 2025-05-01
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
 # Load/prepare data ------------------------------------------------------------
-fc_path <- here("output/fits/forecasts_short_comb.RDS")
+fc_path <- here(paste0("output/fits/", amode, "/forecasts_short_comb.RDS"))
+split_path <- here(paste0("output/fits/", amode, "/splits_short.RDS"))
 thr_path <- here("output/fits/thresholds.RDS")
-split_path <- here("output/fits/splits_short.RDS")
 
 
 fc_all <- readRDS(fc_path)
-alarm_thr <- readRDS(thr_path)
 split_data_cv <- readRDS(split_path)
+alarm_thr <- readRDS(thr_path)
 
 
 # Recode sites
@@ -83,7 +93,7 @@ plt_fc_level <-
 
 
 # Save plots -------------------------------------------------------------------
-save_path <- here("output/plots/forecasts/")
+save_path <- here(paste0("output/plots/forecasts/", amode, "/"))
 
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)

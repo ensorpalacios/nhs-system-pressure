@@ -110,14 +110,15 @@ split_tt <-
 #' @param .initial Length testing sets
 #' @param .assess Length validation sets
 #' @param .skip Separation between consecutive training starting dates
+#' @param .type Select training or test data from split_tt() output
 #' @export
 split_cv <- 
-  function(.ts_occ_tt, .initial, .assess, .skip) {
+  function(.ts_occ_tt, .initial, .assess, .skip, .type) {
     sites = .ts_occ_tt$site %>% unique()
     map(sites, \(.site) {
       tmp_split = # split with re-sampling
         .ts_occ_tt %>% 
-        dplyr::filter(type == "train", site == .site) %>% 
+        dplyr::filter(type == .type, site == .site) %>% 
         timetk::time_series_cv(
           date_var = index,
           initial = .initial, # (length training set)
@@ -131,7 +132,7 @@ split_cv <-
           tmp_train = 
             .split %>% 
             rsample::training() %>% 
-            mutate(split = .name, .before = 1)
+            mutate(split = .name, .before = 1, type = "train")
           tmp_assess = 
             .split %>% 
             rsample::testing() %>% 

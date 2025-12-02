@@ -13,17 +13,25 @@
 #' @date 2025-05-01
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
 # Load data and set seed -------------------------------------------------------
 data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
-fc_trend_path <- here("output/fits/forecast_trend.RDS")
 
 ts_occ <- readRDS(file = data_path)
-fc_trend <- readRDS(file = fc_trend_path)
 sites <- ts_occ$site |> unique()
 
 # Reproducible analysis for rf and xgb
@@ -51,7 +59,7 @@ ts_occ_lag <- lag_fun(ts_occ, .lag = horizon) # lag data
 split_data_tt <- # Train/test set
   split_tt(ts_occ_lag, len_test)
 split_data_cv <- # Cv train/validation sets
-  split_cv(split_data_tt, initial, assess, skip)
+  split_cv(split_data_tt, initial, assess, skip, type)
 
 
 splits <- split_data_cv$split %>% unique() # save cv splits names
@@ -553,7 +561,7 @@ fc_all <-
 
 
 # Save fits and forecasts ------------------------------------------------------
-save_path = here("output/fits/")
+save_path = here(paste0("output/fits/", amode, "/"))
 
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)

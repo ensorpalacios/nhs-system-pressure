@@ -22,8 +22,18 @@
 #' @date 2025-01-08
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
@@ -376,10 +386,13 @@ plot_lags =
 
 
 # Save plots ------------------------------------------------------------------
-save_path <- here("output/plots/predictors/")
+save_path_train <- # path for lagged analysis plots
+  here(paste0("output/plots/predictors/", amode, "/"))
+save_path <- # path for whole-ts plots
+  here("output/plots/predictors/")
 
-if (!file.exists(save_path)) {
-    dir.create(save_path, recursive = TRUE)
+if (!file.exists(save_path_train)) {
+    dir.create(save_path_train, recursive = TRUE)
 }
 
 ls_plots <- list(
@@ -421,13 +434,15 @@ iwalk(ls_plots, \(.plot, .title) {
 iwalk(ls_plots_lag, \(.plots, .title) {
   .plots %>% imap(., \(.plt, .site) {
       if (.title == "spectr") {
-        svg(str_glue("{save_path}{.title}_{.site}.svg"))
+        svglite::svglite(str_glue("{save_path_train}{.title}_{.site}.svg"))
         print(.plt)
         dev.off()
       } else if (.title == "pwccf") {
         .plt %>%
           iwalk(., \(.x, .ex) {
-            svg(str_glue("{save_path}{.title}_{.ex}_{.site}.svg"))
+            svglite::svglite(
+              str_glue("{save_path_train}{.title}_{.ex}_{.site}.svg")
+              )
             print(.x)
             dev.off()
           })
@@ -435,8 +450,10 @@ iwalk(ls_plots_lag, \(.plots, .title) {
         .plt %>%
           iwalk(., \(.x, .ex) {
             iwalk(.x, \(.x, .var_order) {
-              svg(
-                str_glue("{save_path}{.title}_{.ex}_{.site}_{.var_order}.svg")
+              svglite::svglite(
+                str_glue(
+                  "{save_path_train}{.title}_{.ex}_{.site}_{.var_order}.svg"
+                  )
                 )
             print(.x)
             dev.off()

@@ -6,14 +6,24 @@
 #' @date 2025-07-02
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
 # Load data --------------------------------------------------------------------
 # Original ts, train/test split, cv split, fc (with combined models)
-tt_path <- here("output/fits/tt_split.RDS")
+tt_path <- here("output/fits/train/tt_split.RDS") # always use training split!
 split_data_tt <- readRDS(file = tt_path)
 
 # Recode sites

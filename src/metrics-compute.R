@@ -26,14 +26,24 @@
 #' @date 2025-05-14
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
 # Load data --------------------------------------------------------------------
-split_path <- here("output/fits/splits_short.RDS")
-fc_path <- here("output/fits/forecasts_short.RDS")
+split_path <- here(paste0("output/fits/", amode, "/splits_short.RDS"))
+fc_path <- here(paste0("output/fits/", amode, "/forecasts_short.RDS"))
   
 split_data_cv <- readRDS(file = split_path)
 fc_all <- readRDS(file = fc_path)
@@ -159,7 +169,7 @@ metrics_summary_c <- # with combined model
  
 
 # Save -------------------------------------------------------------------------
-save_path = here("output/fits/")
+save_path = here(paste0("output/fits/", amode, "/"))
 
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)

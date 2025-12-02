@@ -11,8 +11,18 @@
 #' @date 2025-01-07
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
@@ -35,29 +45,69 @@ df_occ <-
 
 
 # Temperature data
-tmp_max <- 
-  read.table(
-  paste0(data_path, "maxtemp_daily_totals.txt")
-) %>% data.table() %>% 
-  .[, .(report_date = V1[-1], tmax = as.numeric(V2[-1]))]
+temp_paths <- # list data path
+  list.files(paste0(data_path, "temp5k")) %>% paste0(data_path, "temp5k/", .)
 
-tmp_min <- 
-  read.table(
-  paste0(data_path, "mintemp_daily_totals.txt")
-) %>% data.table() %>% 
-  .[, .(report_date = V1[-1], tmin = as.numeric(V2[-1]))]
-
-df_t <- # join tmax/tmin and melt
-  tmp_min[tmp_max, on = "report_date"] %>%
-  melt(
-    id.vars = "report_date", 
-    variable.name = "metric_name", 
-    value.name = "value",
-    variable.factor = F
-  ) %>% .[ # Temporary code to allign temperature data with hospital data
+df_t <- 
+  map(c("tasmax", "tasmin"), \(.temperature) {
+    temp_path <- temp_paths[grepl(.temperature, temp_paths)]
+    # tmin <- temp_data[grepl("tasmin", temp_data)]
+    temp_date <- 
+      map(temp_path, \(.path) {
+        .dates = 
+          sub(".*_(.*)\\.nc$", "\\1", .path) %>% 
+          strsplit("-") %>% .[[1]] %>% 
+          as.Date("%Y%m%d")
+        seq(.dates[1], .dates[2], by = "days")
+      }) %>% 
+      reduce(c)
+    
+    temp <- 
+      map(temp_path, \(.path) {
+        .nc_file = nc_open(.path)
+        .x = ncvar_get(.nc_file, "projection_x_coordinate")
+        .y = ncvar_get(.nc_file, "projection_y_coordinate")
+        .temp = ncvar_get(.nc_file, .temperature)
+        .temp[
+          which.min(abs(.x - 358668)), which.min(abs(.y - 173492)), 
+        ]
+      }) %>% 
+      unlist()
+    data.table(
+      report_date = as.character(temp_date), 
+      metric_name = .temperature, 
+      value = temp
+    )
+  }) %>% 
+  rbindlist() %>% 
+  .[ # allign temperature data with hospital data
     as.Date(report_date) <= as.Date("2025-11-01")
-  ]
+  ] %>% 
+  .[metric_name == "tasmax", metric_name := "tmax"] %>% 
+  .[metric_name == "tasmin", metric_name := "tmin"]
 
+# tmp_max <- 
+#   read.table(
+#   paste0(data_path, "maxtemp_daily_totals.txt")
+# ) %>% data.table() %>% 
+#   .[, .(report_date = V1[-1], tmax = as.numeric(V2[-1]))]
+# 
+# tmp_min <- 
+#   read.table(
+#   paste0(data_path, "mintemp_daily_totals.txt")
+# ) %>% data.table() %>% 
+#   .[, .(report_date = V1[-1], tmin = as.numeric(V2[-1]))]
+# 
+# df_tt <- # join tmax/tmin and melt
+#   tmp_min[tmp_max, on = "report_date"] %>%
+#   melt(
+#     id.vars = "report_date", 
+#     variable.name = "metric_name", 
+#     value.name = "value",
+#     variable.factor = F
+#   ) %>% .[ # Temporary code to allign temperature data with hospital data
+#     as.Date(report_date) <= as.Date("2025-11-01")
+#   ]
 
 # Join data
 df_occ <- 

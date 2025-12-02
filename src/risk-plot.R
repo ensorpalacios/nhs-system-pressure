@@ -4,16 +4,25 @@
 #' @date 2025-07-02
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
 
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 # Load data --------------------------------------------------------------------
-path_risk <- here("output/fits/risk_ct.RDS")
-path_curves <- here("output/fits/risk_curves_ct.RDS")
-path_auc <- here("output/fits/risk_auc_ct.RDS")
-path_fc <- here("output/fits/forecasts_short_comb.RDS")
+path_risk <- here(paste0("output/fits/", amode, "/risk.RDS"))
+path_curves <- here(paste0("output/fits/", amode, "/risk_curves.RDS"))
+path_auc <- here(paste0("output/fits/", amode, "/risk_auc.RDS"))
+path_fc <- here(paste0("output/fits/", amode, "/forecasts_short_comb.RDS"))
 
 
 list_risk <- readRDS(path_risk)
@@ -34,7 +43,7 @@ list_models <- # select models
     # "var_h",
     # "arima_dad_l",
     # "arima_dad_rec",
-    # "rf_int",
+    "crps_upper",
     "crps"
     )
 
@@ -291,7 +300,7 @@ tbl_auc <-  # add raw colours by model
 
 
 # Save plots -------------------------------------------------------------------
-save_path <- here("output/plots/risk_fc/")
+save_path <- here(paste0("output/plots/" , amode, "/risk_fc/"))
 
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)

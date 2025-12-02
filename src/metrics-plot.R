@@ -7,13 +7,23 @@
 #' @date 2025-05-14
 
 # Prepare environment ----------------------------------------------------------
-rm(list = ls())
+# rm(list = ls())
+renv::activate()
+source("src/packages.R")
 source("src/environment.R")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (!args[1] %in% c("train", "test")) {
+  stop("Invalid analysis mode argument. Must be either train or test")
+}
+
+amode <- args[1]
+setup_env(amode) # define global environment variables
 
 
 
 # Load data --------------------------------------------------------------------
-metric_path = here("output/fits/metrics.RDS")
+metric_path = here(paste0("output/fits/", amode, "/metrics.RDS"))
 metric_data = readRDS(metric_path)
 
 # Unpack from list
@@ -188,7 +198,7 @@ for (i in seq_along(col_models_l)) { # add raw colours by model
 
 
 # Save plots -------------------------------------------------------------------
-save_path_m <- here("output/plots/metrics/")
+save_path_m <- here(paste0("output/plots/metrics/", amode, "/"))
 if (!file.exists(save_path_m)) {
   dir.create(save_path_m, recursive = TRUE)
 }
