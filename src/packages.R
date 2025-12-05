@@ -49,7 +49,6 @@ import::from(Matrix, sparse.model.matrix)
 import::from(pagedown, chrome_print)
 import::from(ncdf4, nc_open, ncvar_add)
 
-library(ncdf4)
 
 # Resolve conflicts (using conflicted package)
 conflicts_prefer(

@@ -86,25 +86,52 @@ list_models <- # select models
     "snaive")
 
 
-metrics <- # compute metrics
-  cv_wrap(
-    list("all" = split_data_cv , "fc" = fc_all), 
-    select_fc,
-    wrap_metric,
-    list_models
-  ) %>% 
-  flatten() %>%
-  bind_rows()
-
-metrics <- # add t_ax, scale by TSLM, factor(penalty)
-  process_metrics(metrics)
+if (amode == "train") {
+  metrics <- # compute metrics
+    cv_wrap(
+      list("all" = split_data_cv , "fc" = fc_all), 
+      select_fc,
+      wrap_metric,
+      list_models
+    ) %>% 
+    flatten() %>%
+    bind_rows()
+  
+  metrics <- # add t_ax, scale by TSLM, factor(penalty)
+    process_metrics(metrics)
+}
 
 
 
 # Combine forecasts and recompute metrics --------------------------------------
 # Combine fc
+# List models
+list_best_models <-
+  list(
+    "BRI" = 
+      c("arima_dadp_l", "arima_dadp_rec", "rf_int_not", 
+        "var_paed", "var_h", "xgb_not"),
+    "Southmead" = 
+      c("arima_dadp_l", "arima_dadp_rec", "var_ad2", 
+        "var_paed", "rf_int", "xgb")
+  )
+
+
+if (amode == "train") { # compute only for training data, otherwise load
+  weights_comb <- 
+    comp_weights(metrics, list_best_models)
+} else if (amode == "test") {
+  path_weights <- here(paste0("output/fits/train/weights_training.RDS"))
+  if (!file.exists(path_weights)) {
+    stop("running on test; no weights_training.RDS file found")
+  } else {
+    weights_comb <- readRDS(file = path_weights)
+  }
+}
+
+
 fc_all_c <- 
-  fc_comb_wrap(fc_all, metrics)
+  fc_comb_wrap(fc_all, weights_comb, list_best_models)
 
 
 # Compute metrics
@@ -177,9 +204,15 @@ if (!file.exists(save_path)) {
 
 metric_data =
   list(
-  "metrics" = metrics,
   "metrics_comb" = metrics_c,
   "metrics_summary_c" = metrics_summary_c
 )
+if (amode == "train") { # computed only for training data
+  metric_data$metrics = metrics
+}
+
 saveRDS(fc_all_c, file = paste0(save_path, "forecasts_short_comb.RDS"))
 saveRDS(metric_data, file = paste0(save_path, "metrics.RDS"))
+if (amode == "train") {
+  saveRDS(weights_comb, file = paste0(save_path, "weights_training.RDS"))
+}

@@ -20,12 +20,14 @@ setup_env(amode) # define global environment variables
 
 # Load data --------------------------------------------------------------------
 path_risk <- here(paste0("output/fits/", amode, "/risk.RDS"))
+path_freq <- here(paste0("output/fits/", amode, "/freq_high.RDS"))
 path_curves <- here(paste0("output/fits/", amode, "/risk_curves.RDS"))
 path_auc <- here(paste0("output/fits/", amode, "/risk_auc.RDS"))
 path_fc <- here(paste0("output/fits/", amode, "/forecasts_short_comb.RDS"))
 
 
 list_risk <- readRDS(path_risk)
+list_freq <- readRDS(path_freq)
 list_curves <- readRDS(path_curves)
 list_auc <- readRDS(path_auc)
 list_fc <- readRDS(path_fc)
@@ -299,8 +301,46 @@ tbl_auc <-  # add raw colours by model
 
 
 
+# Table frequency high ---------------------------------------------------------
+tbl_freq <- list()
+tbl_freq$tbl_freq_d <- 
+  list_freq$freq_d %>% 
+  gt(rowname_col = "time horizon", groupname_col = "site") %>% 
+  tab_stubhead(label = "Time horizon") %>% 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_row_groups()
+  ) %>% 
+  tab_style(
+    style = cell_text(indent = px(12)),
+    locations = cells_stub()
+  )
+
+tbl_freq$tbl_freq_ws <- 
+  list_freq$freq_ws %>% 
+  gt(rowname_col = "time horizon", groupname_col = "site") %>% 
+  tab_stubhead(label = "Time horizon") %>% 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_row_groups()
+  ) %>% 
+  tab_style(
+    style = cell_text(indent = px(12)),
+    locations = cells_stub()
+  )
+
+tbl_freq$tbl_freq_w <- 
+  list_freq$freq_w %>% 
+  gt(groupname_col = "site") %>% 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_row_groups()
+  ) %>% as_latex()
+
+
+
 # Save plots -------------------------------------------------------------------
-save_path <- here(paste0("output/plots/" , amode, "/risk_fc/"))
+save_path <- here(paste0("output/plots/risk_fc/" , amode, "/"))
 
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
@@ -331,3 +371,9 @@ iwalk(tbl_auc, \(.tbl, .name) {
   html2pdf(.tbl, file_name)
 })
 
+
+# Table freq
+iwalk(tbl_freq, \(.tbl, .name) {
+  file_name = str_glue("{save_path}{.name}.tex")
+  gtsave(.tbl, file_name)
+})

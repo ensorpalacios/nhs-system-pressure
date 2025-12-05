@@ -20,9 +20,9 @@ setup_env <-
     if (amode == "train") {
       assign("type", "train", envir = .GlobalEnv) # Run cv split on train/test
       assign("skip", "9 days", envir = .GlobalEnv) # Cv separaion
-    } else if ("mode" == "test") {
+    } else if (amode == "test") {
       assign("type", "test", envir = .GlobalEnv)
-      assign("skip", "6 days", envir = .GlobalEnv)
+      assign("skip", "4 days", envir = .GlobalEnv)
     }
     
     # Threshold for "dangerous" occupancy

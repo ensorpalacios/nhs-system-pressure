@@ -1077,11 +1077,54 @@ process_metrics <- # data wrangling
   }
 
 
-# Function to re-normalise weights in case of floating point issue; check
-# whether weights sum to 1 when renormalising.
+#' Compute weights
+#' Compute weights for forecast combination using biased/unbiased CRPS or 
+#' equal weights.
+#' @param 
+comp_weights <- 
+  function(.metrics, .ls_models) {
+    # Compute median scores for each model scaled by iqr, for each h
+    weight_h <-
+      .metrics %>% #pluck("metrics") %>%
+      group_by(split) %>% 
+      mutate(h = t_ax - min(t_ax) + 1) %>% # create horizon idx for grouping
+      group_by(site, penalty, metric, models, h) %>% # not by split
+      summarise(weight = median(value) * IQR(value)) %>% # compute
+      ungroup() 
+    
+    weight_h <- # add "." to names to avoid confusion with fc
+      weight_h %>% rename_with(~ paste0(".", .x), everything())
+    
+    weight_h <- # add equal weights for linear pooling
+      weight_h %>% group_by(.site, .penalty, .models, .h) %>% 
+      group_modify(~ add_row(.x, .metric = "equal", .weight = 1)) %>% 
+      ungroup()
+    
+    weight_h <- # take reciprocal of crps
+      weight_h %>% 
+      mutate(.weight = 1 / .weight)
+    
+    weight_h <- # normalise weights
+      weight_h %>% 
+      group_by(.site, .penalty, .h, .metric) %>% 
+      mutate(
+        .weight = if_else( # site-specific normalisation factor 
+          .site == "BRI",
+          .weight / sum(.weight[.models %in% .ls_models$BRI]),
+          .weight / sum(.weight[.models %in% .ls_models$Southmead])
+        )
+      ) %>% 
+  ungroup()
+    
+    weight_h
+  }
+
+
+#' Function to re-normalise weights in case of floating point issue; check
+#' whether weights sum to 1 when renormalising.
 renorm <- function(.weight) {
   if (!(identical(sum(.weight), 1))) {
-    cat("Weights sum to:", sum(.weight), "- normalizing...\n") 
+    cat("Weights sum to: ~", sum(.weight), "- normalizing...\n") 
     .weight / sum(.weight)} else {
       .weight
     }
@@ -1116,7 +1159,7 @@ lcomb_fun <-
                            c(.list_m %>% pluck(site[1])),
                          .h == h[1],
                          .metric == .method
-                       ) %>% pull(metric_avg) %>% 
+                       ) %>% pull(.weight) %>% 
                        renorm()
                 )
               )
@@ -1136,7 +1179,7 @@ lcomb_fun <-
 #' @param .fc Original fc to combine.
 #' @param .metrics Original metrics to use for fc weighting.
 fc_comb_wrap <- 
-  function(.fc, .metrics) {
+  function(.fc, .weights, .list_models) {
     # Data wrangling
     n_split <- # number of splits 
       .fc$split %>% unique() %>% tail(1) %>% as.numeric()
@@ -1153,58 +1196,15 @@ fc_comb_wrap <-
       ) %>% 
       ungroup()
     
-    
-    # List models
-    list_best_southmead <- 
-      c("arima_dadpl_l", "arima_dad_rec", "rf_int", "var_ad2", "xgb", "tslm")
-    list_best_bri <- 
-      c("arima_dadp_l", "arima_dad_rec", "es", "rf_int", "var_ad", "var_h") # save2
-    list_best_metric <-
-      list("BRI" = list_best_bri, "Southmead" = list_best_southmead)
-    
-    # Compute median scores for each model scaled by iqr
-    metric_avg <-
-      .metrics %>% #pluck("metrics") %>%
-      group_by(split) %>% 
-      mutate(h = t_ax - min(t_ax) + 1) %>% # create horizon idx for grouping
-      group_by(site, penalty, metric, models, h) %>% # not by split
-      summarise(metric_avg = median(value) * IQR(value)) %>% # compute
-      ungroup() 
-    
-    
-    metric_avg <- # add "." to names to avoid confusion with fc
-      metric_avg %>% rename_with(~ paste0(".", .x), everything())
-    
-    metric_avg <- # add equal weights for linear pooling
-      metric_avg %>% group_by(.site, .penalty, .models, .h) %>% 
-      group_modify(~ add_row(.x, .metric = "equal", .metric_avg = 1)) %>% 
-      ungroup()
-    
-    metric_avg <- # take reciprocal of crps and wilker
-      metric_avg %>% 
-      mutate(.metric_avg = 1 / .metric_avg)
-    
-    metric_avg <- # normalise weights
-      metric_avg %>% 
-      group_by(.site, .penalty, .h, .metric) %>% 
-      mutate(
-        metric_avg = if_else( # site-specific normalisation factor 
-            .site == "BRI",
-              .metric_avg / sum(.metric_avg[.models %in% list_best_bri]),
-              .metric_avg / sum(.metric_avg[.models %in% list_best_southmead])
-          )
-      ) %>% 
-      ungroup()
-      
     fc_comb_lp <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "none", "equal")
+      lcomb_fun(.fc, .weights, .list_models, "none", "equal")
     
     fc_comb_crps_u <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "upper", "crps")
+      lcomb_fun(.fc, .weights, .list_models, "upper", "crps")
     fc_comb_crps_u$`.model` = "crps_upper" # rename
     
     fc_comb_crps <-
-      lcomb_fun(.fc, metric_avg, list_best_metric, "none", "crps")
+      lcomb_fun(.fc, .weights, .list_models, "none", "crps")
     
     dimnames(fc_comb_lp$occ) <- "occ"
     dimnames(fc_comb_crps$occ) <- "occ"

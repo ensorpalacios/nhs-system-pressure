@@ -89,6 +89,29 @@ risk_w <-
 
 
 
+# Save frequency high risk -----------------------------------------------------
+freq_d <- 
+  risk_d[
+    .model == unique(.model)[1], 
+    .(Prevalence = round(sum(obs_cross)/length(obs_cross), 3)), 
+    by = c("site", "h")]
+setnames(freq_d, "h", "time horizon")
+
+freq_ws <- 
+  risk_ws[
+    .model == unique(.model)[1], 
+    .(Prevalence = round(sum(obs_cross)/length(obs_cross), 3)),
+    by = c("site", "week_split")]
+setnames(freq_ws, "week_split", "time horizon")
+
+freq_w <- 
+  risk_w[
+    .model == unique(.model)[1], 
+    .(Prevalence = round(sum(obs_cross)/length(obs_cross), 3)),
+    by = c("site")]
+
+
+
 # Compute ROC/PR curves ------------------------------------------------------
 # Set decision boundary (db) from 1-99% prob
 risk_d_db <- 
@@ -189,6 +212,13 @@ list_risk <-
     "risk_w" = risk_w
   )
 
+list_freq <- 
+  list(
+    "freq_d" = freq_d,
+    "freq_ws" = freq_ws,
+    "freq_w" = freq_w
+  )
+
 list_curves <-
   list(
     "risk_d_roc" = risk_d_roc,
@@ -211,5 +241,6 @@ list_auc <-
 
 
 saveRDS(list_risk, file = paste0(save_path, "risk.RDS"))
+saveRDS(list_freq, file = paste0(save_path, "freq_high.RDS"))
 saveRDS(list_curves, file = paste0(save_path, "risk_curves.RDS"))
 saveRDS(list_auc, file = paste0(save_path, "risk_auc.RDS"))
