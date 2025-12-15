@@ -78,8 +78,8 @@ ls_model_comb <-
 list(
   tar_target(
     data_hosp,
-    path_hosp,
-    format = "file"
+    target_load_hospital_data#,
+    #format = "file"
   ),
   tar_target(
     data_weights,
