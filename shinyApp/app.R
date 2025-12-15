@@ -12,7 +12,6 @@ data <- readRDS("../target/data/2025-12-15.RDS")
 
 theme_set(theme_minimal(base_size = 24))
 
-
 ui <- page_sidebar(
 
   # reactable formatting
@@ -44,26 +43,17 @@ tags$head(
   # verbatimTextOutput("show_info") |>
   #   tagAppendAttributes(style = "max-height: 100px; overflow: auto;"),
 
-  # 🎯 Value boxes
+  # 🎯 Value boxes - First row (General info)
   layout_columns(
     fill = FALSE,
     value_box(
       "Data from:",
       value = uiOutput("report_date", inline = TRUE)
-    ),
-    value_box(
-      "Risk of exceeding threshold within next 7-days",
-      value = uiOutput("weekly_risk", inline = TRUE)
-    ),
-    value_box(
-      "Risk of exceeding threshold in 1-3 days time",
-      value = uiOutput("weekly_split_risk_close", inline = TRUE)
-    ),
-    value_box(
-      "Risk of exceeding threshold in 4-7 days time",
-      value = uiOutput("weekly_split_risk_far", inline = TRUE)
-    ),
+    )
   ),
+  
+  # 🎯 Value boxes - Site-specific rows
+  uiOutput("site_value_boxes"),
 
   layout_columns(
     style = "min-height: 450px;",
@@ -104,38 +94,67 @@ server <- function(input, output, session) {
       format("%A, %d/%m/%Y") %>%
       HTML()
   })
-    
-  output$weekly_risk <- renderUI({
-    data %>%
+  
+  # Create site-specific value boxes dynamically
+  output$site_value_boxes <- renderUI({
+    # Get unique sites
+    sites <- data %>%
       `[[`("risk") %>%
       `[[`("risk_w") %>%
       filter(.model == "crps") %>%
-      mutate(label = str_c(site, ": ", scales::percent(risk_w))) %>%
-      pull(label) %>%
-      str_c(., collapse = "<br>") %>%
-    HTML()
-  })
-  
-  output$weekly_split_risk_close <- renderUI({
-    data %>%
-      `[[`("risk") %>%
-      `[[`("risk_ws") %>%
-      filter(.model == "crps", week_split == "close") %>%
-      mutate(label = str_c(site, ": ", scales::percent(risk_ws))) %>%
-      pull(label) %>%
-      str_c(., collapse = "<br>") %>%
-    HTML()
-  })
-  
-  output$weekly_split_risk_far <- renderUI({
-    data %>%
-      `[[`("risk") %>%
-      `[[`("risk_ws") %>%
-      filter(.model == "crps", week_split == "far") %>%
-      mutate(label = str_c(site, ": ", scales::percent(risk_ws))) %>%
-      pull(label) %>%
-      str_c(., collapse = "<br>") %>%
-    HTML()
+      pull(site) %>%
+      unique()
+    
+    # Create a row of value boxes for each site
+    site_rows <- lapply(sites, function(site_name) {
+      # Get data for this site
+      weekly_risk <- data %>%
+        `[[`("risk") %>%
+        `[[`("risk_w") %>%
+        filter(.model == "crps", site == site_name) %>%
+        pull(risk_w) %>%
+        scales::percent()
+      
+      close_risk <- data %>%
+        `[[`("risk") %>%
+        `[[`("risk_ws") %>%
+        filter(.model == "crps", week_split == "close", site == site_name) %>%
+        pull(risk_ws) %>%
+        scales::percent()
+      
+      far_risk <- data %>%
+        `[[`("risk") %>%
+        `[[`("risk_ws") %>%
+        filter(.model == "crps", week_split == "far", site == site_name) %>%
+        pull(risk_ws) %>%
+        scales::percent()
+      
+      # Create layout_columns for this site with site name as first value box
+      layout_columns(
+        fill = FALSE,
+        col_widths = c(3, 3, 3, 3),  # Equal width columns
+        value_box(
+          title = "",
+          value = site_name,
+          theme = "primary"
+        ),
+        value_box(
+          "7-day risk",
+          value = weekly_risk
+        ),
+        value_box(
+          "1-3 days risk",
+          value = close_risk
+        ),
+        value_box(
+          "4-7 days risk",
+          value = far_risk
+        )
+      )
+    })
+    
+    # Return all site rows
+    tagList(site_rows)
   })
   
   output$daily_risk <- renderPlot({
@@ -160,4 +179,4 @@ server <- function(input, output, session) {
 
 }
 
-  shinyApp(ui, server)
+shinyApp(ui, server)
