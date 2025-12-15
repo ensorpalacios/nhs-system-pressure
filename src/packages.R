@@ -24,6 +24,8 @@ library(knitr)
 library(gt)
 library(FKF)
 library(bsts)
+library(httr)
+library(shiny)
 
 
 # Single functions (using import package)
@@ -47,7 +49,7 @@ import::from(readr, parse_number)
 import::from(xgboost, xgb.train, xgb.DMatrix, getinfo)
 import::from(Matrix, sparse.model.matrix)
 import::from(pagedown, chrome_print)
-import::from(ncdf4, nc_open, ncvar_add)
+import::from(ncdf4, nc_open, ncvar_get)
 
 
 # Resolve conflicts (using conflicted package)
