@@ -516,7 +516,7 @@ compute_risk <-
     
     # Save risk predictions, threshold and fc by dates
     adate <- lubridate::today() # analysis date
-    target_output_path <- paste0(save_path, adate, ".RDS")
+    target_output_path <- file.path(save_path, paste0(adate, ".RDS"))
     
     list_data <- 
       list(
