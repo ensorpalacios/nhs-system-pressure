@@ -925,9 +925,9 @@ crps_func <-  # Compute crps
     tmp_weight =
       .penalty %>% 
       case_match(
-        "upper" ~ expr("tmp_alpha ** 2"),
+        "upper" ~ expr("tmp_alpha ** 3"),
         "none" ~ expr("1"),
-        "lower" ~ expr("(1 - tmp_alpha) ** 2")
+        "lower" ~ expr("(1 - tmp_alpha) ** 3")
       )
     
     map2(.fc, .obs, \(.dist, .obs_) {
