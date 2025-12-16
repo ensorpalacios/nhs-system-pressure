@@ -52,7 +52,7 @@ tar_source("target/R/target_global_var.R")
 
 
 # Check paths
-save_path <- here("target/data/")
+save_path <- here("target/data")
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
