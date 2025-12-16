@@ -110,9 +110,5 @@ list(
     risk_file,
     compute_risk(fcc_file, thr_file),
     format = "file"
-  ),
-  tar_target(
-    plots,
-    plot_risk(risk_file)
   )
 )
