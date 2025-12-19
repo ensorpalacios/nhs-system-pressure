@@ -88,11 +88,7 @@ load_hosp <-
 #' @path_h Path hospital data
 #' @path_t Path temperature data
 prepare_data <- 
-  function(data_hospital) {
-    # Hospital data
-    df_occ <- 
-      read_excel(data_hospital, sheet = 2)
-    
+  function(df_occ) {
     # Temperature data
     df_t <- 
       get_temp_historic()
