@@ -7,8 +7,8 @@ services:
         - DB_NAME
         - DB_USER
         - DB_CRED
-      ports:
-        - "${PORT}:3838"
+     ## ports:
+     ##  - "${PORT}:3838"
       volumes:
       - /samba/nowcast-data/xsi/data:/root/data
       - /home/rshiny:/root/sql

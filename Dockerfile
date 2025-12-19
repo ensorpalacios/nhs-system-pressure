@@ -2,7 +2,9 @@ FROM rockerverse_sap
 
 RUN apt update && apt -y install cron
 
-COPY . /root/
+COPY target /root/target
+COPY _targets /root/_targets
+COPY _targets.R /root/_targets.R
 
 # 1. Setup the crontab file
 COPY crontab /etc/cron.d/nhs-cron
