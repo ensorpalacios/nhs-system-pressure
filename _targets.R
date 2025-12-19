@@ -59,8 +59,6 @@ if (!file.exists(save_path)) {
 
 
 # Data paths
-path_hosp <- # path hospital data
-  "target/data/2022-01-01-to-2025-11-01-acute-occupancy.xlsx"
 path_weight <- 
   "target/data/weights_training.RDS"
 ls_model_comb <-
@@ -78,7 +76,7 @@ ls_model_comb <-
 list(
   tar_target(
     data_hosp,
-    path_hosp,
+    load_hosp(),
     format = "file"
   ),
   tar_target(
