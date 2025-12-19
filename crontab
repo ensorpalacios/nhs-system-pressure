@@ -1,0 +1,2 @@
+## Run every midnight (SWASFT data should update every Thursday, ecds is daily, hence this is a weekly refresh - I just run it daily to make sure I get the latest data)
+## 0 0 * * * /usr/local/bin/Rscript /root/code_data.R > /proc/1/fd/1 2>/proc/1/fd/2

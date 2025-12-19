@@ -1,18 +1,13 @@
-FROM ubuntu2204_r422_xsi
+FROM rocker/tidyverse
 
 RUN apt update && apt -y install cron
 
-# Copy the scripts
 COPY . /root/
 
-# Copy hello-cron file to the cron.d directory
-#COPY crontab /etc/cron.d/crontab
+# 1. Setup the crontab file
+COPY crontab /etc/cron.d/nhs-cron
+RUN chmod 0644 /etc/cron.d/nhs-cron
+RUN crontab /etc/cron.d/nhs-cron
 
-# Give execution rights on the cron job
-#RUN chmod 0644 /etc/cron.d/crontab
-
-# Apply cron job
-#RUN crontab /etc/cron.d/crontab
-
-# Run the command on container startup
-#CMD printenv > /etc/environment && cron -f
+# 2. Start cron in the foreground
+CMD ["sh", "-c", "printenv > /etc/environment && cron -f"]
