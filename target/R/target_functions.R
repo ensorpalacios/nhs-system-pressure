@@ -52,6 +52,7 @@ load_hosp <-
       ) %>%
       dplyr::collect() %>%
       dplyr::mutate(
+
         METRIC_NAME = dplyr::recode(
           METRIC_NAME,
           !!!c(
@@ -74,7 +75,8 @@ load_hosp <-
           )
         )
       ) %>%
-      dplyr::rename_with(.fn = stringr::str_to_lower)
+      dplyr::rename_with(.fn = stringr::str_to_lower) %>%
+      dplyr::mutate(report_date = lubridate::ymd(report_date))
 
     # Save data
     file_path = file.path(save_path, "hosp_data.RDS")
@@ -89,11 +91,13 @@ load_hosp <-
 #' @path_t Path temperature data
 prepare_data <- 
   function(df_occ) {
+    df_occ <- readRDS(df_occ)
     # Temperature data
     df_t <- 
       get_temp_historic()
     df_t <- 
-      df_t %>% melt(id.vars = "report_date", variable.name = "metric_name")
+      df_t %>% melt(id.vars = "report_date", variable.name = "metric_name") %>%
+      mutate(report_date = lubridate::ymd(report_date))
     # Join data
     df_occ <- 
       df_occ %>% 
