@@ -10,12 +10,12 @@ load_hosp <-
   function() {
     con <- DBI::dbConnect(odbc::odbc(), "xsw")
 
-    report_start <- ymd('2022-01-01')
-    report_end <- ymd('2025-11-01')
+    report_start <- lubridate::ymd('2022-01-01')
+    report_end <- lubridate::ymd('2025-11-01')
 
-    ecds_tbl <- tbl(
+    ecds_tbl <- dplyr::tbl(
       con,
-      in_catalog(
+      dbplyr::in_catalog(
         catalog = "Analyst_SQL_Area",
         schema = "dbo",
         table = "tbl_BNSSG_Datasets_UrgentCare_Daily"
@@ -46,13 +46,13 @@ load_hosp <-
 
     hosp_data <-
       ecds_tbl %>%
-      filter(
+      dplyr::filter(
         METRIC_ID %in% metrics,
-        between(Report_Date, report_start, report_end)
+        dplyr::between(Report_Date, report_start, report_end)
       ) %>%
-      collect() %>%
-      mutate(
-        METRIC_NAME = recode(
+      dplyr::collect() %>%
+      dplyr::mutate(
+        METRIC_NAME = dplyr::recode(
           METRIC_NAME,
           !!!c(
             # "Number of Discharges",
@@ -74,7 +74,7 @@ load_hosp <-
           )
         )
       ) %>%
-      rename_with(.fn = str_to_lower)
+      dplyr::rename_with(.fn = stringr::str_to_lower)
 
     # Save data
     file_path = file.path(save_path, "hosp_data.RDS")
