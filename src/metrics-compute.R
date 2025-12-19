@@ -109,11 +109,11 @@ if (amode == "train") {
 list_best_models <-
   list(
     "BRI" = 
-      c("arima_dadp_l", "arima_dadp_rec", "rf_int_not", 
-        "var_paed", "var_h", "xgb_not"),
+      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
+        "var_paed", "var_h", "xgb"),
     "Southmead" = 
-      c("arima_dadp_l", "arima_dadp_rec", "var_ad2", 
-        "var_paed", "rf_int", "xgb")
+      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
+        "var_paed", "var_los", "xgb")
   )
 
 

@@ -335,7 +335,7 @@ tbl_freq$tbl_freq_w <-
   tab_style(
     style = cell_text(weight = "bold"),
     locations = cells_row_groups()
-  ) %>% as_latex()
+  )
 
 
 
