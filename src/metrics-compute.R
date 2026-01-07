@@ -63,8 +63,8 @@ list_models <- # select models
     "arima",
     "arima_dad_l",
     "arima_dadp_l",
-    "arima_dadpt_l",
     "arima_dadpl_l",
+    "arima_dadpt_l",
     "arima_dadplt_l",
     "arima_dad_rec",
     "arima_dadp_rec",
@@ -139,7 +139,8 @@ list_models <- # update list with combined
   c(list_models, 
     "equal",
     "crps",
-    "crps_upper")
+    "crps_upper",
+    "crps_lower")
 
 
 metrics_c <- # compute metrics

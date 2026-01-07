@@ -29,7 +29,7 @@ setup_env <-
     assign("threshold_prob", 0.9, envir = .GlobalEnv) # percentile of total occ.
     
     # Colour mapping
-    col_models = viridis_pal(option = "turbo")(28) # Colour mapping
+    col_models = viridis_pal(option = "turbo")(29) # Colour mapping
     names(col_models) =
       c(
         "arima",
@@ -59,7 +59,8 @@ setup_env <-
         "baseline_min",
         "crps",
         "equal",
-        "crps_upper"
+        "crps_upper",
+        "crps_lower"
       )
     assign("col_models", col_models, envir = .GlobalEnv)
   }

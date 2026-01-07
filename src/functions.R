@@ -1011,7 +1011,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
     
     # Compute metric for each model and penalty
     ls_models = tmp_data %>% names %>% tail(-4)
-    penalty = c("upper", "none")
+    penalty = c("upper", "none", "lower")
     map(penalty, \(.penalty) {
       map(ls_models, \(.model_name) {
         tmp_obs = tmp_data[["occ"]]
@@ -1178,45 +1178,47 @@ lcomb_fun <-
 #' of crps/wilker as higher is worse
 #' @param .fc Original fc to combine.
 #' @param .metrics Original metrics to use for fc weighting.
-fc_comb_wrap <- 
+fc_comb_wrap <-
   function(.fc, .weights, .list_models) {
     # Data wrangling
-    n_split <- # number of splits 
+    n_split <- # number of splits
       .fc$split %>% unique() %>% tail(1) %>% as.numeric()
-    
-    
+
     .fc <- # add fc horizon (need redo t_ax!)
       .fc %>%
-      group_by(split) %>% 
+      group_by(split) %>%
       mutate(
         t_ax = as.numeric(index),
         t_ax = t_ax - (t_ax[1]),
         t_ax = t_ax + 7 * (n_split - as.numeric(split)),
         h = t_ax - min(t_ax) + 1
-      ) %>% 
+      ) %>%
       ungroup()
-    
+
     fc_comb_lp <-
       lcomb_fun(.fc, .weights, .list_models, "none", "equal")
-    
+
     fc_comb_crps_u <-
       lcomb_fun(.fc, .weights, .list_models, "upper", "crps")
     fc_comb_crps_u$`.model` = "crps_upper" # rename
-    
+
+    fc_comb_crps_l <-
+      lcomb_fun(.fc, .weights, .list_models, "lower", "crps")
+    fc_comb_crps_l$`.model` = "crps_lower" # rename
+
     fc_comb_crps <-
       lcomb_fun(.fc, .weights, .list_models, "none", "crps")
-    
+
     dimnames(fc_comb_lp$occ) <- "occ"
     dimnames(fc_comb_crps$occ) <- "occ"
     dimnames(fc_comb_crps_u$occ) <- "occ"
-    
-    .fc <- 
-      list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_crps_u) %>% 
-      reduce(bind_rows) %>%  as_fable(".mean", "occ")
+    dimnames(fc_comb_crps_l$occ) <- "occ"
+
+    .fc <-
+      list(.fc, fc_comb_lp, fc_comb_crps, fc_comb_crps_u, fc_comb_crps_l) %>%
+      reduce(bind_rows) %>%
+      as_fable(".mean", "occ")
   }
-
-
-
 
 
 
