@@ -427,7 +427,7 @@ ls_plots_lag <- list(
 iwalk(ls_plots, \(.plot, .title) {
   .plot %>% 
     ggsave(
-      filename = paste(save_path, .title, ".svg"),
+      filename = paste0(save_path, .title, ".svg"),
       width = 35, height = 20, units = "cm")
 })
 
