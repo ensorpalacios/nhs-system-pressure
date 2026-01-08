@@ -89,37 +89,40 @@ load_hosp <-
 #' Prepare data
 #' @path_h Path hospital data
 #' @path_t Path temperature data
-prepare_data <- 
+prepare_data <-
   function(df_occ) {
     df_occ <- readRDS(df_occ)
     # Temperature data
-    df_t <- 
+    df_t <-
       get_temp_historic()
-    df_t <- 
-      df_t %>% melt(id.vars = "report_date", variable.name = "metric_name") %>%
+    df_t <-
+      df_t %>%
+      melt(id.vars = "report_date", variable.name = "metric_name") %>%
       mutate(report_date = lubridate::ymd(report_date))
     # Join data
-    df_occ <- 
-      df_occ %>% 
+    df_occ <-
+      df_occ %>%
       bind_rows(
-        copy(df_t)[, provider := "BRI"], 
-        copy(df_t)[, provider := "NBT"])
-    
-    
+        copy(df_t)[, provider := "BRI"],
+        copy(df_t)[, provider := "NBT"]
+      )
+
     # Data wrangling:
     # keep BRI & Southmead, generate index, rename variables
-    df_occ <- 
+    df_occ <-
       df_occ |>
       filter(
-        provider == "BRI" | provider == "NBT") |>
-      select(-metric_id) |> 
+        provider == "BRI" | provider == "NBT"
+      ) |>
+      select(-metric_id) |>
       pivot_wider(names_from = metric_name, values_from = value) |>
       mutate(
         index = as.Date(report_date, tz = "GMT"),
         site = case_match(
           provider,
-          "BRI" ~ "BRI", 
-          "NBT" ~ "Southmead"),
+          "BRI" ~ "BRI",
+          "NBT" ~ "Southmead"
+        ),
         adm = `Number of Admissions`,
         dis = `Number of Discharges`,
         occ = `Bed occupancy`,
@@ -137,56 +140,62 @@ prepare_data <-
       ) |>
       relocate(c(index, site)) |>
       arrange(index, site)
-    
-    
+
     # Covert to timeseries (tsibble object)
     ts_data <- df_occ |> as_tsibble(index = index, key = site)
-    
-    
+
     ######
     # Temporary while using data I have
     # Remove first 3/4 of 2022 data (due to strange behaviour)
     cat("starting data from 22/09/01")
-    ts_data <- 
+    ts_data <-
       ts_data %>% filter(index >= as.Date("2022-09-01"))
     ######
-    
-    
+
     # Convert implicit gaps into explicit missing values
-    ts_data <- 
+    ts_data <-
       ts_data |>
       fill_gaps(.full = TRUE) # fully balanced data
-    
-    
+
     # Impute missing values (simple moving average, window=7)
+    impute_fun <-
+      function(.dat) {
+        na_seadec(
+          .dat, algorithm = "ma",
+          k = 3,
+          weighting = "simple",
+          find_frequency = TRUE
+        )
+      }
     ts_data <- # impute
-      ts_data %>% group_by(site) %>% 
+      ts_data %>%
+      group_by(site) %>%
       mutate(
-        occ = occ %>% na_ma(k = 3, weighting = "simple"),
-        dis = dis %>% na_ma(k = 3, weighting = "simple"),
-        adm = adm %>% na_ma(k = 3, weighting = "simple"),
-        paed = paed %>% na_ma(k = 3, weighting = "simple"),
-        los = los %>% na_ma(k = 3, weighting = "simple"),
-        tmin = tmin %>% na_ma(k = 3, weighting = "simple"), # shouldn't be necessary
-        tmax = tmax %>% na_ma(k = 3, weighting = "simple") # shouldn't be necessary
-      ) %>% 
+        occ = occ %>% inpute_fun(),
+        dis = dis %>% inpute_fun(),
+        adm = adm %>% inpute_fun(),
+        paed = paed %>% inpute_fun(),
+        los = los %>% inpute_fun(),
+        tmin = tmin %>% inpute_fun(), # shouldn't be necessary
+        tmax = tmax %>% inpute_fun() # shouldn't be necessary
+      ) %>%
       ungroup()
-    
-    
+
     # Process bed occupation
-    ts_data <- 
-      ts_data %>% group_by(site) %>% 
-      mutate(occ = # stabilise (- xristmus effect)
-          stabilise(occ, index, .xdays = TRUE),
-      ) %>% 
+    ts_data <-
+      ts_data %>%
+      group_by(site) %>%
+      mutate(
+        # stabilise (- xristmus effect)
+        occ = stabilise(occ, index, .xdays = TRUE),
+      ) %>%
       ungroup()
-    
-    
+
     # Aggregate BRI/Southmead
-    ts_data <- 
+    ts_data <-
       ts_data %>%
       aggregate_key(
-        site, 
+        site,
         occ = sum(occ),
         adm = sum(adm),
         dis = sum(dis),
@@ -195,51 +204,50 @@ prepare_data <-
         tmax = unique(tmax), # = across sites; necessary to return 1 value
         tmin = unique(tmin), # = across sites; necessary to return 1 value
       )
-    
-    
+
     # Process admissions-discharges
-    ts_data <- 
-      ts_data %>% 
-      group_by(site) %>% 
+    ts_data <-
+      ts_data %>%
+      group_by(site) %>%
       mutate(
         # New variables
         ad_diff = adm - dis, # difference
-        ad_diff = # stabilise (-holidays/week days effect)
-          stabilise(ad_diff, index, .xdays = "ad-diff", .wdays = TRUE),
+        # stabilise (-holidays/week days effect)
+        ad_diff = stabilise(ad_diff, index, .xdays = "ad-diff", .wdays = TRUE),
         ad_diff2 = c(0, diff(ad_diff)), # rate of change of ad_diff
         # Filter
         ad_diff_f = slide_dbl(ad_diff, mean, .before = 2),
         ad_diff2_f = slide_dbl(ad_diff2, mean, .before = 2)
-      ) %>% 
+      ) %>%
       ungroup()
-    
+
     # Length of stay (+21)
-    ts_data <- 
-      ts_data %>% group_by(site) %>% 
+    ts_data <-
+      ts_data %>%
+      group_by(site) %>%
       mutate(
         # Remove sudden drops from BRI (replace with moving avg)
-        mask = # iqr rule to detect (left-tail) outliers 
-          los < quantile(los)[2] - 1.5 * (quantile(los)[4] - quantile(los)[2]),
+        # iqr rule to detect (left-tail) outliers
+        mask = los <
+          quantile(los)[2] - 1.5 * (quantile(los)[4] - quantile(los)[2]),
         mavg = slide_dbl(los, mean, .before = 5, .after = 5),
         los = if_else(mask, mavg, los),
         mask = NULL,
         mavg = NULL
-      ) %>% 
+      ) %>%
       ungroup()
-    
-    
+
     # Add days of week and numeric time index
-    ts_data <- 
-      ts_data %>%   
+    ts_data <-
+      ts_data %>%
       mutate(
-        days_ = format(index, "%a") |> 
+        days_ = format(index, "%a") |>
           factor(levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")),
         # t_ax = rep(1:(length(days_)/2), 2)
         t_ax = index %>% as.numeric(),
         t_ax = t_ax - min(t_ax) + 1
       )
-    
-    
+
     # Return time series data
     ts_data
   }

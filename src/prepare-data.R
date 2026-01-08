@@ -172,7 +172,7 @@ ts_occ <-
 impute_fun <- 
   function(.dat) {
     na_seadec(
-      .dat, algorithm = "ma", k = 3, weighting = "simple", find_frequency = T
+      .dat, algorithm = "ma", k = 3, weighting = "simple", find_frequency = TRUE
     )
   }
 ts_occ <- # impute
