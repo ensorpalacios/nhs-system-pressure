@@ -169,6 +169,12 @@ ts_occ <-
 
 
 # Impute missing values
+impute_fun <- 
+  function(.dat) {
+    na_seadec(
+      .dat, algorithm = "ma", k = 3, weighting = "simple", find_frequency = T
+    )
+  }
 ts_occ <- # impute
   ts_occ %>% 
   group_by(site) %>% 
@@ -182,14 +188,14 @@ ts_occ <- # impute
     paed_m = paed,
     los_m = los,
     # Impute (simple moving average, window=7)
-    occ = occ %>% na_ma(k = 3, weighting = "simple"),
-    core = core %>% na_ma(k = 3, weighting = "simple"),
-    dis = dis %>% na_ma(k = 3, weighting = "simple"),
-    adm = adm %>% na_ma(k = 3, weighting = "simple"),
-    paed = paed %>% na_ma(k = 3, weighting = "simple"),
-    los = los %>% na_ma(k = 3, weighting = "simple"),
-    tmin = tmin %>% na_ma(k = 3, weighting = "simple"), # shouldn't be necessary
-    tmax = tmax %>% na_ma(k = 3, weighting = "simple") # shouldn't be necessary
+    occ = occ %>% impute_fun(),
+    core = core %>% impute_fun(),
+    dis = dis %>% impute_fun(),
+    adm = adm %>% impute_fun(),
+    paed = paed %>% impute_fun(),
+    los = los %>% impute_fun(),
+    tmin = tmin %>% impute_fun(), # should not be necessary
+    tmax = tmax %>% impute_fun() # should not be necessary
   ) %>% 
   ungroup()
 
