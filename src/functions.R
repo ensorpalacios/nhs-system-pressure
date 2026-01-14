@@ -490,76 +490,96 @@ zs_fun <-
 #' @param .wdays whether to remove effect of week days
 #' @param .stationary whether to make .var stationary
 #' @export
-stabilise <- 
+stabilise <-
   function(.var, .index, .xdays = FALSE, .wdays = FALSE, .stationary = FALSE) {
     # Prepare data
-    tmp_data = 
-      tibble(index = .index, var = .var) %>% 
+    tmp_data =
+      tibble(index = .index, var = .var) %>%
       mutate(
         var_mean = mean(var),
         var_demean = var - var_mean
-      ) %>% 
+      ) %>%
       as_tsibble(index = index)
-    
+
     # Remove effects of special days
     if (!isFALSE(.xdays)) {
-      christmus_period = 
-        .index %>% base::format("%Y") %>% unique() %>%  # years in data
+      christmus_period =
+        .index %>%
+        base::format("%Y") %>%
+        unique() %>% # years in data
         map(\(.year) {
           seq(
-            as.Date(str_glue("{.year}-12-24")), 
+            as.Date(str_glue("{.year}-12-24")),
             as.Date(str_glue("{.year}-12-26")),
-            by = "days")
-        }) %>% 
+            by = "days"
+          )
+        }) %>%
         purrr::reduce(c)
-      
+
       tmp_data = # default gaussian kernel
-        tmp_data %>% 
+        tmp_data %>%
         mutate(
-          christmus = 
-            case_when(index %in% christmus_period ~ 1, .default = 0) %>%
-            ksmooth(index, ., kernel = "normal", bandwidth = 5) %>% .$y
+          christmus = case_when(
+            index %in% christmus_period ~ 1,
+            .default = 0
+          ) %>%
+            ksmooth(index, ., kernel = "normal", bandwidth = 5) %>%
+            .$y
         )
-      
-      if (.xdays == "ad-diff") { # kernel 1st derivative for ad difference
+
+      if (.xdays == "ad-diff") {
+        # kernel 1st derivative for ad difference
         tmp_data =
-          tmp_data %>% 
+          tmp_data %>%
           mutate(christmus = diff(christmus) %>% c(., 0))
         cat("use gaussian kernel derivative")
       }
-      
+
       fit_xdays =
-        tmp_data %>% model(TSLM(formula("var ~ christmus"))) %>%
-        coef() %>% filter(term == "christmus") %>% select(estimate) %>% pull()
+        tmp_data %>%
+        model(TSLM(formula("var ~ christmus"))) %>%
+        coef() %>%
+        filter(term == "christmus") %>%
+        select(estimate) %>%
+        pull()
 
       tmp_data =
-        tmp_data %>% 
-        mutate(var = var - c(christmus * fit_xdays),
-               var_mean = mean(var), # new data mean
-               var_demean = var - var_mean) # new mean-subtracted data 
+        tmp_data %>%
+        mutate(
+          var = var - c(christmus * fit_xdays),
+          var_mean = mean(var), # new data mean
+          var_demean = var - var_mean
+        ) # new mean-subtracted data
     }
-    
+
     # Remove effects of week days
     if (.wdays) {
       fit_wdays =
-        tmp_data %>% 
+        tmp_data %>%
         mutate(
           wdays = factor(weekdays(index))
-        ) %>% 
+        ) %>%
         model(lm = TSLM(var_demean ~ wdays)) %>% # fit on mean-subtracted data
-        residuals() %>% pull(.resid)
-      
+        residuals() %>%
+        pull(.resid)
+
       tmp_data =
-        tmp_data %>% 
-        mutate(var = fit_wdays + var_mean, # add back the mean 
-               var_demean = fit_wdays) # new mean-subtracted data 
+        tmp_data %>%
+        mutate(
+          var = fit_wdays + var_mean, # add back the mean
+          var_demean = fit_wdays
+        ) # new mean-subtracted data
     }
-    
+
     # Make stationary
     if (.stationary) {
       is_stationary =
-        tmp_data %>% features(var, unitroot_kpss) %>% 
-        select(kpss_pvalue) %>% {(pull(.) > 0.05)}
+        tmp_data %>%
+        features(var, unitroot_kpss) %>%
+        select(kpss_pvalue) %>%
+        {
+          (pull(.) > 0.05)
+        }
       while (!is_stationary) {
         if (tmp_data %>% features(var, unitroot_nsdiffs) %>% pull() > 0) {
           tmp_data = tmp_data %>% mutate(var = difference(var, 7))
@@ -568,14 +588,18 @@ stabilise <-
           tmp_data = tmp_data %>% mutate(var = difference(var))
         }
         is_stationary =
-          tmp_data %>% features(var, unitroot_kpss) %>% 
-          select(kpss_pvalue) %>% {(pull(.) > 0.05)}
+          tmp_data %>%
+          features(var, unitroot_kpss) %>%
+          select(kpss_pvalue) %>%
+          {
+            (pull(.) > 0.05)
+          }
       }
       tmp_data =
         tmp_data %>% # fill NA with mean
         mutate(var = replace_na(var, mean(var, na.rm = TRUE)))
     }
-    
+
     return(tmp_data %>% pull(var))
   }
 

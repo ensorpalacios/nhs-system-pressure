@@ -302,39 +302,29 @@ tbl_auc <-  # add raw colours by model
 
 
 # Table frequency high ---------------------------------------------------------
-tbl_freq <- list()
-tbl_freq$tbl_freq_d <- 
-  list_freq$freq_d %>% 
-  gt(rowname_col = "time horizon", groupname_col = "site") %>% 
-  tab_stubhead(label = "Time horizon") %>% 
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_row_groups()
-  ) %>% 
-  tab_style(
-    style = cell_text(indent = px(12)),
-    locations = cells_stub()
-  )
-
-tbl_freq$tbl_freq_ws <- 
-  list_freq$freq_ws %>% 
-  gt(rowname_col = "time horizon", groupname_col = "site") %>% 
-  tab_stubhead(label = "Time horizon") %>% 
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_row_groups()
-  ) %>% 
-  tab_style(
-    style = cell_text(indent = px(12)),
-    locations = cells_stub()
-  )
-
-tbl_freq$tbl_freq_w <- 
-  list_freq$freq_w %>% 
-  gt(groupname_col = "site") %>% 
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_row_groups()
+tbl_freq <-
+  rbind(
+    list_freq$freq_d %>%
+      pivot_wider(names_from = "site", values_from = "Prevalence") |>
+      mutate(`time horizon` = as.character(`time horizon`)),
+    list_freq$freq_ws %>%
+      pivot_wider(names_from = "site", values_from = "Prevalence") |>
+      mutate(
+        `time horizon` = if_else(
+          `time horizon` == "close",
+          "1-3 days",
+          "4-7 days"
+        )
+      ),
+    list_freq$freq_w %>%
+      pivot_wider(names_from = "site", values_from = "Prevalence") |>
+      mutate(`time horizon` = "week")
+  ) |>
+  gt(rowname_col = "time horizon") %>%
+  tab_stubhead(label = "Time horizon") %>%
+  tab_spanner(
+    label = "Prevalence threshold crossing",
+    columns = c("BRI", "Southmead")
   )
 
 

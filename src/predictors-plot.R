@@ -130,6 +130,24 @@ plot_dis_miss <-
   plot_layout(ncol = 1, axis = "collect_x")
 
 
+# Admission - discharges (only raw)
+plot_ad_diff_row <-
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "BRI") %>% .$ad_diff_original,
+    x_axis_labels = x_data_labels,
+    title = "Admission-discharge difference",
+    subtitle = "BRI"
+  ) +
+  ggplot_na_distribution(
+    ts_occ %>% filter(site == "Southmead") %>% .$ad_diff_original,
+    x_axis_labels = x_data_labels,
+    title = NULL,
+    subtitle = "Southmead"
+  ) +
+  plot_layout(ncol = 1, axis = "collect_x")
+
+
+
 # Admission - discharges (raw and filtered)
 tbl_ad_diff <- 
   ts_occ %>%
@@ -249,7 +267,7 @@ plot_temp <-
 tbl_temp <- 
   ts_occ %>% as_tibble() %>%  select(tmax, tmin, tdiff) %>% 
   summary() %>% 
-  kbl() %>%# kable_minimal()
+  kbl(format = "latex") %>%# kable_minimal()
   kable_styling(full_width = F)
 
 
@@ -335,6 +353,32 @@ plot_together <- # plot
 #     # xlim(0, NA) # causes warning
 
 
+# Christmus dummy variables
+christmus_period <- 
+        x_data_labels %>%
+        base::format("%Y") %>%
+        unique() %>% # years in data
+        map(\(.year) {
+          seq(
+            as.Date(str_glue("{.year}-12-24")),
+            as.Date(str_glue("{.year}-12-26")),
+            by = "days"
+          )
+        }) %>%
+        purrr::reduce(c)
+christmus_period <- 
+  if_else(x_data_labels %in% christmus_period, 1, 0)
+
+dummy <- ksmooth(x_data_labels, christmus_period, kernel = "normal", bandwidth = 5)
+
+plot_dummy <-
+  (as.data.table(dummy) |>
+  ggplot(aes(x = x, y = y)) + geom_line()) +
+  (as.data.table(dummy) |>
+  ggplot(aes(x = x, y = y)) + geom_line(aes(y = c(diff(y), 0))))
+
+
+
 # Preliminary analysis ---------------------------------------------------------
 # Use only test data
 split_data_tt <- # Train/test set
@@ -402,6 +446,7 @@ ls_plots <- list(
   "adm_miss" = plot_adm_miss,
   "dis_miss" = plot_dis_miss,
   "dis_miss" = plot_dis_miss,
+  "ad_diff_row" = plot_ad_diff_row,
   "ad_diff" = plot_ad_diff,
   "ad_diff_acf" = plot_ad_diff_acf,
   "ad_diff2_acf" = plot_ad_diff2_acf,
@@ -416,7 +461,8 @@ ls_plots <- list(
   "los_acf" = plot_los_acf,
   "temperature" = plot_temp,
   "beds" = plot_beds,
-  "together" = plot_together
+  "together" = plot_together,
+  "dummy" = plot_dummy
   )
 ls_plots_lag <- list(
   "spectr" = plot_lags %>% map(., ~ ( pluck(.x, "plt_spectr"))),
@@ -463,5 +509,5 @@ iwalk(ls_plots_lag, \(.plots, .title) {
   })
 })
 
-tbl_temp %>% save_kable(paste0(save_path, "tbl_temp.pdf"))
+tbl_temp %>% save_kable(paste0(save_path, "tbl_temp.tex"))
 # tbl_temp %>% save_kable(paste0(save_path, "tbl_temp.html"))
