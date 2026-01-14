@@ -321,11 +321,7 @@ tbl_freq <-
       mutate(`time horizon` = "week")
   ) |>
   gt(rowname_col = "time horizon") %>%
-  tab_stubhead(label = "Time horizon") %>%
-  tab_spanner(
-    label = "Prevalence threshold crossing",
-    columns = c("BRI", "Southmead")
-  )
+  tab_stubhead(label = "Time horizon")
 
 
 
@@ -335,6 +331,9 @@ save_path <- here(paste0("output/plots/risk_fc/" , amode, "/"))
 if (!file.exists(save_path)) {
   dir.create(save_path, recursive = TRUE)
 }
+
+# Table freq
+gtsave(tbl_freq, str_glue("{save_path}tbl_freq.tex"))
 
 # Single fc
 walk(sites, \(.site) {
@@ -359,11 +358,4 @@ iwalk(plt_curves, \(.plt, .name) {
 iwalk(tbl_auc, \(.tbl, .name) {
   file_name = str_glue("{save_path}table_{.name}")
   html2pdf(.tbl, file_name)
-})
-
-
-# Table freq
-iwalk(tbl_freq, \(.tbl, .name) {
-  file_name = str_glue("{save_path}{.name}.tex")
-  gtsave(.tbl, file_name)
 })
