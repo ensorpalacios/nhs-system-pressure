@@ -22,7 +22,7 @@ setup_env <-
       assign("skip", "9 days", envir = .GlobalEnv) # Cv separaion
     } else if (amode == "test") {
       assign("type", "test", envir = .GlobalEnv)
-      assign("skip", "4 days", envir = .GlobalEnv)
+      assign("skip", "3 days", envir = .GlobalEnv)
     }
     
     # Threshold for "dangerous" occupancy
