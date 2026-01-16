@@ -41,12 +41,12 @@ risk_w <- list_risk$risk_w
 
 list_models <- # select models
   c(
-    "arima_dadpl_rec",
+    # "arima_dadpl_rec",
     # "var_h",
     # "arima_dad_l",
     # "arima_dad_rec",
-    "crps_upper",
-    "crps"
+    "crps_lower"
+    # "crps"
     )
 
 splits <- risk_d$split %>% unique()
@@ -150,102 +150,18 @@ plt_risk <-
 
 
 # Plot curves (aggregate splits) -----------------------------------------------
-pcurve_fun <- 
-  function(.ax_data, .auc_data) {
-    .names = names(.ax_data)
-    .y = .names[ncol(.ax_data) - 1]
-    .x = .names[ncol(.ax_data)]
-    
-    if ("week_split" %in% .names) {
-      .auc_data[ # filter by top auc 
-        .ax_data, on = c("nboot", "site", ".model", "week_split")][
-          ,
-          {
-            lapply(.SD, \(.c) {
-              mean = mean(.c)
-              q20 = quantile(.c, 0.2)
-              q80 = quantile(.c, 0.8)
-              c(mean = mean, q20, q80)
-            }) %>% 
-              unlist(use.names = T) %>% 
-              as.list()
-          },
-          by = c("site", ".model", "week_split", "db"),
-          .SDcols = !"nboot" 
-        ][
-          ,
-          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
-          # .SD[auc >= 0],
-          by = c("site", "week_split")
-        ] %>% # plot
-        ggplot(
-          aes(
-            x = .data[[sprintf("%s.mean", .x)]], 
-            y = .data[[sprintf("%s.mean", .y)]],
-            colour = .model, fill = .model)) +
-        geom_ribbon(
-          aes(
-            ymin = .data[[sprintf("%s.20%%", .y)]], 
-            ymax = .data[[sprintf("%s.80%%", .y)]]),
-          colour = NA,
-          alpha = 0.3,
-        ) +
-        geom_line(linewidth = 1) +
-        geom_line(
-          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"), 
-          aes(x = x, y = y)
-        ) +
-        scale_colour_manual(name = ".model", values = col_models) + 
-        scale_fill_manual(name = ".model", values = col_models) + 
-        facet_wrap(vars(site, week_split), ncol = 2)
-    } else {
-      .auc_data[ # filter by top auc 
-        .ax_data, on = c("nboot", "site", ".model")][
-          ,
-          {
-            lapply(.SD, \(.c) {
-              mean = mean(.c)
-              q20 = quantile(.c, 0.2)
-              q80 = quantile(.c, 0.8)
-              c(mean = mean, q20, q80)
-            }) %>% 
-              unlist(, use.names = T) %>% 
-              as.list()
-          },
-          by = c("site", ".model", "db"),
-          .SDcols = !"nboot"
-        ][
-          ,
-          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
-          # .SD[auc.mean >= 0],
-          by = site
-        ] %>% # plot
-        ggplot(
-          aes(
-            x = .data[[sprintf("%s.mean", .x)]], 
-            y = .data[[sprintf("%s.mean", .y)]],
-            colour = .model, fill = .model)) +
-        geom_ribbon(
-          aes(
-            ymin = .data[[sprintf("%s.20%%", .y)]], 
-            ymax = .data[[sprintf("%s.80%%", .y)]]),
-          colour = NA,
-          alpha = 0.3,
-        ) +
-        geom_line(linewidth = 1) +
-        geom_line(
-          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"), 
-          aes(x = x, y = y)
-          ) +
-        scale_colour_manual(name = ".model", values = col_models) + 
-        scale_fill_manual(name = ".model", values = col_models) + 
-        facet_wrap(vars(site), ncol = 1) +
-        theme(aspect.ratio = 1)
-    }
-  }
-  
+list_models_curves <- # base models same as in metrics-compute.R
+  list(
+    "BRI" = 
+      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
+        "var_paed", "var_h", "xgb", "crps", "crps_upper", "crps_lower", "equal"),
+    "Southmead" = 
+      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
+        "var_paed", "var_los", "xgb", "crps", "crps_upper", "crps_lower", "equal")
+  )
+
 plt_curves <- 
-  map2(list_curves, list_auc, pcurve_fun)
+  map2(list_curves, list_auc, pcurve_fun, list_models_curves)
 
 
 

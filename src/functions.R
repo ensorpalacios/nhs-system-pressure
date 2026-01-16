@@ -1246,7 +1246,7 @@ fc_comb_wrap <-
 
 
 
-# Functions for risk prediction ------------------------------------------------
+# Functions for risk prediction/plotting --------------------------------------
 #' Curve axes
 #' Function to compute the axes of the ROC/PR curves from risk prediction
 #' classifier. Curves represent x/y values for different decision boundaries
@@ -1327,6 +1327,128 @@ auc_fun <-
     height <- (y[2:.Nr] + y[1:.Nr - 1]) / 2
     list(auc = sum(dx * height))
   } 
+
+
+#' Plot risk curves
+#'
+#' @param .ax_data Data for plotting roc/pr curves
+#' @param .auc_data Data about auc
+#' @param .list_models List of models to plot
+#'
+#' @returns Plot auc/pr curves for each risk time period
+pcurve_fun <-
+  function(.ax_data, .auc_data, .list_models) {
+    .names = names(.ax_data)
+    .y = .names[ncol(.ax_data) - 1]
+    .x = .names[ncol(.ax_data)]
+
+    .ax_data =
+      rbind(
+        .ax_data[
+          site == "BRI" & .model %in% .list_models$BRI
+        ],
+        .ax_data[
+          site == "Southmead" & .model %in% .list_models$Southmead
+        ]
+      )
+
+    if ("week_split" %in% .names) {
+      .auc_data[
+        # filter by top auc
+        .ax_data,
+        on = c("nboot", "site", ".model", "week_split")
+      ][,
+        {
+          lapply(.SD, \(.c) {
+            mean = mean(.c)
+            q20 = quantile(.c, 0.2)
+            q80 = quantile(.c, 0.8)
+            c(mean = mean, q20, q80)
+          }) %>%
+            unlist(use.names = T) %>%
+            as.list()
+        },
+        by = c("site", ".model", "week_split", "db"),
+        .SDcols = !"nboot"
+      ][,
+          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
+          # .SD[auc >= 0],
+          by = c("site", "week_split")
+        ] %>% # plot
+        ggplot(
+          aes(
+            x = .data[[sprintf("%s.mean", .x)]],
+            y = .data[[sprintf("%s.mean", .y)]],
+            colour = .model,
+            fill = .model
+          )
+        ) +
+        geom_ribbon(
+          aes(
+            ymin = .data[[sprintf("%s.20%%", .y)]],
+            ymax = .data[[sprintf("%s.80%%", .y)]]
+          ),
+          colour = NA,
+          alpha = 0.3,
+        ) +
+        geom_line(linewidth = 1) +
+        geom_line(
+          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"),
+          aes(x = x, y = y)
+        ) +
+        scale_colour_manual(name = ".model", values = col_models) +
+        scale_fill_manual(name = ".model", values = col_models) +
+        facet_wrap(vars(site, week_split), ncol = 2)
+    } else {
+      .auc_data[
+        # filter by top auc
+        .ax_data,
+        on = c("nboot", "site", ".model")
+      ][,
+        {
+          lapply(.SD, \(.c) {
+            mean = mean(.c)
+            q20 = quantile(.c, 0.2)
+            q80 = quantile(.c, 0.8)
+            c(mean = mean, q20, q80)
+          }) %>%
+            unlist(, use.names = T) %>%
+            as.list()
+        },
+        by = c("site", ".model", "db"),
+        .SDcols = !"nboot"
+      ][,
+        .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
+        # .SD[auc.mean >= 0],
+        by = site
+      ] %>% # plot
+        ggplot(
+          aes(
+            x = .data[[sprintf("%s.mean", .x)]],
+            y = .data[[sprintf("%s.mean", .y)]],
+            colour = .model,
+            fill = .model
+          )
+        ) +
+        geom_ribbon(
+          aes(
+            ymin = .data[[sprintf("%s.20%%", .y)]],
+            ymax = .data[[sprintf("%s.80%%", .y)]]
+          ),
+          colour = NA,
+          alpha = 0.3,
+        ) +
+        geom_line(linewidth = 1) +
+        geom_line(
+          data = data.frame(x = c(0, 1), y = c(0, 1), .model = "I-line"),
+          aes(x = x, y = y)
+        ) +
+        scale_colour_manual(name = ".model", values = col_models) +
+        scale_fill_manual(name = ".model", values = col_models) +
+        facet_wrap(vars(site), ncol = 1) +
+        theme(aspect.ratio = 1)
+    }
+  }
 
 
 
