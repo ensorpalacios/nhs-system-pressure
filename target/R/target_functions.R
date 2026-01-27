@@ -8,7 +8,6 @@
 #' Load hospital data
 load_hosp <-
   function() {
-    con <- DBI::dbConnect(odbc::odbc(), "xsw")
 
     con <- switch(
       .Platform$OS.type,
