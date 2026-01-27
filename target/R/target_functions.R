@@ -13,7 +13,7 @@ load_hosp <-
       .Platform$OS.type,
       windows = DBI::dbConnect(odbc::odbc(), "xsw"),
       unix = {
-        DBI:dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql/sql_connect_string_linux_sql18"))
+        DBI::dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql/sql_connect_string_linux_sql18"))
       }
     )
 
