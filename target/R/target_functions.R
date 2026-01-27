@@ -10,6 +10,15 @@ load_hosp <-
   function() {
     con <- DBI::dbConnect(odbc::odbc(), "xsw")
 
+    con <- switch(
+      .Platform$OS.type,
+      windows = DBI::dbConnect(odbc::odbc(), "xsw"),
+      unix = {
+        DBI:dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql/sql_connect_string_linux_sql18"))
+      }
+    )
+
+
     report_start <- lubridate::ymd('2022-01-01')
     report_end <- lubridate::ymd('2025-11-01')
 
