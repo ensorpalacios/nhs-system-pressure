@@ -180,13 +180,13 @@ prepare_data <-
       ts_data %>%
       group_by(site) %>%
       mutate(
-        occ = occ %>% inpute_fun(),
-        dis = dis %>% inpute_fun(),
-        adm = adm %>% inpute_fun(),
-        paed = paed %>% inpute_fun(),
-        los = los %>% inpute_fun(),
-        tmin = tmin %>% inpute_fun(), # shouldn't be necessary
-        tmax = tmax %>% inpute_fun() # shouldn't be necessary
+        occ = occ %>% impute_fun(),
+        dis = dis %>% impute_fun(),
+        adm = adm %>% impute_fun(),
+        paed = paed %>% impute_fun(),
+        los = los %>% impute_fun(),
+        tmin = tmin %>% impute_fun(), # shouldn't be necessary
+        tmax = tmax %>% impute_fun() # shouldn't be necessary
       ) %>%
       ungroup()
 
