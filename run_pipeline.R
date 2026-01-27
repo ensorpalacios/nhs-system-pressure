@@ -1,7 +1,7 @@
-tar_source("src/packages.R")
-tar_source("target/R/target_functions.R")
-tar_source("target/R/target_helper.R")
-tar_source("target/R/target_global_var.R")
+source("src/packages.R")
+source("target/R/target_functions.R")
+source("target/R/target_helper.R")
+source("target/R/target_global_var.R")
 
 path_weight <- 
   "target/data/weights_training.RDS"
