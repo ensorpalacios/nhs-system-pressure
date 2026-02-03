@@ -28,73 +28,97 @@ metric_data = readRDS(metric_path)
 
 # Unpack from list
 metrics_c <- metric_data$metrics_comb # metrics with combined models
+metrics_other <- metric_data$metrics_other # other metrics
 metrics_summary_c <- metric_data$metrics_summary_c
 sites <- metrics_c$site %>% unique()
-metric_names <- metrics_c$metric %>% unique()
+metric_names_other <- metrics_other$metric %>% unique()
 
 
 # Order metrics
 metrics_c$models <- 
   metrics_c$models %>% factor(levels = names(col_models))
+metrics_other$model <- 
+  metrics_other$model %>% factor(levels = names(col_models))
 metrics_summary_c$models <- 
   metrics_summary_c$models %>% factor(levels = names(col_models))
 
 
 
 # Generate plots ---------------------------------------------------------------
-plt_metric_c <- # boxplot metrics with combined models
-  map(metric_names, \(.metric) {
-    metrics_c %>%
-      # filter(metric == .metric, models != "tslm") %>%
-      filter(metric == .metric) %>%
-      # ggplot(aes(x = models, y = value_s, colour = models)) +
-      ggplot(aes(x = models, y = value, colour = models)) +
-      # geom_boxplot(outliers = FALSE) +
-      ggdist::stat_interval(
-        aes(alpha = after_stat(level),),
-        linewidth = 5,
-        point_interval = "median_qi",
-        .width = c(.10, .50, .8)
-        ) +
-      ggdist::stat_pointinterval(
-        color = "black",
-        fatten_point = 1,
-        .width = c(0)) +
-      # geom_hline(yintercept = 1, lty = "dotted") +
-      scale_colour_manual(name = "models", values = col_models) +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-      facet_wrap(vars(site, penalty), scales = "free_y")
-  }) %>%
-  set_names(metric_names)
-
+# Boxplot metrics with combined models
+plt_metric_c <-
+  metrics_c %>%
+  # filter(metric == .metric, models != "tslm") %>%
+  # ggplot(aes(x = models, y = value_s, colour = models)) +
+  ggplot(aes(x = models, y = value, colour = models)) +
+  # geom_boxplot(outliers = FALSE) +
+  ggdist::stat_interval(
+    aes(alpha = after_stat(level), ),
+    linewidth = 5,
+    point_interval = "median_qi",
+    .width = c(.10, .50, .8)
+  ) +
+  ggdist::stat_pointinterval(
+    color = "black",
+    fatten_point = 1,
+    .width = c(0)
+  ) +
+  # geom_hline(yintercept = 1, lty = "dotted") +
+  scale_colour_manual(name = "models", values = col_models) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(vars(site, penalty), scales = "free_y")
 
 
 # Scores time series
 max_y <- 4
 plt_metric_time_summary_c <- # time series (summary data)
-  map(metric_names, \(.metric) {
-    map(sites, \(.site) {
-      metrics_summary_c %>% 
-        mutate(
+  map(sites, \(.site) {
+    metrics_summary_c %>%
+      mutate(
         value_s = if_else(value_s > max_y, max_y, value_s) # cap y
-        ) %>%
-        filter(metric == .metric, site == .site) %>%
-        ggplot(aes(x = t_ax, y = value_s, colour = models)) +
-        geom_line(linewidth = 1) +
-        geom_line(
-          aes(x = t_ax, y = -0.5, colour = best_model, group = 1),
-          linewidth = 5) +
-        scale_colour_manual(name = "models", values = col_models) + 
-        facet_wrap(vars(penalty), ncol = 1, strip.position = "right") +
-        labs(title = .site) +
-        ylim(-2, max_y) +
-        geom_hline(yintercept = max_y,  linetype = "dashed", color = "black")
-    }) %>%
-      reduce(`+`) +
-      plot_layout(ncol = 1, guides = "collect", axes = "collect")
+      ) %>%
+      filter(site == .site) %>%
+      ggplot(aes(x = t_ax, y = value_s, colour = models)) +
+      geom_line(linewidth = 1) +
+      geom_line(
+        aes(x = t_ax, y = -0.5, colour = best_model, group = 1),
+        linewidth = 5
+      ) +
+      scale_colour_manual(name = "models", values = col_models) +
+      facet_wrap(vars(penalty), ncol = 1, strip.position = "right") +
+      labs(title = .site) +
+      ylim(-2, max_y) +
+      geom_hline(yintercept = max_y, linetype = "dashed", color = "black")
   }) %>%
-  set_names(metric_names)
+  reduce(`+`) +
+  plot_layout(ncol = 1, guides = "collect", axes = "collect")
+
+
+# Plot other metrics
+plot_other_metrics <-
+  lapply(metric_names_other, \(.metric) {
+    metrics_other |>
+      filter(metric == .metric) |>
+      ggplot(aes(x = model, y = value, colour = model)) +
+      ggdist::stat_interval(
+        aes(alpha = after_stat(level),),
+        linewidth = 10,
+        point_interval = "median_qi",
+        .width = c(.10, .50, .8)
+        ) +
+      ggdist::stat_pointinterval(
+        color = "black",
+        fatten_point = 2,
+        .width = c(0)
+      ) +
+      scale_colour_manual(name = "models", values = col_models) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+      labs(title = .metric) +
+      facet_wrap(vars(site), ncol = 1)
+  }) |> 
+  set_names(metric_names_other)
 
 
 
@@ -203,23 +227,25 @@ if (!file.exists(save_path_m)) {
   dir.create(save_path_m, recursive = TRUE)
 }
 
-walk(metric_names, \(.metric) {
-  plt_metric_c %>% 
-    pluck(.metric) %>% 
+plt_metric_c %>% 
     ggsave(
-      file = str_glue("{save_path_m}{.metric}_boxplot.svg"),
-      width = 15, height = 8.88,
-      dpi = 500
+      file = str_glue("{save_path_m}crps_boxplot.svg"),
+      width = 15, height = 8.88
     )
   
-  plt_metric_time_summary_c %>% 
-    pluck(.metric) %>% 
+walk(metric_names_other, \(.metric){
+  plot_other_metrics |> pluck(.metric) |> 
     ggsave(
-      file = str_glue("{save_path_m}{.metric}_ts_summary.svg"),
-      width = 15, height = 8.88,
-      dpi = 500
+      file = str_glue("{save_path_m}{.metric}_boxplot.svg"),
+      width = 15, height = 8.88
     )
 })
+  
+plt_metric_time_summary_c %>%
+  ggsave(
+    file = str_glue("{save_path_m}crps_ts_summary.svg"),
+    width = 15, height = 8.88
+  )
 
 html2pdf(tbl_metric_c, str_glue("{save_path_m}table_metrics"))
 html2pdf(tbl_freq_best_c, str_glue("{save_path_m}table_freq_best"))

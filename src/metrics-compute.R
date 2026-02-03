@@ -92,7 +92,8 @@ if (amode == "train") {
       list("all" = split_data_cv , "fc" = fc_all), 
       select_fc,
       wrap_metric,
-      list_models
+      list_models,
+      "crps"
     ) %>% 
     flatten() %>%
     bind_rows()
@@ -116,7 +117,6 @@ list_best_models <-
         "var_paed", "var_los", "xgb")
   )
 
-
 if (amode == "train") { # compute only for training data, otherwise load
   weights_comb <- 
     comp_weights(metrics, list_best_models)
@@ -128,7 +128,6 @@ if (amode == "train") { # compute only for training data, otherwise load
     weights_comb <- readRDS(file = path_weights)
   }
 }
-
 
 fc_all_c <- 
   fc_comb_wrap(fc_all, weights_comb, list_best_models)
@@ -143,18 +142,30 @@ list_models <- # update list with combined
     "crps_lower")
 
 
-metrics_c <- # compute metrics
+metrics_c <- # compute crps
   cv_wrap(
     list("all" = split_data_cv , "fc" = fc_all_c), 
     select_fc,
     wrap_metric,
-    list_models
+    list_models,
+    "crps"
   ) %>% 
   flatten() %>%
   bind_rows()
 
 metrics_c <- # add t_ax, scale by TSLM, factor(penalty)
   process_metrics(metrics_c)
+
+metrics_other <- # compute other metrics
+  cv_wrap(
+    list("all" = split_data_cv , "fc" = fc_all_c), 
+    select_fc,
+    wrap_metric,
+    list_models,
+    "other"
+  ) %>% 
+  flatten() %>%
+  bind_rows()
 
 
 
@@ -206,6 +217,7 @@ if (!file.exists(save_path)) {
 metric_data =
   list(
   "metrics_comb" = metrics_c,
+  "metrics_other" = metrics_other,
   "metrics_summary_c" = metrics_summary_c
 )
 if (amode == "train") { # computed only for training data

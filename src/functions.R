@@ -940,11 +940,8 @@ xgb_reg_int <-
 #' @param .obs True occ values
 #' @param .fc Forecast probabilities
 #' @param .penalty Bias to use (upper=right, none, lower=left of dist.)
-crps_func <-  # Compute crps
+crps_fun <-
   function(.obs, .fc, .penalty) {
-    # .obs: observed value
-    # .fc: forecast distribution
-    # .penalty: 
     tmp_alpha = seq(0.01, 0.99, 0.01) # alpha level ([0, 1])
     tmp_weight =
       .penalty %>% 
@@ -981,37 +978,49 @@ crps_func <-  # Compute crps
   }
 
 
-#' Wilker function
-#' Compute average wilker score over discretized alpha (predictive interval)
-#' values for all cv fc.
+#' Mean pinball loss function
+#' When .fq is 0.5, this is the same as mean absolute error (MAE)
 #' @param .obs True occ values
 #' @param .fc Forecast probabilities
-#' @param .penalty Bias to use (upper=right, none, lower=left of dist.)
-wilker_func <- # compute Wilker score - used in wilker_wrap()
-  function(.obs, .fc, .penalty) {
-    # .obs: observed value
-    # .fc: forecast distribution
-    # .penalty: penalise more observations above or below prediction interval
-    ci_width = seq(0.05, 0.95, 0.05) # width of the confidence interval
-    map(ci_width, \(.width) {
-      upper = .fc %>% quantile(0.5 + .width / 2) # (upper interval)
-      lower = .fc %>% quantile(0.5 - .width / 2) # (lower interval)
-      ci_width = upper - lower # width confidence interval
-      .penalty =
-        case_when(
-          .penalty == "upper" ~ 2,
-          .penalty == "none" ~ 1,
-          .penalty == "lower" ~ .5
-        )
-      case_when(
-        .obs > upper ~ ci_width + (2 * .penalty) /.width * (.obs - upper),
-        .obs < lower ~ ci_width + (2 / .penalty) /.width * (lower - .obs),
-        .default = ci_width
-      ) %>% 
-        as_tibble_col(.width %>% as.character())
-    }) %>% 
-      list_cbind() %>% 
-      rowMeans()
+#' @param .fq Forecast quantile
+pball_fun <-
+  function(.obs, .fc, .fq) {
+    ape = abs(quantile(.fc, .fq) - .obs)
+    ifelse(
+      .obs < quantile(.fc, .fq),
+      2 * (1 - .fq) * ape,
+      2 * .fq * ape
+    ) |>
+      mean()
+  }
+
+
+#' Mean absolute error function
+#' @param .obs True occ values
+#' @param .fc Forecast probabilities
+#' @param .snaive In-sample (training data) MAE of snaive model reference
+mase_fun <-
+  function(.obs, .fc, .snaive) {
+    mean(abs(.obs - mean(.fc))) / .snaive
+  }
+
+
+#' Coverage function
+#' Frequency observations fall within x-percent prediction intervall 
+#' across forecast horizon.
+#' #' @param .obs True occ values
+#' @param .fc Forecast probabilities
+#' @param .pi Prediction interval 
+cover_fun <-
+  function(.obs, .fc, .pi) {
+    upi = quantile(.fc, .5 + .pi / 2)
+    lpi = quantile(.fc, .5 - .pi / 2)
+    ifelse(
+      .obs >= lpi & .obs <= upi,
+      TRUE,
+      FALSE
+    ) |>
+      mean()
   }
 
 
@@ -1022,53 +1031,94 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
   function(.data, ...) {
     # Organise obs and fc distributions in one tibble
     tmp_data =
-      .data$all %>% 
-      filter(type == "test") %>% 
-      select(split, site, index, occ) %>% 
+      .data$all %>%
+      filter(type == "test") %>%
+      select(split, site, index, occ) %>%
       left_join(
         .data$fc %>%
           as_tibble() %>%
-          select(index, .model, occ) %>% 
+          select(index, .model, occ) %>%
           pivot_wider(names_from = .model, values_from = occ),
         by = "index"
       )
-    
+
     # Compute metric for each model and penalty
     ls_models = tmp_data %>% names %>% tail(-4)
-    penalty = c("upper", "none", "lower")
-    map(penalty, \(.penalty) {
+    if ("crps" %in% list(...)) {
+      penalty = c("upper", "none", "lower")
+      map(penalty, \(.penalty) {
+        map(ls_models, \(.model_name) {
+          tmp_obs = tmp_data[["occ"]]
+          tmp_fc = tmp_data[[.model_name]] # forecast distribution
+          tibble(
+            split = tmp_data$split,
+            site = tmp_data$site,
+            penalty = .penalty,
+            index = tmp_data$index,
+            # wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
+            crps = crps_fun(tmp_obs, tmp_fc, .penalty)
+          ) %>%
+            pivot_longer(
+              cols = where(is.numeric),
+              names_to = "metric",
+              values_to = .model_name
+            )
+        }) %>%
+          reduce(
+            left_join,
+            by = c("split", "site", "penalty", "index", "metric")
+          ) %>%
+          pivot_longer(
+            cols = where(is.numeric),
+            names_to = "models"
+          )
+      }) %>%
+        list_rbind()
+    } else if ("other" %in% list(...)) {
+      tmp_snaive =
+        .data$all %>%
+        filter(type == "train") %>%
+        select(split, site, index, occ) |>
+        model(naive = SNAIVE(occ)) |>
+        augment() |>
+        pull(".resid") |>
+        abs() |>
+        mean(na.rm = TRUE)
+
       map(ls_models, \(.model_name) {
         tmp_obs = tmp_data[["occ"]]
         tmp_fc = tmp_data[[.model_name]] # forecast distribution
         tibble(
-          split = tmp_data$split,
-          site = tmp_data$site,
-          penalty = .penalty,
-          index = tmp_data$index,
-          # wilker = wilker_func(tmp_obs, tmp_fc, .penalty),
-          crps = crps_func(tmp_obs, tmp_fc, .penalty)
-        ) %>% pivot_longer(
-          cols = where(is.numeric), 
-          names_to = "metric",
-          values_to = .model_name)
-      }) %>% 
-        reduce(
-          left_join, 
-          by = c("split", "site", "penalty", "index", "metric")
-        ) %>% 
-        pivot_longer(
-          cols = where(is.numeric),
-          names_to = "models"
-        )
-    }) %>% 
-      list_rbind()
+          obs = tmp_obs,
+          fc = tmp_fc
+        ) |>
+          summarise(
+            mae = pball_fun(obs, fc, 0.5),
+            pball10 = pball_fun(obs, fc, 0.1),
+            pball90 = pball_fun(obs, fc, 0.9),
+            mase = mase_fun(obs, fc, tmp_snaive),
+            cover80 = cover_fun(obs, fc, 0.8),
+            cover90 = cover_fun(obs, fc, 0.9)
+          ) %>%
+          pivot_longer(
+            cols = everything(),
+            names_to = "metric",
+          ) |>
+          mutate(
+            split = unique(tmp_data$split),
+            site = unique(tmp_data$site),
+            model = .model_name
+          ) |>
+          relocate(split, site, model)
+      }) %>%
+      reduce(rbind)
+    }
   }
 
 
 #' Process metrics 
-#' Post-process output of wrap_metric function, which is a wrapper for crps_fun
-#' and wilker_fun. Add t_ax, scale metrics by tslm metrics, convert penalty to
-#' factor.
+#' Post-process output of wrap_metric function (wrapper for crps_fun): add 
+#' t_ax, scale metrics by tslm metrics, convert penalty to factor.
 #' @param .metrics Tibble of metrics
 process_metrics <- # data wrangling
   function(.metrics) {
