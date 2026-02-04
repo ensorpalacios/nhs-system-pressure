@@ -98,16 +98,18 @@ plt_metric_time_summary_c <- # time series (summary data)
 # Plot other metrics
 plot_other_metrics <-
   lapply(metric_names_other, \(.metric) {
+    tmp_interval = if_else(grepl("cover", .metric), "mean_qi", "median_qi")
     metrics_other |>
       filter(metric == .metric) |>
       ggplot(aes(x = model, y = value, colour = model)) +
       ggdist::stat_interval(
         aes(alpha = after_stat(level),),
         linewidth = 10,
-        point_interval = "median_qi",
+        point_interval = "median_qi", #  mean_qi also returns quantile intervals
         .width = c(.10, .50, .8)
         ) +
       ggdist::stat_pointinterval(
+        point_interval = tmp_interval,
         color = "black",
         fatten_point = 2,
         .width = c(0)

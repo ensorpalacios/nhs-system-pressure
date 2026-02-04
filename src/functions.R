@@ -1098,7 +1098,7 @@ wrap_metric <- # general wrapper over metric function - used in cv_wrap()
             pball90 = pball_fun(obs, fc, 0.9),
             mase = mase_fun(obs, fc, tmp_snaive),
             cover80 = cover_fun(obs, fc, 0.8),
-            cover90 = cover_fun(obs, fc, 0.9)
+            cover95 = cover_fun(obs, fc, 0.95)
           ) %>%
           pivot_longer(
             cols = everything(),
