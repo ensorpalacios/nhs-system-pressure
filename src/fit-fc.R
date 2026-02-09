@@ -318,6 +318,12 @@ ls_rf_int_not <- # ... no temperature
     select_training,  rf_reg_int,  list_var_rf_int_not, "all", horizon
   )
 
+ls_rf_int_fit <- # extract fits (for feature analysis)
+  ls_rf_int %>% 
+  map(., ~ # site
+        map(.x, ~ # split
+              pluck(.x, "fit")))
+
 ls_rf_int_par <- # extract parameters fc distribution ...
   ls_rf_int %>% 
   map(., ~ # site
@@ -328,6 +334,7 @@ ls_rf_int_par_not <- # ... no temperature
   map(., ~ # site
         map(.x, ~ # split
               pluck(.x, "par")))
+
 
 
 # XGBoosting - interaction
@@ -361,6 +368,7 @@ fit_all =
     "fable_var_h" = fit_fable_var_h,
     "es" = fit_es,
     "rf_par" = ls_rf_par,
+    "rf_int_fit" = ls_rf_int_fit,
     "rf_int_par" = ls_rf_int_par,
     "rf_int_par_not" = ls_rf_int_par_not,
     "xgb_par" = ls_xgb_par,

@@ -292,7 +292,6 @@ es_forecast <- # define esx forecast
 #' @param ... Includes name of model for saving fc.
 rf_forecast = 
   function(.data, ...) {
-    # Function to harmonise fc to fable data structure
     .data$index = # get test data
       .data$index %>% filter(type == "test")
     .data$model = 
@@ -818,7 +817,8 @@ rf_reg_int <-
       .data_rf %>% filter(type == "test") %>% select(-type)
     
     # Compute
-    tmp_fit = randomForest(occ ~ ., data = data_train, ntree = 1000)
+    tmp_fit = 
+      randomForest(occ ~ ., data = data_train, ntree = 1000, importance = TRUE)
     tmp_fc = predict(tmp_fit,  data_test, predict.all = TRUE)
     
     # Out-of-bag prediction error
