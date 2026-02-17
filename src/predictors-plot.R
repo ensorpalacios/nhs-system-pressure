@@ -84,7 +84,8 @@ plot_occ <-
     theme(
       legend.position="none",
       axis.title.x = element_blank()
-    )
+    ) +
+  theme_minimal()
 
 
 plot_occ_acf = plot_cf(ts_occ, .var = "occ", .lag = 100)
