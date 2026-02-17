@@ -104,8 +104,8 @@ if (amode == "train") {
 
 
 
-# Combine forecasts and recompute metrics --------------------------------------
-# Combine fc
+# Mix forecasts and recompute metrics ------------------------------------------
+# Mix fc (linear mixture, not combination)
 # List models
 list_best_models <-
   list(
