@@ -60,7 +60,14 @@ idx_start_test <- split_data_cv$type %>% grep("test", .) %>% head(1)
 
 # Predict test exogenous -------------------------------------------------------
 split_data_cv <- # Exclude occ_other and ad_diff3 (as in fit-models-short.R)
-  split_data_cv %>% select(-contains("occ_other"), -contains("ad_diff3"))
+  split_data_cv %>%
+  select(
+    -contains("occ_other"),
+    -contains("ad_diff3"),
+    -contains("wx"),
+    -contains("original"),
+    -contains("lag")
+  )
 
 xpredict_method = c("tslm", "snaive", "arima", "ets", "pull")
 
@@ -119,10 +126,10 @@ if (!file.exists(save_path)) {
 }
 
 plt_err_abs %>% 
-  ggsave(file = paste0(save_path, "xreg_err_abs.eps"), width = 11, height = 7)
+  ggsave(file = paste0(save_path, "xreg_err_abs.svg"), width = 11, height = 7)
 
 plt_err_sq %>% 
-  ggsave(file = paste0(save_path, "xreg_err_sq.eps"), width = 11, height = 7)
+  ggsave(file = paste0(save_path, "xreg_err_sq.svg"), width = 11, height = 7)
 
 # for (x in tbl_data$split %>% unique()) {
 #   x11()
