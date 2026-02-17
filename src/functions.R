@@ -946,9 +946,9 @@ crps_fun <-
     tmp_weight =
       .penalty %>% 
       case_match(
-        "upper" ~ expr("tmp_alpha ** 3"),
-        "none" ~ expr("1"),
-        "lower" ~ expr("(1 - tmp_alpha) ** 3")
+        "upper" ~ "tmp_alpha ** 3",
+        "none" ~ "1",
+        "lower" ~ "(1 - tmp_alpha) ** 3"
       )
     
     map2(.fc, .obs, \(.dist, .obs_) {
@@ -985,11 +985,11 @@ crps_fun <-
 #' @param .fq Forecast quantile
 pball_fun <-
   function(.obs, .fc, .fq) {
-    ape = abs(quantile(.fc, .fq) - .obs)
+    pe = quantile(.fc, .fq) - .obs
     ifelse(
-      .obs < quantile(.fc, .fq),
-      2 * (1 - .fq) * ape,
-      2 * .fq * ape
+      pe > 0,
+      2 * (1 - .fq) * abs(pe),
+      2 * .fq * abs(pe)
     ) |>
       mean()
   }
