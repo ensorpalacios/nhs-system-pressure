@@ -17,9 +17,9 @@ load_hosp <-
       }
     )
 
+    report_end <- lubridate::today()
+    report_start <- as.Date(report_end - lubridate::dyears(3))
 
-    report_start <- lubridate::ymd('2022-01-01')
-    report_end <- lubridate::ymd('2025-11-01')
 
     ecds_tbl <- dplyr::tbl(
       con,
@@ -152,13 +152,6 @@ prepare_data <-
     # Covert to timeseries (tsibble object)
     ts_data <- df_occ |> as_tsibble(index = index, key = site)
 
-    ######
-    # Temporary while using data I have
-    # Remove first 3/4 of 2022 data (due to strange behaviour)
-    cat("starting data from 22/09/01")
-    ts_data <-
-      ts_data %>% filter(index >= as.Date("2022-09-01"))
-    ######
 
     # Convert implicit gaps into explicit missing values
     ts_data <-
