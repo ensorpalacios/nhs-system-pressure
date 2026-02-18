@@ -748,6 +748,12 @@ prepare_output <-
     list_data$risk$risk_ws[, type := "risk_ws"]
     list_data$risk$risk_w[, type := "risk_w"]
   
+    list_data$fc <- 
+      list_data$fc[
+      list_data$threshold,
+      on = "site"
+    ]
+
     list_data$risk$risk_ws <- 
       list_data$risk$risk_ws[
       list_data$threshold,
@@ -777,7 +783,7 @@ prepare_output <-
       dir.create(dirname(target_output_path), recursive = TRUE)
     }
     
-    saveRDS(list_data, target_output_path)
+    saveRDS(output, target_output_path)
     
     # Return list
     target_output_path

@@ -11,6 +11,8 @@ library(here)
 library(targets)
 library(htmltools)
 
+source("00_prepare_data.R")
+
 ui <- page_sidebar(
   # Theme
   theme = bs_theme(
@@ -107,78 +109,29 @@ ui <- page_sidebar(
 
 server <- function(input, output, session) {
   # Check changes in data directory
-  get_dates <- reactiveFileReader(
-    60000, # check every minute
-    session,
-    here("target/data/output"),
-    function(path) {
-      if (dir.exists(path)) {
-        files <- list.files(path, pattern = "\\.RDS$")
-        req(length(files) > 0)
-        gsub(".RDS", "", files) |> as.Date()
-      } else {
-        NULL
-      }
-    }
-  )
+ 
 
-  # Update widget values when files change
-  observe({
-    list_dates <- get_dates()
-
-    updateDateInput(
-      session,
-      "date",
-      "Prediction date",
-      value = max(list_dates),
-      min = min(list_dates),
-      max = max(list_dates)
-    )
-  })
-
-  # Load data
-  get_data <- reactive({
-    req(input$date)
-    list_dates <- get_dates() # only to create dependency on file changes
-
-    path_data <- here("target/data/output")
-    file_path <- file.path(path_data, paste0(input$date, ".RDS"))
-
-    if (file.exists(file_path)) {
-      readRDS(file_path)
-    } else {
-      NULL
-    }
-  })
-
-  # For displaying the selected date
-  output$report_date <- renderUI({
-    if (!is.null(get_data())) {
-      input$date |>
-        format("%A, %d/%m/%Y") %>%
-        shiny::HTML()
-    } else {
-      shiny::HTML(paste0("No forecast for ", format(input$date, "%A, %d/%m/%y")))
-    }
-  })
 
   # Create site-specific value boxes dynamically
   output$site_value_boxes <- renderUI({
+
     # Get data
-    req(get_data()) # protect agains null data
-    data <- get_data()
+    risk_ws <- model_out |> filter(type == "risk_ws") |> as.data.table()
+    risk_w <- model_out |> filter(type == "risk_w") |> as.data.table()
+    
+
+    #data <- model_out
 
     # Get unique sites
-    sites <- unique(data[["fc"]]$site)
+    sites <- unique(risk_d$site)
 
     # Create a row of value boxes for each site
-    thr <- data[["threshold"]]
-    risk_w <- data[["risk"]][["risk_w"]]
-    risk_ws <- data[["risk"]][["risk_ws"]]
+    thr <- data[["thr"]]
+
 
     site_rows <- lapply(sites, function(site_name) {
       threshold <- #threshold
-        thr[site == site_name, thr]
+        risk_w[site == site_name, unique(thr)]
 
       weekly_risk <- # weekly risk predictions
         risk_w[.model == "crps" & site == site_name, scales::percent(risk_w)]
@@ -249,20 +202,18 @@ server <- function(input, output, session) {
 
   output$daily_risk <- renderPlot({
     # Get data
-    req(get_data()) # protect agains null data
-    data <- get_data()
-    risk_d <- data[["risk"]][["risk_d"]]
+    risk_d <- model_out |> filter(type == "risk_d") |> as.data.table()
 
     # Plot
     risk_d[.model == "crps"] |>
       ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
       geom_col() +
       scale_y_continuous(name = NULL, limits = c(0, 1), breaks = NULL) +
-      scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
+      #scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
       geom_hline(yintercept = 0) +
       geom_label(
         aes(label = scales::percent(round(risk_day, 2))),
-        label.size = NA,
+        linewidth = NA,
         fill = "white",
         hjust = 0.5,
         vjust = -0.5
@@ -296,16 +247,10 @@ server <- function(input, output, session) {
   })
 
   output$forecast <- renderPlot({
-    # Get and prepare data
-    req(get_data()) # protect agains null data
-    data <- get_data()
-    fc <- data[["fc"]]
 
-    fc <- # add site-specific threshold
-      data[["threshold"]][
-        fc,
-        on = "site"
-      ]
+
+    fc <- model_out |> filter(type == "forecast") |> as.data.table()
+    fc$occ <- dist_normal(mu = fc$occ_mean, sigma = sqrt(fc$occ_var))
 
     fc <- fc[.model == "crps"] # select model
 
