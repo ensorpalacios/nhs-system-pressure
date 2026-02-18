@@ -612,7 +612,7 @@ compute_risk <-
         "date" = adate
       )
 
-    target_output_path <- file.path(save_path, "output", paste0(adate, ".RDS"))
+    target_output_path <- file.path(save_path, "output", paste0("model_out", ".RDS"))
     
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
