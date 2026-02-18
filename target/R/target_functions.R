@@ -613,6 +613,7 @@ compute_risk <-
       )
     
     # Return list
+
     list_data
   }
 
@@ -734,9 +735,9 @@ compute_risk <-
 #' @param  .tables RDS file containing out tables to merge
 prepare_output <-
   function(.tables) {
-    browser()
-    list_data <- readRDS("target/data/output/2025-12-16.RDS")
+  
 
+    list_data <- .tables
     list_data$fc <- as.data.table(list_data$fc)
     list_data$risk$risk_d <- as.data.table(list_data$risk$risk_d)
     list_data$risk$risk_ws <- as.data.table(list_data$risk$risk_ws)
@@ -770,7 +771,7 @@ prepare_output <-
       )
     output$date_fc <- list_data$date
 
-    target_output_path <- file.path(save_path, "output", paste0(adate, ".RDS"))
+    target_output_path <- file.path(save_path, "output", paste0("model_out_flat", ".RDS"))
     
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
