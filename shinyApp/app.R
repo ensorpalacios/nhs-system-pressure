@@ -107,7 +107,7 @@ ui <- page_sidebar(
   )
 )
 
-server <- function(input, output, session) {
+server <- function(input, output) {
   # Check changes in data directory
  
 
@@ -123,10 +123,8 @@ server <- function(input, output, session) {
     #data <- model_out
 
     # Get unique sites
-    sites <- unique(risk_d$site)
+    sites <- unique(risk_w$site)
 
-    # Create a row of value boxes for each site
-    thr <- data[["thr"]]
 
 
     site_rows <- lapply(sites, function(site_name) {
