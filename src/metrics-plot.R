@@ -125,6 +125,93 @@ plot_other_metrics <-
 
 
 # Generate tables --------------------------------------------------------------
+# Best models across metrics
+all_metrics <- # combine CRPS and other metrics
+  rbindlist(
+    list(
+      as.data.table(metrics_c)[,
+        .SD,
+        .SDcols = -c("index", "t_ax", "value_s")
+      ][,
+        c("metric", "model") := .(paste0("crps", "_", penalty), models)
+      ][,
+        .SD,
+        .SDcols = -c("penalty", "models")
+      ],
+      as.data.table(metrics_other)
+    ),
+    use.names = TRUE
+  )
+
+all_metrics <- # remove ensemble forecasts from table
+  all_metrics[!grepl("crps|equal|baseline_min", model)]
+
+newmap <- c( # map names based on table in paper
+  arima            = "ARIMA (1)",
+  arima_dad_l      = "ARIMA (2)",
+  arima_dadp_l     = "ARIMA (3)",
+  arima_dadpt_l    = "ARIMA (4)",
+  arima_dadpl_l    = "ARIMA (5)",
+  arima_dadplt_l   = "ARIMA (6)",
+  arima_dad_rec    = "ARIMA rec. (1)",
+  arima_dadp_re    = "ARIMA rec. (2)",
+  arima_dadpl_rec  = "ARIMA rec. (3)",
+  arima_dadplt_rec = "ARIMA rec. (4)",
+  var_ad           = "VAR (1)",
+  var_ad2          = "VAR (2)",
+  var_paed         = "VAR (3)",
+  var_los          = "VAR (4)",
+  var_h            = "VAR (5)",
+  nn               = "NNAR",
+  es               = "ES",
+  rf               = "rf (1)",
+  rf_int           = "rf (2)",
+  rf_int_not       = "rf (3)",
+  xgb              = "XGBoost (1)",
+  xgb_not          = "XGBoost (2)",
+  tslm             = "linear model",
+  snaive           = "s. naive"
+)
+
+all_metrics[, # rename models
+  model := 
+    factor(newmap[model], levels = newmap)
+]
+
+all_metrics_best <- # prepare table with models sorted for each metric
+  dcast(
+    all_metrics[,
+      stat_fun(metric, value),
+      by = c("site", "metric", "model")
+    ],
+    site + model ~ metric,
+    value.var = c("stat")
+  )[,
+    mapply(
+      order_fun,
+      .SD,
+      names(.SD),
+      MoreArgs = list(.model = model),
+      SIMPLIFY = FALSE
+    ),
+    by = c("site"),
+    .SDcols = -c("model")
+  ] |>
+  setcolorder(c("cover80", "cover95"), after = "pball90")
+
+tbl_metric_best_crps <- # generate table (CRPS)
+  all_metrics_best[, .SD, .SDcols = grepl("site|crps", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+tbl_metric_best_nocover <- # generate table (other)
+  all_metrics_best[, .SD, .SDcols = !grepl("crps|cover", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+tbl_metric_best_cover <- # generate table (other)
+  all_metrics_best[, .SD, .SDcols = grepl("site|cover", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+
 # Models' metric median and iqr - with combined models
 tbl_metric_c <- 
   metrics_c %>% # attention: values not scaled by tslm!
@@ -249,6 +336,9 @@ plt_metric_time_summary_c %>%
     width = 15, height = 8.88
   )
 
+tbl_metric_best_crps |> gtsave(str_glue("{save_path_m}table_metric_best_crps.tex"))
+tbl_metric_best_nocover |> gtsave(str_glue("{save_path_m}table_metric_best_nocover.tex"))
+tbl_metric_best_cover |> gtsave(str_glue("{save_path_m}table_metric_best_cover.tex"))
 html2pdf(tbl_metric_c, str_glue("{save_path_m}table_metrics"))
 html2pdf(tbl_freq_best_c, str_glue("{save_path_m}table_freq_best"))
 # tbl_metric %>% 

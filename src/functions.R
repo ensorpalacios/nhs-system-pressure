@@ -1295,6 +1295,43 @@ fc_comb_wrap <-
   }
 
 
+#' Compute center and dispersion
+#' Used in metrics-pot.R to create table to models across metrics
+#' @param .metric Name of the metric
+#' @param .value Metric values across splits
+stat_fun <- function(.metric, .value) {
+  if (any(grepl("cover", .metric))) {
+    list(stat = paste0(mean(.value), "_", disp = sd(.value)))
+  } else {
+    list(stat = paste0(median(.value), "_", disp = IQR(.value)))
+  }
+}
+
+
+#' Sort models
+#' Used in metrics-pot.R to sort models based on center of metric 
+#' distribution (mean/median)
+#' @param .col Column of metric-specific stats
+#' @param .model Column of models associated with .col
+#' @param .colname Name of the metric
+order_fun <- function(.col, .model, .colname) {
+  center = as.numeric(sub("_.*", "", .col))
+  disp = as.numeric(sub(".*_", "", .col))
+  tmp_tbl = data.table(.model, center, disp)
+  if (grepl("cover", .colname)) {
+    tmp_tbl[
+      order(-center), 
+      .(.model = sprintf("%s (%.2f, %.2f)", .model, center, disp))
+    ][1:10, .model]
+  } else {
+    tmp_tbl[
+      order(center), 
+      .(.model = sprintf("%s (%.2f, %.2f)", .model, center, disp))
+    ][1:10, .model]
+  }
+}
+
+
 
 # Functions for risk prediction/plotting --------------------------------------
 #' Curve axes
