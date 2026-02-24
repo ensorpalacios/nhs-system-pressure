@@ -14,7 +14,7 @@ setup_env <-
     
     # Lag/split data parameters
     assign("horizon", 7, envir = .GlobalEnv) # Forecast horizon & lag
-    assign("len_test", "10 months", envir = .GlobalEnv) # Train/test
+    assign("len_test", "13 months", envir = .GlobalEnv) # Train/test
     assign("initial", "16 weeks", envir = .GlobalEnv) # Cv split - training set
     assign("assess", "1 weeks", envir = .GlobalEnv) # Cv split - validation set
     if (amode == "train") {
@@ -22,7 +22,7 @@ setup_env <-
       assign("skip", "9 days", envir = .GlobalEnv) # Cv separaion
     } else if (amode == "test") {
       assign("type", "test", envir = .GlobalEnv)
-      assign("skip", "3 days", envir = .GlobalEnv)
+      assign("skip", "5 days", envir = .GlobalEnv)
     }
     
     # Threshold for "dangerous" occupancy
