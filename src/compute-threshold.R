@@ -23,7 +23,8 @@ setup_env(amode) # define global environment variables
 
 # Load data --------------------------------------------------------------------
 # Original ts, train/test split, cv split, fc (with combined models)
-tt_path <- here("output/fits/train/tt_split.RDS") # always use training split!
+tt_path <-  # train/test does not matter (taking whole ts)
+  here("output/fits/train/tt_split.RDS")
 split_data_tt <- readRDS(file = tt_path)
 
 # Recode sites
