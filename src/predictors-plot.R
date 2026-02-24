@@ -38,8 +38,8 @@ setup_env(amode) # define global environment variables
 
 
 # Load data -------------------------------------------------------------------
-ts_occ <- readRDS(file = here("/data/processed/tbl_occ.RDS"))
-ts_thr <- readRDS(file = here("output/fits/thresholds.RDS"))
+ts_occ <- readRDS(file = here("data/processed/tbl_occ.RDS"))
+thr <- readRDS(file = here("output/fits/thresholds.RDS"))
 ts_occ <- 
   ts_occ %>% 
   filter(!is_aggregated(site)) %>% 
