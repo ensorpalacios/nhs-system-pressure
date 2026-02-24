@@ -1356,8 +1356,8 @@ ax_curve_fun <-
         FN = sum(.obs_cross & !pos)
         TN = sum(!.obs_cross & !pos)
         
-        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
-        FPR = if ((FP + TN) > 0) round(FP / (FP + TN), 2) else 0
+        TPR = if ((TP + FN) > 0) TP / (TP + FN) else NA_real_
+        FPR = if ((FP + TN) > 0) FP / (FP + TN) else NA_real_
         
         return(data.table(db = .x, TPR = TPR, FPR = FPR))
       })
@@ -1370,8 +1370,8 @@ ax_curve_fun <-
         FN = sum(.obs_cross & !pos)
         TN = sum(!.obs_cross & !pos)
         
-        PPV = if ((TP + FP) > 0) round(TP / (TP + FP), 2) else 0
-        TPR = if ((TP + FN) > 0) round(TP / (TP + FN), 2) else 0
+        PPV = if ((TP + FP) > 0) TP / (TP + FP) else NA_real_
+        TPR = if ((TP + FN) > 0) TP / (TP + FN) else NA_real_
         
         return(data.table(db = .x, PPV = PPV, TPR = TPR))
       })
@@ -1412,7 +1412,7 @@ auc_fun <-
     dx <- diff(.SD[[.Nc]])
     y <- .SD[[.Nc - 1]]
     height <- (y[2:.Nr] + y[1:.Nr - 1]) / 2
-    list(auc = sum(dx * height))
+    list(auc = sum(dx * height, na.rm = TRUE))
   } 
 
 
@@ -1447,9 +1447,9 @@ pcurve_fun <-
       ][,
         {
           lapply(.SD, \(.c) {
-            mean = mean(.c)
-            q20 = quantile(.c, 0.2)
-            q80 = quantile(.c, 0.8)
+            mean = mean(.c, na.rm = TRUE)
+            q20 = quantile(.c, 0.2, na.rm = TRUE)
+            q80 = quantile(.c, 0.8, na.rm = TRUE)
             c(mean = mean, q20, q80)
           }) %>%
             unlist(use.names = T) %>%
@@ -1458,10 +1458,10 @@ pcurve_fun <-
         by = c("site", ".model", "week_split", "db"),
         .SDcols = !"nboot"
       ][,
-          .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
-          # .SD[auc >= 0],
-          by = c("site", "week_split")
-        ] %>% # plot
+        .SD[auc.mean >= quantile(auc.mean, na.rm = TRUE)[["0%"]]],
+        # .SD[auc >= 0],
+        by = c("site", "week_split")
+      ] %>% # plot
         ggplot(
           aes(
             x = .data[[sprintf("%s.mean", .x)]],
@@ -1494,9 +1494,9 @@ pcurve_fun <-
       ][,
         {
           lapply(.SD, \(.c) {
-            mean = mean(.c)
-            q20 = quantile(.c, 0.2)
-            q80 = quantile(.c, 0.8)
+            mean = mean(.c, na.rm = TRUE)
+            q20 = quantile(.c, 0.2, na.rm = TRUE)
+            q80 = quantile(.c, 0.8, na.rm = TRUE)
             c(mean = mean, q20, q80)
           }) %>%
             unlist(, use.names = T) %>%
@@ -1505,7 +1505,7 @@ pcurve_fun <-
         by = c("site", ".model", "db"),
         .SDcols = !"nboot"
       ][,
-        .SD[auc.mean >= quantile(auc.mean)[["75%"]]],
+        .SD[auc.mean >= quantile(auc.mean, na.rm = TRUE)[["0%"]]],
         # .SD[auc.mean >= 0],
         by = site
       ] %>% # plot
