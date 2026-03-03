@@ -184,6 +184,15 @@ plt_curves <-
 
 
 # Table AUC --------------------------------------------------------------------
+# Rename models (newmap from environment.R)
+rename_fun <- function(.tbl, namecol) {
+  .tbl[, (namecol) := factor(newmap[get(namecol)], levels = newmap)]
+}
+
+lapply(list_auc, rename_fun, ".model")
+list_models_curves$BRI <- newmap[list_models_curves$BRI]
+list_models_curves$Southmead <- newmap[list_models_curves$Southmead]
+
 # Generate table
 tbl_auc <- 
   list_auc %>%

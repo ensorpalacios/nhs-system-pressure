@@ -146,34 +146,7 @@ all_metrics <- # combine CRPS and other metrics
 all_metrics <- # remove ensemble forecasts from table
   all_metrics[!grepl("crps|equal|baseline_min", model)]
 
-newmap <- c( # map names based on table in paper
-  arima            = "ARIMA (1)",
-  arima_dad_l      = "ARIMA (2)",
-  arima_dadp_l     = "ARIMA (3)",
-  arima_dadpt_l    = "ARIMA (4)",
-  arima_dadpl_l    = "ARIMA (5)",
-  arima_dadplt_l   = "ARIMA (6)",
-  arima_dad_rec    = "ARIMA rec. (1)",
-  arima_dadp_re    = "ARIMA rec. (2)",
-  arima_dadpl_rec  = "ARIMA rec. (3)",
-  arima_dadplt_rec = "ARIMA rec. (4)",
-  var_ad           = "VAR (1)",
-  var_ad2          = "VAR (2)",
-  var_paed         = "VAR (3)",
-  var_los          = "VAR (4)",
-  var_h            = "VAR (5)",
-  nn               = "NNAR",
-  es               = "ES",
-  rf               = "rf (1)",
-  rf_int           = "rf (2)",
-  rf_int_not       = "rf (3)",
-  xgb              = "XGBoost (1)",
-  xgb_not          = "XGBoost (2)",
-  tslm             = "linear model",
-  snaive           = "s. naive"
-)
-
-all_metrics[, # rename models
+all_metrics[, # rename models (newmap from environment.R)
   model := 
     factor(newmap[model], levels = newmap)
 ]
