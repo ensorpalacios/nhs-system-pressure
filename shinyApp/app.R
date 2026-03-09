@@ -11,306 +11,199 @@ library(here)
 library(targets)
 library(htmltools)
 
-source("00_prepare_data.R")
+source(here("shinyApp/shiny-functions.R"))
 
-ui <- page_sidebar(
+# source("00_prepare_data.R")
+model_out <- readRDS(here("target/data/output/2025-12-16.RDS"))
+
+ui <- page_fillable(
   # Theme
+  title = "",
   theme = bs_theme(
     bg = "#f8f8f8", # Background color
     fg = "#000000" # Foreground (text) color
   ),
 
-  title = "Bed occupancy forecast",
+  # theme = bs_theme(bootswatch = "flatly"),
 
-  # Select date
-  sidebar = sidebar(
-    dateInput("date", "Prediction date", value = lubridate::today())
-  ),
-  
-  # Add custom CSS to center value box content
-  tags$head(
-    tags$link(
-      rel = "stylesheet", 
-      href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
-    ),
-    tags$style(HTML("
-      .bslib-value-box .value-box-value {
-        text-align: center !important;
-      }
-      .bslib-value-box .value-box-title {
-        text-align: center !important;
-      }
-      .bslib-value-box {
-        text-align: center !important;
-      }
-    "))
+  titlePanel("Risk predictions"),
+
+  p(
+    "Displaying 2 weeks of actual data + 7 day forecast with confidence intervals"
   ),
 
-  # # reactable formatting
-  # tags$head(
-  #   tags$style(HTML("
-  #   .reactable {
-  #     width: 150% !important;  /* or whatever width you prefer */
-  #   }
-  #   .reactable .rt-td {
-  #     white-space: nowrap !important;
-  #     overflow: hidden;
-  #     text-overflow: ellipsis;
-  #   }
-  # "))
-  # ),
-
-  # TODO: Add custom CSS if needed
-  # includeCSS("styles.css"),
-
-  # sidebar = ,
-
-  # useBusyIndicators(),
-
-  # 🏷️ Header
-  # h3(textOutput("show_title")),
-  # verbatimTextOutput("show_info") |>
-  #   tagAppendAttributes(style = "max-height: 100px; overflow: auto;"),
-
-  # Value boxes - First row (General info)
+  # Group 1
   layout_columns(
-    fill = FALSE,
-    value_box(
-      "Data from:",
-      value = uiOutput("report_date", inline = TRUE)
-    )
-  ),
-
-  # Value boxes - Site-specific rows
-  div(
-    style = "margin: 10px; padding: 0;",
-    uiOutput("site_value_boxes")
-  ),
-
-  layout_columns(
-    style = "min-height: 450px;",
-    col_widths = c(12),
-
-    # 📊 Plot 1
-    navset_card_tab(
-      # full_screen = TRUE,
-
-      nav_panel(
-        "Daily risk prediction",
-        plotOutput("daily_risk")
-      ),
-      nav_panel(
-        "Bed occupancy forecast",
-        plotOutput("forecast")
+    col_widths = c(8, 4),
+    # Time series
+    card(
+      card_header(strong("Occupancy time series")),
+      card_body(
+        h5("BRI"),
+        plotOutput("fc_bri", height = "300px"),
+        hr(),
+        h5("Southmead"),
+        plotOutput("fc_southmead", height = "300px"),
+        hr()
       )
+    ),
+
+    # Risk predictions
+    # BRI
+    card(
+      card_header(strong("Risk")),
+      card_body(
+        h5("BRI"),
+        selectInput(
+          "risk_metric_bri",
+          "Select Risk Metric:",
+          choices = c(
+            "Daily Risk" = "risk_d",
+            "Weekly Risk (Close)" = "risk_ws_close",
+            "Weekly Risk (Far)" = "risk_ws_far",
+            "Weekly Risk" = "risk_w"
+          ),
+          selected = "risk_d"
+        ),
+        # div(
+        #   style = "text-align: center; padding: 20px;",
+        #   h2(textOutput("risk_value_2"), style = "color: #e74c3c; margin: 0;"),
+        #   p("Risk Score (%)", style = "color: #7f8c8d; margin-top: 5px;")
+        # )
+        uiOutput("bri_risk")
+      ),
+      hr(),
+      h5("Southmead"),
+      selectInput(
+        "risk_metric_southmead",
+        "risk window:",
+        choices = c(
+          "Daily Risk" = "risk_d",
+          "Weekly Risk (Close)" = "risk_ws_close",
+          "Weekly Risk (Far)" = "risk_ws_far",
+          "Weekly Risk" = "risk_w"
+        ),
+        selected = "daily"
+      ),
+      uiOutput("southmead_risk")
+      # div(
+      #   style = "text-align: center; padding: 20px;",
+      #   h2(textOutput("risk_value_2"), style = "color: #e74c3c; margin: 0;"),
+      #   p("Risk Score (%)", style = "color: #7f8c8d; margin-top: 5px;")
+      # )
     )
   )
 )
 
 server <- function(input, output) {
+  # Choose model
+  model <- "crps"
+
   # Check changes in data directory
- 
+  risk_d <- model_out$risk$risk_d[.model == model]
+  risk_ws_close <- model_out$risk$risk_ws[
+    .model == model & week_split == "close"
+  ]
+  risk_ws_far <- model_out$risk$risk_ws[.model == model & week_split == "far"]
+  risk_w <- model_out$risk$risk_w[.model == model]
+  fc <- model_out$fc |> filter(.model == model)
+  thr <- model_out$threshold
 
-
-  # Create site-specific value boxes dynamically
-  output$site_value_boxes <- renderUI({
-
-    # Get data
-    risk_ws <- model_out |> filter(type == "risk_ws") |> as.data.table()
-    risk_w <- model_out |> filter(type == "risk_w") |> as.data.table()
-    
-
-    #data <- model_out
-
-    # Get unique sites
-    sites <- unique(risk_w$site)
-
-
-
-    site_rows <- lapply(sites, function(site_name) {
-      threshold <- #threshold
-        risk_w[site == site_name, unique(thr)]
-
-      weekly_risk <- # weekly risk predictions
-        risk_w[.model == "crps" & site == site_name, scales::percent(risk_w)]
-
-      close_risk <- # predictions 1-3 days ahead
-        risk_ws[
-          .model == "crps" & site == site_name & week_split == "close",
-          scales::percent(risk_ws)
-        ]
-
-      far_risk <- # predictions 4-7 days ahead
-        risk_ws[
-          .model == "crps" & site == site_name & week_split == "far",
-          scales::percent(risk_ws)
-        ]
-
-      # Create layout_columns for this site with site name as first value box
-      layout_columns(
-        fill = FALSE,
-        col_widths = c(3, 2, 2, 2, 2), # Equal width columns
-        value_box(
-          title = "",
-          value = site_name,
-          theme = "primary",
-          height = "90px" # Set explicit height
-        ),
-        tooltip(
-          value_box(
-            title = "threshold (ℹ)",
-            value = threshold,
-            height = "90px"
-          ),
-          "okokokok",
-          placement = "top"
-        ),
-        # tooltip(
-        #   value_box(
-        #     title = HTML(
-        #       'threshold <i class="fas fa-info-circle info-icon"></i>'
-        #     ),
-        #     value = threshold,
-        #     height = "90px"
-        #   ),
-        #   "okokokok",
-        #   placement = "right"
-        # ),
-        value_box(
-          "7-day risk",
-          value = weekly_risk,
-          height = "90px" # Set explicit height
-        ),
-        value_box(
-          "1-3 days risk",
-          value = close_risk,
-          height = "90px" # Set explicit height
-        ),
-        value_box(
-          "4-7 days risk",
-          value = far_risk,
-          height = "90px" # Set explicit height
-        )
+  # Render plots
+  # Plot risk
+  output$bri_risk <- renderUI({
+    switch(
+      input$risk_metric_bri,
+      risk_d = plotOutput("plot_bri_risk", height = "200px"),
+      risk_ws_close = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_bri_risk"), style = "color: #e74c3c;")
+      ),
+      risk_ws_far = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_bri_risk"), style = "color: #e74c3c;")
+      ),
+      risk_w = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_bri_risk"), style = "color: #e74c3c;")
       )
-    })
-
-    # Return all site rows
-    htmltools::tagList(site_rows)
+    )
   })
 
-  output$daily_risk <- renderPlot({
-    # Get data
-    risk_d <- model_out |> filter(type == "risk_d") |> as.data.table()
-
-    # Plot
-    risk_d[.model == "crps"] |>
-      ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
-      geom_col() +
-      scale_y_continuous(name = NULL, limits = c(0, 1), breaks = NULL) +
-      #scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
-      geom_hline(yintercept = 0) +
-      geom_label(
-        aes(label = scales::percent(round(risk_day, 2))),
-        linewidth = NA,
-        fill = "white",
-        hjust = 0.5,
-        vjust = -0.5
-      ) +
-      facet_wrap(vars(site), ncol = 1) +
-      scale_fill_viridis_c(
-        name = "Daily risk",
-        option = "rocket",
-        direction = -1,
-        limits = c(0, 1),
-        labels = scales::percent
-      ) +
-      # scale_fill_gradientn(
-      # colors = c("#6699FF", "#", "#660000"),
-      # limits = c(0, 1)
-      # ) +
-      theme(
-        axis.title.x = element_blank(),
-        axis.text = element_text(size = 14),
-        strip.text = element_text(size = 24),
-        strip.background = element_rect(fill = "white", linewidth = 0),
-        panel.border = element_rect(linewidth = 0),
-        panel.background = element_rect(fill = "white"),
-        legend.text = element_text(size = 14),
-        legend.title = element_text(size = 14, margin = margin(b = 15)),
-        legend.background = element_rect(colour = "black", linewidth = 1),
-        legend.margin = margin(t = 5, r = 4, b = 10, l = 4),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank()
-      )
+  # Only render plot when it's actually being displayed
+  output$plot_bri_risk <- renderPlot({
+    req(input$risk_metric_bri == "risk_d") # Only run if risk_d is selected
+    plot_riskd(risk_d, "BRI")
   })
 
-  output$forecast <- renderPlot({
-
-
-    fc <- model_out |> filter(type == "forecast") |> as.data.table()
-    fc$occ <- dist_normal(mu = fc$occ_mean, sigma = sqrt(fc$occ_var))
-
-    fc <- fc[.model == "crps"] # select model
-
-    compute_quantiles <- function(q, .data) {
-      quantile(.data, p = c(q))
-    }
-    fc[,
-      # get percentiles
-      c("10%", "25%", "75%", "90%") := lapply(
-        c(0.1, 0.25, 0.75, .9),
-        compute_quantiles,
-        .data = .SD[, occ]
-      )
-    ]
-
-    # Plot
-    fc |>
-      ggplot(aes(x = index, mean(occ))) +
-      geom_line() +
-      geom_ribbon(
-        aes(ymin = `25%`, ymax = `75%`, fill = "50%"),
-        alpha = 0.3
-      ) +
-      geom_ribbon(
-        aes(ymin = `10%`, ymax = `90%`, fill = "80%"),
-        alpha = 0.1
-      ) +
-      geom_hline(
-        aes(yintercept = thr),
-        colour = "red",
-        linetype = "dashed",
-        linewidth = 1
-      ) +
-      scale_y_continuous(name = "bed occupancy") +
-      scale_x_date(
-        labels = \(x) {
-          format(x, "%a\n%d-%m")
-        },
-        breaks = "day",
-        name = "bed occupancy"
-      ) +
-      scale_fill_manual(
-        name = "Forecast\ninterval",
-        values = c("50%" = "steelblue", "80%" = "steelblue")
-      ) +
-      facet_wrap(vars(site), ncol = 1, scales = "free_y") +
-      theme(
-        axis.title.y = element_text(size = 14),
-        axis.title.x = element_blank(),
-        axis.text = element_text(size = 14),
-        strip.text = element_text(size = 24),
-        strip.background = element_rect(fill = "white", linewidth = 0),
-        legend.text = element_text(size = 14),
-        legend.title = element_text(size = 14, margin = margin(b = 15)),
-        legend.margin = margin(t = 5, r = 4, b = 5, l = 4),
-        # panel.border = element_rect(linewidth = 0),
-        legend.background = element_rect(colour = "black", linewidth = 1)
-        # panel.background = element_rect(fill = "white")
-        # panel.grid.major = element_blank(),
-        # panel.grid.minor = element_blank()
-      )
+  # Only render text when it's being displayed
+  output$text_bri_risk <- renderText({
+    req(input$risk_metric_bri %in% c("risk_ws_close", "risk_ws_far", "risk_w"))
+    switch(
+      input$risk_metric_bri,
+      risk_ws_close = sprintf(
+        "%.2f%%",
+        risk_ws_close[site == "BRI", risk_ws]
+      ),
+      risk_ws_far = sprintf(
+        "%.2f%%",
+        risk_ws_far[site == "BRI", risk_ws]
+      ),
+      risk_w = sprintf("%.2f%%", risk_w[site == "BRI", risk_w])
+    )
   })
+
+  # Southmead
+  output$southmead_risk <- renderUI({
+    switch(
+      input$risk_metric_southmead,
+      risk_d = plotOutput("plot_southmead_risk", height = "200px"),
+      risk_ws_close = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_southmead_risk"), style = "color: #e74c3c;")
+      ),
+      risk_ws_far = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_southmead_risk"), style = "color: #e74c3c;")
+      ),
+      risk_w = div(
+        style = "text-align: center; padding: 20px;",
+        h2(textOutput("text_southmead_risk"), style = "color: #e74c3c;")
+      )
+    )
+  })
+
+  # Only render plot when it's actually being displayed
+  output$plot_southmead_risk <- renderPlot({
+    req(input$risk_metric_southmead == "risk_d") # Only run if risk_d is selected
+    plot_riskd(risk_d, "Southmead")
+  })
+
+  # Only render text when it's actually being displayed
+  output$text_southmead_risk <- renderText({
+    req(input$risk_metric_southmead %in% c("risk_ws_close", "risk_ws_far", "risk_w"))
+    switch(
+      input$risk_metric_southmead,
+      risk_ws_close = sprintf(
+        "%.2f%%",
+        risk_ws_close[site == "Southmead", risk_ws]
+      ),
+      risk_ws_far = sprintf(
+        "%.2f%%",
+        risk_ws_far[site == "Southmead", risk_ws]
+      ),
+      risk_w = sprintf("%.2f%%", risk_w[site == "Southmead", risk_w])
+    )
+  })
+
+  # Plot bed occupancy
+  output$fc_bri <- renderPlot(
+    plot_fc(fc, thr, "BRI")
+  )
+
+  output$fc_southmead <- renderPlot(
+    plot_fc(fc, thr, "Southmead")
+  )
 }
 
 
