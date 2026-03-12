@@ -104,18 +104,18 @@ list(
     fcc_file,
     fc_combination(fc_file, weights, ls_model_comb)
   ),
-  # tar_target(
-  #   risk_file,
-  #   compute_risk(fcc_file, thr_file),
-  #   format = "file"
-  # )
   tar_target(
     risk_file,
     compute_risk(fcc_file, thr_file)
   ),
   tar_target(
-    output_file,
-    prepare_output(risk_file),
+    output_file_pred,
+    prepare_output_pred(risk_file),
+    format = "file"
+  ),
+  tar_target(
+    output_file_hist,
+    prepare_output_hist(ts_file),
     format = "file"
   )
 )

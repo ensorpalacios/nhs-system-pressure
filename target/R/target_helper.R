@@ -438,38 +438,38 @@ xgb_reg_int <-
 
 
 
-# Plots ------------------------------------------------------------------------
-#' Plot forecasts
-#' Plot fc for each site and split
-#' @param .data Data containing observed ("all") and fc occ ("fc").
-plot_forecast <- # plot forecast function
-  function(.data, ...) {
-    # Reduce length observations (x axis)
-    .data$all = 
-      .data$all %>% 
-      group_by(split, type, site) %>% 
-      mutate(
-        start_index = 
-          case_when(
-            type == "train" ~
-              head(index, 1) + 
-              (tail(index, 1) - head(index, 1)) / 1.7,
-            type == "test" ~
-              head(index, 1)
-          )
-      ) %>% 
-      ungroup() %>% 
-      filter(index >= start_index)
+# # Plots ------------------------------------------------------------------------
+# #' Plot forecasts
+# #' Plot fc for each site and split
+# #' @param .data Data containing observed ("all") and fc occ ("fc").
+# plot_forecast <- # plot forecast function
+#   function(.data, ...) {
+#     # Reduce length observations (x axis)
+#     .data$all = 
+#       .data$all %>% 
+#       group_by(split, type, site) %>% 
+#       mutate(
+#         start_index = 
+#           case_when(
+#             type == "train" ~
+#               head(index, 1) + 
+#               (tail(index, 1) - head(index, 1)) / 1.7,
+#             type == "test" ~
+#               head(index, 1)
+#           )
+#       ) %>% 
+#       ungroup() %>% 
+#       filter(index >= start_index)
     
-    # Plot
-    .data$fc %>%
-      autoplot() +
-      autolayer(.data$all, .vars = occ) +
-      scale_colour_manual(name = "models", values = col_models) + 
-      scale_fill_manual(name = "models", values = col_models) + 
-      scale_y_continuous(breaks = c(600, 700)) +
-      facet_wrap(vars(.model), ncol = 1, strip.position = "right")
-  }
+#     # Plot
+#     .data$fc %>%
+#       autoplot() +
+#       autolayer(.data$all, .vars = occ) +
+#       scale_colour_manual(name = "models", values = col_models) + 
+#       scale_fill_manual(name = "models", values = col_models) + 
+#       scale_y_continuous(breaks = c(600, 700)) +
+#       facet_wrap(vars(.model), ncol = 1, strip.position = "right")
+#   }
 
 
 # Metric-related functions -----------------------------------------------------

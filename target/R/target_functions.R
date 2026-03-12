@@ -618,122 +618,9 @@ compute_risk <-
   }
 
 
-# #' Plot risk
-# #' @param risk_file Contains all elements for plot (risk prediction, fc, thr)
-# plot_risk <-
-#   function(path_data) {
-#     # Prepare for plot
-#     all_data <- readRDS(path_data)
-#     thr <- all_data$threshold
-#     risk_d <- all_data$risk$risk_d
-#     risk_ws <- all_data$risk$risk_ws
-#     risk_w <- all_data$risk$risk_w
-#     fc <- all_data$fc
-
-#     sites <- thr[, unique(site)]
-
-#     list_models = c("crps")
-
-#     # Make plot
-#     plt_risk <-
-#       map(sites, \(.site) {
-#         # Prepare data
-#         tmp_tbl = # daily risks
-#           risk_d[
-#             site == .site & .model %in% list_models
-#           ]
-
-#         tmp_thr = tmp_tbl[1, thr] # threshold (all equals)
-
-#         risk_close = # week split close risk
-#           risk_ws[
-#             site == .site & .model %in% list_models &
-#               week_split == "close"
-#           ][ # add x-axis position
-#             , x_axis := 1
-#           ]
-#         risk_far = # week split far risk
-#           risk_ws[
-#             site == .site & .model %in% list_models &
-#               week_split == "far"
-#           ][ # add x-axis position
-#             , x_axis := 2
-#           ]
-#         risk_weeks = # join close/far
-#           rbind(risk_close, risk_far)
-
-#         risk_week = # week (whole) risk
-#           risk_w[
-#             site == .site & .model %in% list_models
-#           ][ # add x-axis position
-#             , x_axis := 3
-#           ]
-
-#         tmp_fc =
-#           fc %>%
-#           filter(site == .site, .model %in% list_models)
-
-#         # Plot
-#         p1 = # predicted risk weekly (split and whole)
-#           ggplot() +
-#           geom_col(
-#             data = risk_weeks,
-#             aes(x = x_axis, y = risk_ws, fill = .model),
-#             position = "dodge"
-#           ) +
-#           geom_col(
-#             data = risk_week,
-#             aes(x = x_axis, y = risk_w, fill = .model),
-#             position = "dodge"
-#           ) +
-#           geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
-#           # ylim(0, .8) +
-#           # scale_colour_manual(name = "models", values = col_models) +
-#           scale_fill_manual(name = "models", values = col_models) +
-#           scale_x_continuous(
-#             breaks = c(1, 2, 3), labels = c("1-3", "4-7", "week")
-#           )
-
-#         p2 = # predicted risk daily
-#           tmp_tbl %>%
-#           ggplot(aes(x = index, y = risk_day, fill = .model)) +
-#           geom_col(position = "dodge", width = 0.5) +
-#           geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
-#           # ylim(0, .8) +
-#           # scale_colour_manual(name = "models", values = col_models) +
-#           scale_fill_manual(name = "models", values = col_models)
-
-#         p3 = # time series
-#           tmp_fc %>%
-#           autoplot() +
-#           # geom_line(
-#             # data = tmp_tbl[.model == tmp_tbl$.model[1]],
-#             # aes(x = index, y = occ_obs, group = 1), linewidth = 2
-#           # ) +
-#           geom_hline(
-#             yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2
-#           )
-#         # p3 = # time series
-#         # tmp_tbl[.model == tmp_tbl$.model[1]] %>%
-#         # ggplot(aes(x = index, y = occ_obs, group = 1)) +
-#         # geom_line(linewidth = 2) +
-#         # geom_hline(yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2)
-
-#         # Join
-#         p1 / p2 / p3 +
-#           plot_layout(
-#             ncol = 1, axes = "collect_x", guides = "collect"
-#           )
-#       }) %>%
-#       set_names(sites)
-
-#     # Return plot
-#     plt_risk
-# }
-
-#' Prepae target output
+#' Prepare target output (predictions)
 #' @param  .tables RDS file containing out tables to merge
-prepare_output <-
+prepare_output_pred <-
   function(.tables) {
   
 
@@ -753,7 +640,6 @@ prepare_output <-
       list_data$threshold,
       on = "site"
     ]
-
     list_data$risk$risk_ws <- 
       list_data$risk$risk_ws[
       list_data$threshold,
@@ -779,6 +665,25 @@ prepare_output <-
 
     target_output_path <- file.path(save_path, "output", paste0("model_out_flat", ".RDS"))
     
+    if (!file.exists(dirname(target_output_path))) {
+      dir.create(dirname(target_output_path), recursive = TRUE)
+    }
+    
+    saveRDS(output, target_output_path)
+    
+    # Return list
+    target_output_path
+  }
+
+
+#' Prepae target output (historical data)
+#' @param  .table RDS file containing historical data
+prepare_output_hist <-
+  function(.table) {
+    output <- .table
+
+    target_output_path <- file.path(save_path, "output", paste0("historic_data", ".RDS"))
+
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
     }
