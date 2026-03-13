@@ -14,18 +14,18 @@ library(htmltools)
 
 source(here("shinyApp/shiny-functions.R"))
 
-# source("00_prepare_data.R")
-model_out <- readRDS(here("target/data/output/2025-12-16.RDS"))
-model_out$hist <- 
-  as.data.table(
-    list(
-      "site"=rep(c("BRI", "Southmead"), each=14),
-      "index" = seq.Date(as.Date("2025-11-02")-14, as.Date("2025-11-02")-1),
-      "occ" = 
-        c(mean(mean(as.data.table(model_out$fc)[site == "BRI" & .model == "arima_dadp_rec", occ])) + rnorm(14, sd=5),
-        mean(mean(as.data.table(model_out$fc)[site == "Southmead" & .model == "arima_dadp_rec", occ])) + rnorm(14, sd=5))
-    )
-  )
+source("00_prepare_data.R")
+# model_out <- readRDS(here("target/data/output/2026-02-18.RDS"))
+# model_out$hist <- 
+#   as.data.table(
+#     list(
+#       "site"=rep(c("BRI", "Southmead"), each=14),
+#       "index" = seq.Date(as.Date("2025-11-02")-14, as.Date("2025-11-02")-1),
+#       "occ" = 
+#         c(mean(mean(as.data.table(model_out$fc)[site == "BRI" & .model == "arima_dadp_rec", occ])) + rnorm(14, sd=5),
+#         mean(mean(as.data.table(model_out$fc)[site == "Southmead" & .model == "arima_dadp_rec", occ])) + rnorm(14, sd=5))
+#     )
+#   )
 
 ui <- page_fillable(
   # Theme
@@ -91,15 +91,13 @@ server <- function(input, output) {
   model <- "crps"
 
   # Get data
-  risk_d <- model_out$risk$risk_d[.model == model]
-  risk_ws_close <- model_out$risk$risk_ws[
-    .model == model & week_split == "close"
-  ]
-  risk_ws_far <- model_out$risk$risk_ws[.model == model & week_split == "far"]
-  risk_w <- model_out$risk$risk_w[.model == model]
-  fc <- model_out$fc |> filter(.model == model)
-  thr <- model_out$threshold
-  hist <- model_out$hist
+  risk_d <- as.data.table(model_out)[type == "risk_d" & .model == model, .(site, index, risk_day)]
+  risk_ws_close <- as.data.table(model_out)[type == "risk_ws" & .model == model & week_split == "close", .(site, risk_ws)]
+  risk_ws_far <- as.data.table(model_out)[type == "risk_ws" & .model == model & week_split == "far", .(site, risk_ws)]
+  risk_w <- as.data.table(model_out)[type == "risk_w" & .model == model, .(site, risk_w)]
+  fc <- as.data.table(model_out)[type == "forecast" & .model == model]
+  thr <- as.data.table(model_out)[type == "risk_w" & .model == model, .(site, thr)]
+  hist <- as.data.table(historic_data)
 
   # Plot risk
   output$bri_risk <- renderPlot({

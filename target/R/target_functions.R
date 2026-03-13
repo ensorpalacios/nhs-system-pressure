@@ -17,7 +17,7 @@ load_hosp <-
       }
     )
 
-    report_end <- lubridate::today()
+    report_end <- lubridate::today()-lubridate::dmonths(3)
     report_start <- as.Date(report_end - lubridate::dyears(3))
 
 
@@ -100,9 +100,10 @@ load_hosp <-
 prepare_data <-
   function(df_occ) {
     df_occ <- readRDS(df_occ)
-    # Temperature data
+    # Temperature data (historical data)
     df_t <-
-      get_temp_historic()
+      get_temp(historic = TRUE)
+    browser()
     df_t <-
       df_t %>%
       melt(id.vars = "report_date", variable.name = "metric_name") %>%
@@ -682,6 +683,7 @@ prepare_output_hist <-
   function(.table) {
     output <- .table
 
+    output$site <- as.character(output$site)
     target_output_path <- file.path(save_path, "output", paste0("historic_data", ".RDS"))
 
     if (!file.exists(dirname(target_output_path))) {

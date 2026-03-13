@@ -12,7 +12,6 @@
 #' @param .site Site to display
 #' @param .hist Historical data??
 plot_fc <- function(.fc, .hist, .thr, .site) {
-  .fc <- as.data.table(.fc)
   .fc <- .fc[site == .site]
   .hist <- .hist[site == .site]
   .thr <- .thr[site == .site, thr]
@@ -20,6 +19,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   compute_quantiles <- function(q, .data) {
     quantile(.data, p = c(q))
   }
+  .fc[, occ := dist_normal(occ_mean, occ_var)]
   .fc[,
     # get percentiles
     c("10%", "25%", "75%", "90%") := lapply(
@@ -94,13 +94,13 @@ plot_riskd <- function(.risk_d, .risk_ws_close, .risk_ws_far, .risk_w, .site) {
   x_far_s <- .risk_d[4, index]
   x_far_e <- .risk_d[7, index]
   x_close_l <- .risk_d[2, index]
-  x_far_l <- .risk_d[6, index]
+  x_far_l <- .risk_d[6, index] - 0.5
   x_week_l <- .risk_d[4, index]
   y_close <- .risk_d[1:3, max(risk_day)] +0.3
-  y_far <- .risk_d[1:3, max(risk_day)] + 0.3
+  y_far <- .risk_d[4:7, max(risk_day)] + 0.3
   y_week <- .risk_d[, max(risk_day)] + 0.5
   max_y <- ifelse((y_week + 0.2) > 1, y_week + 0.2, 1)
-
+ 
   # Plot
   .risk_d |>
     ggplot(aes(x = index, y = risk_day, fill = risk_day)) +

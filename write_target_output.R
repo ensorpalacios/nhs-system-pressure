@@ -4,14 +4,21 @@ library(RMySQL)
 library(dplyr)
 library(distributional)
 
-tar_make()
+tar_make(callr_function = NULL)
 
 model_out <- readRDS("target/data/output/model_out_flat.RDS")
+historic_data <- readRDS("target/data/output/historic_data.RDS")
 
 # compute mean/sd
 model_out <-model_out %>%
   mutate(occ_mean = mean(occ), occ_var = variance(occ)) %>%
   select(-occ)
+
+historic_data <- historic_data %>%
+  filter(index >= (min(model_out$index, na.rm = TRUE)-lubridate::dweeks(2))) %>%
+  filter(site != "<aggregated>")
+
+
 
 
 # Write to MYSQL
@@ -33,5 +40,8 @@ conn <- dbConnect(dbDriver("MySQL"),
 
 # delete old data
 query_delete <- str_c("DELETE FROM nhs_bed_pressure")
+query_delete_historic <- str_c("DELETE FROM nhs_bed_pressure_historic")
 DBI::dbGetQuery(conn, query_delete)
-dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE)
+DBI::dbGetQuery(conn, query_delete_historic)
+dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE, row.names = FALSE)
+dbWriteTable(conn, "nhs_bed_pressure_historic", value = historic_data, overwrite = TRUE, row.names = FALSE)

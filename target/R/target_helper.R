@@ -179,6 +179,7 @@ stabilise <-
 #' @param .type choose model for x-predictions
 xpredict_fun <- 
   function(.data, .var, .type) {
+    browser()
     new_index = seq(max(.data$index) + 1 , max(.data$index) + horizon)
     
     .data = # add rows for future data with index and type)
@@ -240,14 +241,8 @@ xpredict_fun <-
     
     # Add temperature forecasts
     temp_fc <- 
-      get_temp_fc()
+      get_temp_fc(historic = FALSE)
     
-    ######
-    # Temporary: Changing date of forecast to align to data I have (finishing at
-    # 2025-11-01 + 7 h)
-    cat("!!!changing dates temperature fc because hospital data not up to date")
-    temp_fc[, index := .data$index %>% tail(7)]
-    ######
     
     # Check hospital and temperature forecast data are alligned
     if (!identical(tail(.data$index, 7), temp_fc[, index])) {
@@ -567,13 +562,23 @@ get_temp_fc <-
 #' temperatyre is 2 m from ground; start historical data is 2022.
 #' Attention: put this within prepare_data function, so that it's run within
 #' target flow everytime hospital data change.
-get_temp_historic <- 
-  function() {
+get_temp <- 
+  function(historic) {
     today <- Sys.Date()
+
+    if (isTRUE(historic)) {
     res_h <- # historical data
       GET(
         str_glue("https://archive-api.open-meteo.com/v1/archive?latitude=51.458886&longitude=-2.596293&start_date=2022-01-01&end_date={today}&daily=temperature_2m_max,temperature_2m_min&timezone=GMT")
       )
+    } else {
+      tomorrow <- today + 1
+      h_fc <- today + 7
+      res_h <- # historical data
+      GET(
+        str_glue("https://archive-api.open-meteo.com/v1/archive?latitude=51.458886&longitude=-2.596293&start_date={tomorrow}&end_date={h_fc}&daily=temperature_2m_max,temperature_2m_min&timezone=GMT")
+      )
+    }
     
     res_h <- res_h$content %>% rawToChar() %>% jsonlite::fromJSON()
     
@@ -584,20 +589,6 @@ get_temp_historic <-
         tmin = res_h$daily$temperature_2m_min
       )[
         , report_date := as.Date(report_date, tz = "GMT")
-      ][
-        , report_date := as.character(report_date) 
-      ]
-    
-    #####
-    # Temporary:
-    # ATTENTION!!!! only during testing because no hospital data up to date!!!
-    #####
-    cat("!!!trimming end temperature data because hospital data not up to date")
-    tbl_h <- 
-      tbl_h[
-        , report_date := as.Date(report_date, tz = "GMT")
-      ][
-        report_date <= "2025-11-1" # last date of hospital data I have
       ][
         , report_date := as.character(report_date) 
       ]
