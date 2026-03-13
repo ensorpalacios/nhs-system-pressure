@@ -9,26 +9,40 @@
 load_hosp <-
   function() {
 
-    con <- switch(
-      .Platform$OS.type,
-      windows = DBI::dbConnect(odbc::odbc(), "xsw"),
-      unix = {
-        DBI::dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql_connect_string_linux_sql18"))
-      }
-    )
+local <- TRUE 
 
-    report_end <- lubridate::today()-lubridate::dmonths(3)
+if (local) {
+  con <- dbConnect(RSQLite::SQLite(), "data/local_db/local_dev.sqlite")
+  message("Connected to: Local SQLite")
+} else {
+  con <- switch(
+    .Platform$OS.type,
+    windows = dbConnect(odbc::odbc(), "xsw"),
+    unix = {
+      dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql_connect_string_linux_sql18"))
+    }
+  )
+  message("Connected to: Hosted SQL Server")
+}
+
+# 2. Define the Table Reference (ecds_tbl)
+if (local) {
+  # SQLite doesn't understand catalogs/schemas, so we point to the flat table name
+  ecds_tbl <- tbl(con, "urgent_care_daily")
+} else {
+  # Use the full path for the hosted environment
+  ecds_tbl <- tbl(
+    con, 
+    in_catalog(
+      catalog = "Analyst_SQL_Area", 
+      schema = "dbo", 
+      table = "tbl_BNSSG_Datasets_UrgentCare_Daily"
+    )
+  )
+}
+
+    report_end <- lubridate::today()
     report_start <- as.Date(report_end - lubridate::dyears(3))
-
-
-    ecds_tbl <- dplyr::tbl(
-      con,
-      dbplyr::in_catalog(
-        catalog = "Analyst_SQL_Area",
-        schema = "dbo",
-        table = "tbl_BNSSG_Datasets_UrgentCare_Daily"
-      )
-    )
 
     metrics <- c(
       '347334',
@@ -53,16 +67,18 @@ load_hosp <-
     )
 
     hosp_data <-
-      ecds_tbl %>%
+      ecds_tbl  %>%
+      dplyr::rename_with(.fn = stringr::str_to_lower) %>%
+        dplyr::collect() %>%
+      dplyr::mutate(report_date = lubridate::ymd(report_date)) %>%
       dplyr::filter(
-        METRIC_ID %in% metrics,
-        dplyr::between(Report_Date, report_start, report_end)
+        metric_id %in% metrics,
+        dplyr::between(report_date, report_start, report_end)
       ) %>%
-      dplyr::collect() %>%
       dplyr::mutate(
 
-        METRIC_NAME = dplyr::recode(
-          METRIC_NAME,
+        metric_name = dplyr::recode(
+          metric_name,
           !!!c(
             # "Number of Discharges",
             "General & Acute Beds - Total G&A escalation beds open" = "Escalation beds open",
@@ -83,7 +99,6 @@ load_hosp <-
           )
         )
       ) %>%
-      dplyr::rename_with(.fn = stringr::str_to_lower) %>%
       dplyr::mutate(report_date = lubridate::ymd(report_date))
 
     # Save data
@@ -103,7 +118,7 @@ prepare_data <-
     # Temperature data (historical data)
     df_t <-
       get_temp(historic = TRUE)
-    browser()
+
     df_t <-
       df_t %>%
       melt(id.vars = "report_date", variable.name = "metric_name") %>%

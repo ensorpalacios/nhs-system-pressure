@@ -19,8 +19,13 @@ historic_data <- historic_data %>%
   filter(site != "<aggregated>")
 
 
+local <- TRUE 
 
 
+if (local) {
+  conn <- dbConnect(RSQLite::SQLite(), "data/local_db/local_shiny_dev.sqlite")
+  message("Connected to: Local SQLite")
+} else {
 # Write to MYSQL
 # Connection details
 host <- Sys.getenv("DB_HOST")
@@ -36,12 +41,9 @@ conn <- dbConnect(dbDriver("MySQL"),
                   port = 3306,
                   user = user,
                   password=password)
+  message("Connected to: Hosted SQLite database")
+}
 
-
-# delete old data
-query_delete <- str_c("DELETE FROM nhs_bed_pressure")
-query_delete_historic <- str_c("DELETE FROM nhs_bed_pressure_historic")
-DBI::dbGetQuery(conn, query_delete)
-DBI::dbGetQuery(conn, query_delete_historic)
 dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE, row.names = FALSE)
 dbWriteTable(conn, "nhs_bed_pressure_historic", value = historic_data, overwrite = TRUE, row.names = FALSE)
+

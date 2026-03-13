@@ -179,7 +179,7 @@ stabilise <-
 #' @param .type choose model for x-predictions
 xpredict_fun <- 
   function(.data, .var, .type) {
-    browser()
+    #browser()
     new_index = seq(max(.data$index) + 1 , max(.data$index) + horizon)
     
     .data = # add rows for future data with index and type)
@@ -241,22 +241,24 @@ xpredict_fun <-
     
     # Add temperature forecasts
     temp_fc <- 
-      get_temp_fc(historic = FALSE)
-    
+      get_temp(historic = FALSE)
     
     # Check hospital and temperature forecast data are alligned
-    if (!identical(tail(.data$index, 7), temp_fc[, index])) {
-      stop("hospital and temperature data not alligned")
-    }
-    
+    #if (!identical(tail(.data$index, 7), temp_fc[2:8, report_date])) {
+    #  stop("hospital and temperature data not alligned")
+    #}
+    temp_fc <- temp_fc[2:8]
+
     # Replace missing temp with forecasts
     .data %>% 
-      group_by(site) %>% 
-      mutate(
-        tmax = replace(tmax, is.na(tmax), temp_fc[, tmax]),
-        tmin = replace(tmin, is.na(tmin), temp_fc[, tmin])
-      ) %>% 
-      ungroup()
+      left_join(
+        temp_fc %>%
+        mutate(report_date = as.Date(report_date)) %>%
+        rename_with(.fn = \(x) str_c(x, "_api")),
+         by = join_by(index == report_date_api)) %>%
+      mutate(tmax = coalesce(tmax, tmax_api)) %>%
+      mutate(tmin = coalesce(tmin, tmin_api)) %>%
+      select(!matches("_api")) 
   }
 
 
@@ -574,14 +576,14 @@ get_temp <-
     } else {
       tomorrow <- today + 1
       h_fc <- today + 7
-      res_h <- # historical data
+      res_h <- # forecast data
       GET(
-        str_glue("https://archive-api.open-meteo.com/v1/archive?latitude=51.458886&longitude=-2.596293&start_date={tomorrow}&end_date={h_fc}&daily=temperature_2m_max,temperature_2m_min&timezone=GMT")
+        str_glue("https://api.open-meteo.com/v1/forecast?latitude=51.458886&longitude=-2.596293&daily=temperature_2m_max,temperature_2m_min&timezone=GMT&forecast_days=14")
       )
     }
     
     res_h <- res_h$content %>% rawToChar() %>% jsonlite::fromJSON()
-    
+
     tbl_h <- 
       data.table(
         report_date = res_h$daily$time, 
