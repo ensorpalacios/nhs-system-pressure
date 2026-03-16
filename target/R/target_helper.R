@@ -58,7 +58,7 @@ lag_fun <-
         tmp_data %>% 
           slice(.lag:n()) %>% 
           select(index, type, site, t_ax, days_),
-        tmp_lagged %>% as_tibble(),
+        tmp_lagged %>% as_tibble(.name_repair = "check_unique"),
         tmp_days %>% as_tibble() %>%  slice(.lag:n())
       )
     }) %>% 
