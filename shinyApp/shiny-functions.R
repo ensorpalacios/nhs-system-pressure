@@ -11,70 +11,73 @@
 #' @param .thr Threshold for high system pressure
 #' @param .site Site to display
 #' @param .hist Historical data??
-plot_fc <- function(.fc, .hist, .thr, .site) {
+plot_fc <- function(.fc, .hist, .thr, .site, .type) {
   .fc <- .fc[site == .site]
   .hist <- .hist[site == .site]
   .thr <- .thr[site == .site, thr]
 
-  compute_quantiles <- function(q, .data) {
-    quantile(.data, p = c(q))
-  }
-  .fc[, occ := dist_normal(occ_mean, occ_var)]
-  .fc[,
-    # get percentiles
-    c("10%", "25%", "75%", "90%") := lapply(
-      c(0.1, 0.25, 0.75, .9),
-      compute_quantiles,
-      .data = .SD[, occ]
-    )
-  ]
+  if (.type == "forecast") {
+    .hist = .hist[index >= max(index) - lubridate::dweeks(2), ]
+    compute_quantiles <- function(q, .data) {
+      quantile(.data, p = c(q))
+    }
+    .fc[, occ := dist_normal(occ_mean, sqrt(occ_var))]
+    .fc[,
+      # get percentiles
+      c("10%", "25%", "75%", "90%") := lapply(
+        c(0.1, 0.25, 0.75, .9),
+        compute_quantiles,
+        .data = .SD[, occ]
+      )
+    ]
 
-  # Plot
-  .fc |>
-    ggplot(aes(x = index, y = mean(occ))) +
-    geom_line() +
-    geom_ribbon(
-      aes(ymin = `25%`, ymax = `75%`, fill = "50%"),
-      alpha = 0.3
-    ) +
-    geom_ribbon(
-      aes(ymin = `10%`, ymax = `90%`, fill = "80%"),
-      alpha = 0.1
-    ) +
-    geom_hline(
-      aes(yintercept = .thr),
-      colour = "red",
-      linetype = "dotted",
-      linewidth = 1.5
-    ) +
-    geom_line(data = .hist, aes(x = index, y = occ)) +
-    # scale_y_continuous(name = "none") +
-    scale_x_date(
-      labels = \(x) {
-        format(x, "%a\n%d-%m")
-      },
-      breaks = "2 day",
-      name = "bed occupancy"
-    ) +
-    scale_fill_manual(
-      name = "Forecast\ninterval",
-      values = c("50%" = "steelblue", "80%" = "steelblue")
-    ) +
-    # facet_wrap(vars(site), ncol = 1, scales = "free_y") +
-    theme(
-      # axis.title.y = element_text(size = 14),
-      axis.title.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text = element_text(size = 14),
-      # strip.text = element_text(size = 24),
-      strip.text = element_blank(),
-      strip.background = element_rect(fill = "white", linewidth = 0),
-      legend.position = "none"
-      # legend.text = element_text(size = 14),
-      # legend.title = element_text(size = 14, margin = margin(b = 15)),
-      # legend.margin = margin(t = 5, r = 4, b = 5, l = 4),
-      # legend.background = element_rect(colour = "black", linewidth = 1)
-    )
+    # Plot
+    .fc |>
+      ggplot(aes(x = index, y = mean(occ))) +
+      geom_line() +
+      geom_ribbon(
+        aes(ymin = `25%`, ymax = `75%`, fill = "50%"),
+        alpha = 0.3
+      ) +
+      geom_ribbon(
+        aes(ymin = `10%`, ymax = `90%`, fill = "80%"),
+        alpha = 0.1
+      ) +
+      geom_hline(
+        aes(yintercept = .thr),
+        colour = "red",
+        linetype = "dotted",
+        linewidth = 1.5
+      ) +
+      geom_line(data = .hist, aes(x = index, y = occ)) +
+      # scale_y_continuous(name = "none") +
+      scale_x_date(
+        labels = \(x) {
+          format(x, "%a\n%d-%m")
+        },
+        breaks = "2 day",
+        name = "bed occupancy"
+      ) +
+      scale_fill_manual(
+        name = "Forecast\ninterval",
+        values = c("50%" = "steelblue", "80%" = "steelblue")
+      ) +
+      # facet_wrap(vars(site), ncol = 1, scales = "free_y") +
+      theme(
+        # axis.title.y = element_text(size = 14),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 14),
+        # strip.text = element_text(size = 24),
+        strip.text = element_blank(),
+        strip.background = element_rect(fill = "white", linewidth = 0),
+        legend.position = "none"
+        # legend.text = element_text(size = 14),
+        # legend.title = element_text(size = 14, margin = margin(b = 15)),
+        # legend.margin = margin(t = 5, r = 4, b = 5, l = 4),
+        # legend.background = element_rect(colour = "black", linewidth = 1)
+      )
+  }
 }
 
 #' Daily risk plot

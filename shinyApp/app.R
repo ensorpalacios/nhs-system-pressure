@@ -88,7 +88,7 @@ ui <- page_fillable(
 
 server <- function(input, output) {
   # Choose model
-  model <- "crps"
+  model <- "equal"
 
   # Get data
   risk_d <- as.data.table(model_out)[type == "risk_d" & .model == model, .(site, index, risk_day)]
@@ -110,11 +110,11 @@ server <- function(input, output) {
 
   # Plot bed occupancy
   output$fc_bri <- renderPlot(
-    plot_fc(fc, hist, thr, "BRI")
+    plot_fc(fc, hist, thr, "BRI", "forecast")
   )
 
   output$fc_southmead <- renderPlot(
-    plot_fc(fc, hist, thr, "Southmead")
+    plot_fc(fc, hist, thr, "Southmead", "forecast")
   )
 }
 

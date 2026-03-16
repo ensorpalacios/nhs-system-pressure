@@ -10,9 +10,8 @@ load_hosp <-
   function() {
 
 local <- TRUE 
-
 if (local) {
-  con <- dbConnect(RSQLite::SQLite(), "data/local_db/local_dev.sqlite")
+  con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
   message("Connected to: Local SQLite")
 } else {
   con <- switch(
@@ -115,14 +114,17 @@ if (local) {
 prepare_data <-
   function(df_occ) {
     df_occ <- readRDS(df_occ)
+    today = df_occ$report_date |> max()
+    start = df_occ$report_date |> min()
+
     # Temperature data (historical data)
     df_t <-
-      get_temp(historic = TRUE)
+      get_temp(.historic = TRUE, .today = today, .start = start)
 
     df_t <-
       df_t %>%
-      melt(id.vars = "report_date", variable.name = "metric_name") %>%
-      mutate(report_date = lubridate::ymd(report_date))
+      melt(id.vars = "report_date", variable.name = "metric_name")
+
     # Join data
     df_occ <-
       df_occ %>%
@@ -141,7 +143,7 @@ prepare_data <-
       select(-metric_id) |>
       pivot_wider(names_from = metric_name, values_from = value) |>
       mutate(
-        index = as.Date(report_date, tz = "GMT"),
+        index = lubridate::ymd(report_date),
         site = case_match(
           provider,
           "BRI" ~ "BRI",
@@ -168,7 +170,6 @@ prepare_data <-
     # Covert to timeseries (tsibble object)
     ts_data <- df_occ |> as_tsibble(index = index, key = site)
 
-
     # Convert implicit gaps into explicit missing values
     ts_data <-
       ts_data |>
@@ -178,7 +179,8 @@ prepare_data <-
     impute_fun <-
       function(.dat) {
         na_seadec(
-          .dat, algorithm = "ma",
+          .dat,
+          algorithm = "ma",
           k = 3,
           weighting = "simple",
           find_frequency = TRUE
@@ -298,7 +300,6 @@ forecast_occ <-
   function(ts_data) {
     sites <- ts_data$site %>% unique()
     
-    
     # Reproducible analysis for rf and xgb
     set.seed(123) 
     
@@ -339,16 +340,6 @@ forecast_occ <-
     
     
     # Fit models
-    list_best_models <-
-      list(
-        "BRI" = 
-          c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-            "var_paed", "var_h", "xgb"),
-        "Southmead" = 
-          c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-            "var_paed", "var_los", "xgb")
-      )
-    
     # ARIMA aggregated
     fc_fable_rec <- 
       data_xpredict %>% 
@@ -386,13 +377,13 @@ forecast_occ <-
     
     
     # Vector autoregressive models
-    fc_fable_var_los <- # Length of stay (+21)
+    fc_fable_var_ad2 <- # Length of stay (+21)
       data_xpredict %>% 
       filter(type == "train", !is_aggregated(site)) %>%
       mutate(site = site %>% as.character()) %>% 
       tsibble(index = index, key = site) %>%
       model(
-        var_los = VAR(vars(occ, los) ~ season(period = "week"))
+        var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
       ) %>% 
       forecast(h = horizon)
     
@@ -421,7 +412,7 @@ forecast_occ <-
     fc_var <- # bind VAR fc
       map(
         list(
-          fc_fable_var_los, fc_fable_var_paed
+          fc_fable_var_ad2, fc_fable_var_paed
         ),
         \(.x) {
           .x %>% 
@@ -556,7 +547,7 @@ fc_combination <-
     #   lcomb_fun(.fc, .weights, .list_models, "upper", "crps")
     # fc_comb_crps_u$`.model` = "crps_upper" # rename
     fc_comb_crps <-
-      lcomb_fun(.fc, .weights, .list_models, "none", "crps")
+      lcomb_fun(.fc, .weights, .list_models, "none", "equal")
     
     dimnames(fc_comb_crps$occ) <- "occ"
     
@@ -576,7 +567,7 @@ compute_risk <-
   function(.fc, .thr) {
     # Reproducible analysis for bootstrapping splits
     set.seed(321)
-    
+        
     
     # Add alarm thresholds to fc
     fc_threshold <-

@@ -10,20 +10,20 @@ model_out <- readRDS("target/data/output/model_out_flat.RDS")
 historic_data <- readRDS("target/data/output/historic_data.RDS")
 
 # compute mean/sd
-model_out <-model_out %>%
-  mutate(occ_mean = mean(occ), occ_var = variance(occ)) %>%
-  select(-occ)
-
 historic_data <- historic_data %>%
-  filter(index >= (min(model_out$index, na.rm = TRUE)-lubridate::dweeks(2))) %>%
-  filter(site != "<aggregated>")
+  filter(site != "<aggregated>") |> 
+  mutate(index = as.character(index))
+
+model_out <- model_out %>%
+  mutate(index = as.character(index), occ_mean = mean(occ), occ_var = variance(occ)) %>%
+  select(-occ)
 
 
 local <- TRUE 
 
 
 if (local) {
-  conn <- dbConnect(RSQLite::SQLite(), "data/local_db/local_shiny_dev.sqlite")
+  conn <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_shiny_dev.sqlite"))
   message("Connected to: Local SQLite")
 } else {
 # Write to MYSQL
@@ -47,3 +47,4 @@ conn <- dbConnect(dbDriver("MySQL"),
 dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE, row.names = FALSE)
 dbWriteTable(conn, "nhs_bed_pressure_historic", value = historic_data, overwrite = TRUE, row.names = FALSE)
 
+DBI::dbDisconnect(conn)

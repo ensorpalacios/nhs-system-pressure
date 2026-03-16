@@ -65,10 +65,10 @@ ls_model_comb <-
   list(
     "BRI" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_h", "xgb"),
+        "var_paed", "var_ad2", "xgb"),
     "Southmead" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_los", "xgb")
+        "var_paed", "var_h", "xgb")
   )
 
 

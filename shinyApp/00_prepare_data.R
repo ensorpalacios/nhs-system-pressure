@@ -3,7 +3,7 @@ library(dplyr)
 local <- TRUE 
 
 if (local) {
-  conn <- dbConnect(RSQLite::SQLite(), "data/local_db/local_shiny_dev.sqlite")
+  conn <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_shiny_dev.sqlite"))
   message("Connected to: Local SQLite")
 } else {
 # Write to MYSQL
@@ -23,7 +23,6 @@ conn <- dbConnect(dbDriver("MySQL"),
                   password=password)
   message("Connected to: Hosted SQLite database")
 }
-
 
 model_out <- dbGetQuery(conn, "select * from nhs_bed_pressure") %>%
   mutate(index = lubridate::ymd(index))
