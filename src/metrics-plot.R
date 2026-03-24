@@ -125,6 +125,66 @@ plot_other_metrics <-
 
 
 # Generate tables --------------------------------------------------------------
+# Best models across metrics
+all_metrics <- # combine CRPS and other metrics
+  rbindlist(
+    list(
+      as.data.table(metrics_c)[,
+        .SD,
+        .SDcols = -c("index", "t_ax", "value_s")
+      ][,
+        c("metric", "model") := .(paste0("crps", "_", penalty), models)
+      ][,
+        .SD,
+        .SDcols = -c("penalty", "models")
+      ],
+      as.data.table(metrics_other)
+    ),
+    use.names = TRUE
+  )
+
+all_metrics <- # remove ensemble forecasts from table
+  all_metrics[!grepl("crps|equal|baseline_min", model)]
+
+all_metrics[, # rename models (newmap from environment.R)
+  model := 
+    factor(newmap[model], levels = newmap)
+]
+
+all_metrics_best <- # prepare table with models sorted for each metric
+  dcast(
+    all_metrics[,
+      stat_fun(metric, value),
+      by = c("site", "metric", "model")
+    ],
+    site + model ~ metric,
+    value.var = c("stat")
+  )[,
+    mapply(
+      order_fun,
+      .SD,
+      names(.SD),
+      MoreArgs = list(.model = model),
+      SIMPLIFY = FALSE
+    ),
+    by = c("site"),
+    .SDcols = -c("model")
+  ] |>
+  setcolorder(c("cover80", "cover95"), after = "pball90")
+
+tbl_metric_best_crps <- # generate table (CRPS)
+  all_metrics_best[, .SD, .SDcols = grepl("site|crps", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+tbl_metric_best_nocover <- # generate table (other)
+  all_metrics_best[, .SD, .SDcols = !grepl("crps|cover", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+tbl_metric_best_cover <- # generate table (other)
+  all_metrics_best[, .SD, .SDcols = grepl("site|cover", names(all_metrics_best))] |> 
+  gt(groupname_col = "site", row_group_as_column = T)
+
+
 # Models' metric median and iqr - with combined models
 tbl_metric_c <- 
   metrics_c %>% # attention: values not scaled by tslm!
@@ -249,6 +309,9 @@ plt_metric_time_summary_c %>%
     width = 15, height = 8.88
   )
 
+tbl_metric_best_crps |> gtsave(str_glue("{save_path_m}table_metric_best_crps.tex"))
+tbl_metric_best_nocover |> gtsave(str_glue("{save_path_m}table_metric_best_nocover.tex"))
+tbl_metric_best_cover |> gtsave(str_glue("{save_path_m}table_metric_best_cover.tex"))
 html2pdf(tbl_metric_c, str_glue("{save_path_m}table_metrics"))
 html2pdf(tbl_freq_best_c, str_glue("{save_path_m}table_freq_best"))
 # tbl_metric %>% 

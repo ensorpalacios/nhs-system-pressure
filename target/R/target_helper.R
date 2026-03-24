@@ -58,7 +58,7 @@ lag_fun <-
         tmp_data %>% 
           slice(.lag:n()) %>% 
           select(index, type, site, t_ax, days_),
-        tmp_lagged %>% as_tibble(),
+        tmp_lagged %>% as_tibble(.name_repair = "check_unique"),
         tmp_days %>% as_tibble() %>%  slice(.lag:n())
       )
     }) %>% 
@@ -180,8 +180,7 @@ stabilise <-
 xpredict_fun <- 
   function(.data, .var, .type) {
     new_index = seq(max(.data$index) + 1 , max(.data$index) + horizon)
-    
-    .data = # add rows for future data with index and type)
+    .data = # add rows for future data with index and type
       .data %>%
       group_by(site) %>% 
       mutate(type = "train") %>% 
@@ -240,28 +239,18 @@ xpredict_fun <-
     
     # Add temperature forecasts
     temp_fc <- 
-      get_temp_fc()
+      get_temp(.historic = FALSE, .today = new_index[1] - 1)
     
-    ######
-    # Temporary: Changing date of forecast to align to data I have (finishing at
-    # 2025-11-01 + 7 h)
-    cat("!!!changing dates temperature fc because hospital data not up to date")
-    temp_fc[, index := .data$index %>% tail(7)]
-    ######
-    
-    # Check hospital and temperature forecast data are alligned
-    if (!identical(tail(.data$index, 7), temp_fc[, index])) {
-      stop("hospital and temperature data not alligned")
-    }
-    
+
     # Replace missing temp with forecasts
     .data %>% 
-      group_by(site) %>% 
-      mutate(
-        tmax = replace(tmax, is.na(tmax), temp_fc[, tmax]),
-        tmin = replace(tmin, is.na(tmin), temp_fc[, tmin])
-      ) %>% 
-      ungroup()
+      left_join(
+        temp_fc %>%
+        rename_with(.fn = \(x) str_c(x, "_api")),
+         by = join_by(index == report_date_api)) %>%
+      mutate(tmax = coalesce(tmax, tmax_api)) %>%
+      mutate(tmin = coalesce(tmin, tmin_api)) %>%
+      select(!matches("_api"))
   }
 
 
@@ -438,38 +427,38 @@ xgb_reg_int <-
 
 
 
-# Plots ------------------------------------------------------------------------
-#' Plot forecasts
-#' Plot fc for each site and split
-#' @param .data Data containing observed ("all") and fc occ ("fc").
-plot_forecast <- # plot forecast function
-  function(.data, ...) {
-    # Reduce length observations (x axis)
-    .data$all = 
-      .data$all %>% 
-      group_by(split, type, site) %>% 
-      mutate(
-        start_index = 
-          case_when(
-            type == "train" ~
-              head(index, 1) + 
-              (tail(index, 1) - head(index, 1)) / 1.7,
-            type == "test" ~
-              head(index, 1)
-          )
-      ) %>% 
-      ungroup() %>% 
-      filter(index >= start_index)
+# # Plots ------------------------------------------------------------------------
+# #' Plot forecasts
+# #' Plot fc for each site and split
+# #' @param .data Data containing observed ("all") and fc occ ("fc").
+# plot_forecast <- # plot forecast function
+#   function(.data, ...) {
+#     # Reduce length observations (x axis)
+#     .data$all = 
+#       .data$all %>% 
+#       group_by(split, type, site) %>% 
+#       mutate(
+#         start_index = 
+#           case_when(
+#             type == "train" ~
+#               head(index, 1) + 
+#               (tail(index, 1) - head(index, 1)) / 1.7,
+#             type == "test" ~
+#               head(index, 1)
+#           )
+#       ) %>% 
+#       ungroup() %>% 
+#       filter(index >= start_index)
     
-    # Plot
-    .data$fc %>%
-      autoplot() +
-      autolayer(.data$all, .vars = occ) +
-      scale_colour_manual(name = "models", values = col_models) + 
-      scale_fill_manual(name = "models", values = col_models) + 
-      scale_y_continuous(breaks = c(600, 700)) +
-      facet_wrap(vars(.model), ncol = 1, strip.position = "right")
-  }
+#     # Plot
+#     .data$fc %>%
+#       autoplot() +
+#       autolayer(.data$all, .vars = occ) +
+#       scale_colour_manual(name = "models", values = col_models) + 
+#       scale_fill_manual(name = "models", values = col_models) + 
+#       scale_y_continuous(breaks = c(600, 700)) +
+#       facet_wrap(vars(.model), ncol = 1, strip.position = "right")
+#   }
 
 
 # Metric-related functions -----------------------------------------------------
@@ -493,115 +482,83 @@ renorm <- function(.weight) {
 #' @param .method Type of scoring methods used for generating weights
 lcomb_fun <- 
   function(.fc, .weights, .list_m, .penalty_, .method) {
+    n_models <- lapply(.list_m, length)
     .fc %>%
       group_by(site, h) %>%
       summarise(
-        occ =
-          tryCatch({
+        occ = tryCatch(
+          {
             do.call(
               dist_mixture,
               c(
-                as.list(occ[.model %in% 
-                              c(.list_m %>% pluck(site[1]))]),
-                list(weights = #new_weight
-                       .weights %>%
-                       filter(
-                         .site == site[1],
-                         .penalty == .penalty_,
-                         .models  %in%
-                           c(.list_m %>% pluck(site[1])),
-                         .h == h[1],
-                         .metric == .method
-                       ) %>% pull(.weight) %>% 
-                       renorm()
+                as.list(occ[
+                  .model %in%
+                    c(.list_m %>% pluck(site[1]))
+                ]),
+                list(
+                  weights = rep(
+                    1 / pluck(n_models, site[1]),
+                    pluck(n_models, site[1])
+                  )
                 )
+                # list(
+                #   #new_weight
+                #   weights = .weights %>%
+                #     filter(
+                #       .site == site[1],
+                #       .penalty == .penalty_,
+                #       .models %in%
+                #         c(.list_m %>% pluck(site[1])),
+                #       .h == h[1],
+                #       .metric == .method
+                #     ) %>%
+                #     pull(.weight) %>%
+                #     renorm()
+                # )
               )
-            )}, error = function(e) {
-              message("model weights not summing to 1 when combining fc")
-            }),
+            )
+          },
+          error = function(e) {
+            message("model weights not summing to 1 when combining fc")
+          }
+        ),
         .mean = mean(occ)
-      ) %>% 
+      ) %>%
       mutate(.model = .method) %>%
       ungroup()
   }
 
 
 # Functions for temperature variable -------------------------------------------
-#' Get temperature data forecasts
-#' Get forecast min/max temperatures from open-meteo api;
-#' temperatyre is 2 m from ground; retain forecasts from +1 ... +7 days ahead;
-#' Attention: put this within xpredict_fun, to add together with other 
-#' x-regressor predictions.
-get_temp_fc <- 
-  function() {
-    # Get data
-    res_f <- # forecast data
-      GET(
-        "https://api.open-meteo.com/v1/forecast?latitude=51.458886&longitude=-2.596293&daily=temperature_2m_max,temperature_2m_min&timezone=GMT&forecast_days=14"
-      )
-    
-    res_f <- res_f$content %>% rawToChar() %>% jsonlite::fromJSON()
-    
-    today <- Sys.Date()
-    tbl_f <- 
-      data.table(
-        index = res_f$daily$time, 
-        tmax = res_f$daily$temperature_2m_max, 
-        tmin = res_f$daily$temperature_2m_min
-      )[
-        , index := as.Date(index, tz = "GMT")
-      ][
-        index > today & index <= today + 7
-      ][
-        , index := as.character(index) 
-      ]
-    
-    # Return tbl
-    tbl_f
-    
-  }
+#' Get temperature data
+#' Get both historical and forecast min/max temperatures from open-meteo api;
+#' temperatuyre is 2 m from ground; for historical data, align to ts_occ.
+get_temp <- 
+  function(.historic, .today, .start = NULL) {
 
-
-#' Get historical temperature data
-#' Get both historical min/max temperatures from open-meteo api;
-#' temperatyre is 2 m from ground; start historical data is 2022.
-#' Attention: put this within prepare_data function, so that it's run within
-#' target flow everytime hospital data change.
-get_temp_historic <- 
-  function() {
-    today <- Sys.Date()
+    if (isTRUE(.historic)) {
     res_h <- # historical data
       GET(
-        str_glue("https://archive-api.open-meteo.com/v1/archive?latitude=51.458886&longitude=-2.596293&start_date=2022-01-01&end_date={today}&daily=temperature_2m_max,temperature_2m_min&timezone=GMT")
+        str_glue("https://archive-api.open-meteo.com/v1/archive?latitude=51.458886&longitude=-2.596293&start_date={.start}&end_date={.today}&daily=temperature_2m_max,temperature_2m_min&timezone=GMT")
       )
+    } else {
+      res_h <- # forecast data
+      GET(
+        str_glue("https://api.open-meteo.com/v1/forecast?latitude=51.458886&longitude=-2.596293&daily=temperature_2m_max,temperature_2m_min&start_date={.today+1}&end_date={.today+7}")
+      )
+    }
     
     res_h <- res_h$content %>% rawToChar() %>% jsonlite::fromJSON()
-    
+
     tbl_h <- 
       data.table(
         report_date = res_h$daily$time, 
         tmax = res_h$daily$temperature_2m_max, 
         tmin = res_h$daily$temperature_2m_min
       )[
-        , report_date := as.Date(report_date, tz = "GMT")
-      ][
-        , report_date := as.character(report_date) 
-      ]
-    
-    #####
-    # Temporary:
-    # ATTENTION!!!! only during testing because no hospital data up to date!!!
-    #####
-    cat("!!!trimming end temperature data because hospital data not up to date")
-    tbl_h <- 
-      tbl_h[
-        , report_date := as.Date(report_date, tz = "GMT")
-      ][
-        report_date <= "2025-11-1" # last date of hospital data I have
-      ][
-        , report_date := as.character(report_date) 
-      ]
-    
+        , report_date := lubridate::ymd(report_date)
+      ]    
+
     # Return tbl
     tbl_h
   }

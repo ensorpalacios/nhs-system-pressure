@@ -84,7 +84,7 @@ list_models <- # select models
     "xgb_not",
     "tslm",
     "snaive")
-
+    
 
 if (amode == "train") {
   metrics <- # compute metrics
@@ -111,10 +111,10 @@ list_best_models <-
   list(
     "BRI" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_h", "xgb"),
+        "var_ad2", "var_paed", "xgb"),
     "Southmead" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_los", "xgb")
+        "var_paed", "var_h", "xgb")
   )
 
 if (amode == "train") { # compute only for training data, otherwise load
@@ -174,7 +174,7 @@ metrics_other <- # compute other metrics
 #   metrics_c
   # filter(models %in% list_modelvar_summary) # select variables for summary
 
-metrics_summary_c <- # with combined model
+metrics_summary_c <- # with combined model (CRPS metrics)
   metrics_c %>% 
   # tmp_metrics %>%  
   # filter(models %in% var_summary) %>%
@@ -205,7 +205,7 @@ metrics_summary_c <- # with combined model
   # filter(!(models %in% c("tslm", "snaive"))) %>% 
   ungroup()
 
- 
+
 
 # Save -------------------------------------------------------------------------
 save_path = here(paste0("output/fits/", amode, "/"))

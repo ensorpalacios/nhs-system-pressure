@@ -65,10 +65,10 @@ ls_model_comb <-
   list(
     "BRI" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_h", "xgb"),
+        "var_paed", "var_ad2", "xgb"),
     "Southmead" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_los", "xgb")
+        "var_paed", "var_h", "xgb")
   )
 
 
@@ -104,18 +104,18 @@ list(
     fcc_file,
     fc_combination(fc_file, weights, ls_model_comb)
   ),
-  # tar_target(
-  #   risk_file,
-  #   compute_risk(fcc_file, thr_file),
-  #   format = "file"
-  # )
   tar_target(
     risk_file,
     compute_risk(fcc_file, thr_file)
   ),
   tar_target(
-    output_file,
-    prepare_output(risk_file),
+    output_file_pred,
+    prepare_output_pred(risk_file),
+    format = "file"
+  ),
+  tar_target(
+    output_file_hist,
+    prepare_output_hist(ts_file),
     format = "file"
   )
 )

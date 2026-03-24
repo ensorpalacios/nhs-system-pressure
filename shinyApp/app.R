@@ -5,312 +5,255 @@ library(dplyr)
 library(stringr)
 library(lubridate)
 library(bslib)
+library(bsicons)
 library(fontawesome)
 library(ggplot2)
 library(here)
 library(targets)
 library(htmltools)
+source(here("shinyApp/shiny-functions.R"))
 
 source("00_prepare_data.R")
+# source("shinyApp/00_prepare_data.R")
 
 ui <- page_sidebar(
+  # Sidebar panel for inputs
+  sidebar = sidebar(
+    # Main navigation
+    radioButtons(
+      "main_nav",
+      "View",
+      choices = list("Risk" = "risk", "Data" = "data"),
+      selected = "risk"
+    )
+  ),
+
   # Theme
+  title = "",
   theme = bs_theme(
     bg = "#f8f8f8", # Background color
     fg = "#000000" # Foreground (text) color
   ),
 
-  title = "Bed occupancy forecast",
+  conditionalPanel(
+    condition = "input.main_nav == 'risk'",
+   layout_columns(
+      col_widths = c(8, 4),
+      titlePanel("7 days ahead risk predictions"),
+      div(
+        style = "margin-top: 20px;",
+        selectInput(
+          "select_risk",
+          "Risk type:",
+          choices = list(
+            "Daily risk" = "daily risk",
+            "Daily & aggregate risk" = "daily + aggregate"
+          ),
+          selected = "daily risk",
+          width = "100%"
+        )
+      )
+    ), 
 
-  # Select date
-  sidebar = sidebar(
-    dateInput("date", "Prediction date", value = lubridate::today())
-  ),
-  
-  # Add custom CSS to center value box content
-  tags$head(
-    tags$link(
-      rel = "stylesheet", 
-      href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    layout_columns(
+      col_widths = c(7, 5),
+      div(
+        strong("Bed occupancy forecast"),
+        tooltip(
+          bs_icon("info-circle"),
+          "2 weeks bed occupancy history (black line), 1 week ahead forecast 
+        (mean, 50%, 80% prediction interval), and bed occupancy threshold 
+        (dotted line)"
+        ) #,
+        # style = "margin-bottom: 10px; margin-top: 10px; font-size: 16px;"
+      ),
+      div(
+        strong("Risk predictions"),
+        tooltip(
+          bs_icon("info-circle"),
+          "probability of bed occupancy forecast crossing the threshold
+        by days and at least once for day aggregates (first 3, last 4 days, 
+        whole week ahead)"
+        ) #,
+        # style = "margin-bottom: 10px; margin-top: 10px; font-size: 16px;"
+      )
     ),
-    tags$style(HTML("
-      .bslib-value-box .value-box-value {
-        text-align: center !important;
-      }
-      .bslib-value-box .value-box-title {
-        text-align: center !important;
-      }
-      .bslib-value-box {
-        text-align: center !important;
-      }
-    "))
-  ),
+    # BRI card
+    card(
+      card_header(strong("BRI")),
+      card_body(
+        layout_columns(
+          col_widths = c(7, 5),
+          div(
+            style = "height: 300px;",
+            plotOutput("fc_bri", height = "300px")
+          ),
+          div(
+            style = "height: 300px;",
+            conditionalPanel(
+              condition = "input.select_risk == 'daily risk'",
+              plotOutput("bri_risk_d", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate'",
+              plotOutput("bri_risk_a", height = "300px")
+            )
+          )
+        )
+      )
+    ),
 
-  # # reactable formatting
-  # tags$head(
-  #   tags$style(HTML("
-  #   .reactable {
-  #     width: 150% !important;  /* or whatever width you prefer */
-  #   }
-  #   .reactable .rt-td {
-  #     white-space: nowrap !important;
-  #     overflow: hidden;
-  #     text-overflow: ellipsis;
-  #   }
-  # "))
-  # ),
-
-  # TODO: Add custom CSS if needed
-  # includeCSS("styles.css"),
-
-  # sidebar = ,
-
-  # useBusyIndicators(),
-
-  # 🏷️ Header
-  # h3(textOutput("show_title")),
-  # verbatimTextOutput("show_info") |>
-  #   tagAppendAttributes(style = "max-height: 100px; overflow: auto;"),
-
-  # Value boxes - First row (General info)
-  layout_columns(
-    fill = FALSE,
-    value_box(
-      "Data from:",
-      value = uiOutput("report_date", inline = TRUE)
+    # Southmead card
+    card(
+      card_header(strong("Southmead")),
+      card_body(
+        layout_columns(
+          col_widths = c(7, 5),
+          div(
+            style = "height: 300px;",
+            plotOutput("fc_southmead", height = "300px")
+          ),
+          div(
+            style = "height: 300px;",
+            conditionalPanel(
+              condition = "input.select_risk == 'daily risk'",
+              plotOutput("southmead_risk_d", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate'",
+              plotOutput("southmead_risk_a", height = "300px")
+            )
+          )
+        )
+      )
     )
   ),
 
-  # Value boxes - Site-specific rows
-  div(
-    style = "margin: 10px; padding: 0;",
-    uiOutput("site_value_boxes")
-  ),
+  # Data Page
+  conditionalPanel(
+    condition = "input.main_nav == 'data'",
+   layout_columns(
+      col_widths = c(8, 4),
+      titlePanel("Data View"),
+      div(
+        style = "margin-top: 20px;",
+        selectInput(
+          "data_ts",
+          "Variable:",
+          choices = list(
+            "Bed occupancy" = "occ",
+            "Admission and discharges" = "ad_diff",
+            "Paediatric A&E" = "paed",
+            "Length of stay" = "los",
+            "Temperature" = "temp"
+          ),
+          selected = "occ",
+          width = "100%"
+        )
+      )
+    ), 
 
-  layout_columns(
-    style = "min-height: 450px;",
-    col_widths = c(12),
-
-    # 📊 Plot 1
-    navset_card_tab(
-      # full_screen = TRUE,
-
-      nav_panel(
-        "Daily risk prediction",
-        plotOutput("daily_risk")
+    card(
+      card_header(strong("BRI")),
+      card_body(
+          plotOutput("data_bri", height = "300px")
       ),
-      nav_panel(
-        "Bed occupancy forecast",
-        plotOutput("forecast")
+      card_header(strong("Southmead")),
+      card_body(
+          plotOutput("data_southmead", height = "300px")
       )
     )
   )
 )
 
 server <- function(input, output) {
-  # Check changes in data directory
- 
+  # Choose model
+  model <- "equal"
 
+  # Get data
+  risk_d <- as.data.table(model_out)[
+    type == "risk_d" & .model == model,
+    .(site, index, risk_day)
+  ]
+  risk_ws_close <- as.data.table(model_out)[
+    type == "risk_ws" & .model == model & week_split == "close",
+    .(site, risk_ws)
+  ]
+  risk_ws_far <- as.data.table(model_out)[
+    type == "risk_ws" & .model == model & week_split == "far",
+    .(site, risk_ws)
+  ]
+  risk_w <- as.data.table(model_out)[
+    type == "risk_w" & .model == model,
+    .(site, risk_w)
+  ]
+  fc <- as.data.table(model_out)[type == "forecast" & .model == model]
+  thr <- as.data.table(model_out)[
+    type == "risk_w" & .model == model,
+    .(site, thr)
+  ]
+  hist <- as.data.table(historic_data)
 
-  # Create site-specific value boxes dynamically
-  output$site_value_boxes <- renderUI({
-
-    # Get data
-    risk_ws <- model_out |> filter(type == "risk_ws") |> as.data.table()
-    risk_w <- model_out |> filter(type == "risk_w") |> as.data.table()
-    
-
-    #data <- model_out
-
-    # Get unique sites
-    sites <- unique(risk_w$site)
-
-
-
-    site_rows <- lapply(sites, function(site_name) {
-      threshold <- #threshold
-        risk_w[site == site_name, unique(thr)]
-
-      weekly_risk <- # weekly risk predictions
-        risk_w[.model == "crps" & site == site_name, scales::percent(risk_w)]
-
-      close_risk <- # predictions 1-3 days ahead
-        risk_ws[
-          .model == "crps" & site == site_name & week_split == "close",
-          scales::percent(risk_ws)
-        ]
-
-      far_risk <- # predictions 4-7 days ahead
-        risk_ws[
-          .model == "crps" & site == site_name & week_split == "far",
-          scales::percent(risk_ws)
-        ]
-
-      # Create layout_columns for this site with site name as first value box
-      layout_columns(
-        fill = FALSE,
-        col_widths = c(3, 2, 2, 2, 2), # Equal width columns
-        value_box(
-          title = "",
-          value = site_name,
-          theme = "primary",
-          height = "90px" # Set explicit height
-        ),
-        tooltip(
-          value_box(
-            title = "threshold (ℹ)",
-            value = threshold,
-            height = "90px"
-          ),
-          "okokokok",
-          placement = "top"
-        ),
-        # tooltip(
-        #   value_box(
-        #     title = HTML(
-        #       'threshold <i class="fas fa-info-circle info-icon"></i>'
-        #     ),
-        #     value = threshold,
-        #     height = "90px"
-        #   ),
-        #   "okokokok",
-        #   placement = "right"
-        # ),
-        value_box(
-          "7-day risk",
-          value = weekly_risk,
-          height = "90px" # Set explicit height
-        ),
-        value_box(
-          "1-3 days risk",
-          value = close_risk,
-          height = "90px" # Set explicit height
-        ),
-        value_box(
-          "4-7 days risk",
-          value = far_risk,
-          height = "90px" # Set explicit height
-        )
-      )
-    })
-
-    # Return all site rows
-    htmltools::tagList(site_rows)
+  # Plot risk - daily
+  output$bri_risk_d <- renderPlot({
+    plot_riskd(
+      risk_d, 
+      risk_ws_close, 
+      risk_ws_far, 
+      risk_w, 
+      "BRI", 
+      "daily risk"
+    )
+  })
+  output$southmead_risk_d <- renderPlot({
+    plot_riskd(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "Southmead",
+      "daily risk"
+    )
   })
 
-  output$daily_risk <- renderPlot({
-    # Get data
-    risk_d <- model_out |> filter(type == "risk_d") |> as.data.table()
-
-    # Plot
-    risk_d[.model == "crps"] |>
-      ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
-      geom_col() +
-      scale_y_continuous(name = NULL, limits = c(0, 1), breaks = NULL) +
-      #scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
-      geom_hline(yintercept = 0) +
-      geom_label(
-        aes(label = scales::percent(round(risk_day, 2))),
-        linewidth = NA,
-        fill = "white",
-        hjust = 0.5,
-        vjust = -0.5
-      ) +
-      facet_wrap(vars(site), ncol = 1) +
-      scale_fill_viridis_c(
-        name = "Daily risk",
-        option = "rocket",
-        direction = -1,
-        limits = c(0, 1),
-        labels = scales::percent
-      ) +
-      # scale_fill_gradientn(
-      # colors = c("#6699FF", "#", "#660000"),
-      # limits = c(0, 1)
-      # ) +
-      theme(
-        axis.title.x = element_blank(),
-        axis.text = element_text(size = 14),
-        strip.text = element_text(size = 24),
-        strip.background = element_rect(fill = "white", linewidth = 0),
-        panel.border = element_rect(linewidth = 0),
-        panel.background = element_rect(fill = "white"),
-        legend.text = element_text(size = 14),
-        legend.title = element_text(size = 14, margin = margin(b = 15)),
-        legend.background = element_rect(colour = "black", linewidth = 1),
-        legend.margin = margin(t = 5, r = 4, b = 10, l = 4),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank()
-      )
+  # plot risk - daily + aggregate
+  output$bri_risk_a <- renderPlot({
+    plot_riskd(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "BRI",
+      "daily + aggregate"
+    )
+  })
+  output$southmead_risk_a <- renderPlot({
+    plot_riskd(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "Southmead",
+      "daily + aggregate"
+    )
   })
 
-  output$forecast <- renderPlot({
+  # Plot bed occupancy fc
+  output$fc_bri <- renderPlot(
+    plot_fc(fc, hist, thr, "BRI")
+  )
 
+  output$fc_southmead <- renderPlot(
+    plot_fc(fc, hist, thr, "Southmead")
+  )
 
-    fc <- model_out |> filter(type == "forecast") |> as.data.table()
-    fc$occ <- dist_normal(mu = fc$occ_mean, sigma = sqrt(fc$occ_var))
-
-    fc <- fc[.model == "crps"] # select model
-
-    compute_quantiles <- function(q, .data) {
-      quantile(.data, p = c(q))
-    }
-    fc[,
-      # get percentiles
-      c("10%", "25%", "75%", "90%") := lapply(
-        c(0.1, 0.25, 0.75, .9),
-        compute_quantiles,
-        .data = .SD[, occ]
-      )
-    ]
-
-    # Plot
-    fc |>
-      ggplot(aes(x = index, mean(occ))) +
-      geom_line() +
-      geom_ribbon(
-        aes(ymin = `25%`, ymax = `75%`, fill = "50%"),
-        alpha = 0.3
-      ) +
-      geom_ribbon(
-        aes(ymin = `10%`, ymax = `90%`, fill = "80%"),
-        alpha = 0.1
-      ) +
-      geom_hline(
-        aes(yintercept = thr),
-        colour = "red",
-        linetype = "dashed",
-        linewidth = 1
-      ) +
-      scale_y_continuous(name = "bed occupancy") +
-      scale_x_date(
-        labels = \(x) {
-          format(x, "%a\n%d-%m")
-        },
-        breaks = "day",
-        name = "bed occupancy"
-      ) +
-      scale_fill_manual(
-        name = "Forecast\ninterval",
-        values = c("50%" = "steelblue", "80%" = "steelblue")
-      ) +
-      facet_wrap(vars(site), ncol = 1, scales = "free_y") +
-      theme(
-        axis.title.y = element_text(size = 14),
-        axis.title.x = element_blank(),
-        axis.text = element_text(size = 14),
-        strip.text = element_text(size = 24),
-        strip.background = element_rect(fill = "white", linewidth = 0),
-        legend.text = element_text(size = 14),
-        legend.title = element_text(size = 14, margin = margin(b = 15)),
-        legend.margin = margin(t = 5, r = 4, b = 5, l = 4),
-        # panel.border = element_rect(linewidth = 0),
-        legend.background = element_rect(colour = "black", linewidth = 1)
-        # panel.background = element_rect(fill = "white")
-        # panel.grid.major = element_blank(),
-        # panel.grid.minor = element_blank()
-      )
-  })
+  # Plot data time series
+  output$data_bri <- renderPlot(
+    plot_ts(hist, "BRI", input$data_ts)
+  )
+  output$data_southmead <- renderPlot(
+    plot_ts(hist, "Southmead", input$data_ts)
+  )
 }
 
 

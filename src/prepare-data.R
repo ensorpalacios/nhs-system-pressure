@@ -39,7 +39,7 @@ data_path <- paste0(here(), "/data/raw/")
 # - 21+ days length of stay
 df_occ <- 
   read_excel(
-    paste0(data_path, "2022-01-01-to-2025-11-01-acute-occupancy.xlsx"),
+    paste0(data_path, "2022-01-01-to-2026-02-01-acute-occupancy.xlsx"),
     sheet = 2
   )
 
@@ -81,7 +81,7 @@ df_t <-
   }) %>% 
   rbindlist() %>% 
   .[ # allign temperature data with hospital data
-    as.Date(report_date) <= as.Date("2025-11-01")
+    as.Date(report_date) <= as.Date("2026-02-01")
   ] %>% 
   .[metric_name == "tasmax", metric_name := "tmax"] %>% 
   .[metric_name == "tasmin", metric_name := "tmin"]

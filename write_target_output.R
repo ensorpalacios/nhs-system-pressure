@@ -4,16 +4,28 @@ library(RMySQL)
 library(dplyr)
 library(distributional)
 
-tar_make()
+tar_make(callr_function = NULL)
 
 model_out <- readRDS("target/data/output/model_out_flat.RDS")
+historic_data <- readRDS("target/data/output/historic_data.RDS")
 
 # compute mean/sd
-model_out <-model_out %>%
-  mutate(occ_mean = mean(occ), occ_var = variance(occ)) %>%
+historic_data <- historic_data %>%
+  filter(site != "<aggregated>") |> 
+  mutate(index = as.character(index))
+
+model_out <- model_out %>%
+  mutate(index = as.character(index), occ_mean = mean(occ), occ_var = variance(occ)) %>%
   select(-occ)
 
 
+local <- TRUE 
+
+
+if (local) {
+  conn <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_shiny_dev.sqlite"))
+  message("Connected to: Local SQLite")
+} else {
 # Write to MYSQL
 # Connection details
 host <- Sys.getenv("DB_HOST")
@@ -29,9 +41,10 @@ conn <- dbConnect(dbDriver("MySQL"),
                   port = 3306,
                   user = user,
                   password=password)
+  message("Connected to: Hosted SQLite database")
+}
 
+dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE, row.names = FALSE)
+dbWriteTable(conn, "nhs_bed_pressure_historic", value = historic_data, overwrite = TRUE, row.names = FALSE)
 
-# delete old data
-query_delete <- str_c("DELETE FROM nhs_bed_pressure")
-DBI::dbGetQuery(conn, query_delete)
-dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE)
+DBI::dbDisconnect(conn)

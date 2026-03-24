@@ -27,7 +27,7 @@ path_fc <- here(paste0("output/fits/", amode, "/forecasts_short_comb.RDS"))
 
 
 list_risk <- readRDS(path_risk)
-list_freq <- readRDS(path_freq)
+list_freq <- readRDS(path_freq) # frequency observed occurrances
 list_curves <- readRDS(path_curves)
 list_auc <- readRDS(path_auc)
 list_fc <- readRDS(path_fc)
@@ -52,7 +52,7 @@ list_models <- # select models
 splits <- risk_d$split %>% unique()
 sites <- risk_d$site %>% unique()
 
-plt_risk <- 
+plt_risk <- # individual predictions
   map(splits, \(.split) {
     map(sites, \(.site) {
       # Prepare data
@@ -152,12 +152,30 @@ plt_risk <-
 # Plot curves (aggregate splits) -----------------------------------------------
 list_models_curves <- # base models same as in metrics-compute.R
   list(
-    "BRI" = 
-      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_h", "xgb", "crps", "crps_upper", "crps_lower", "equal"),
-    "Southmead" = 
-      c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_los", "xgb", "crps", "crps_upper", "crps_lower", "equal")
+    "BRI" = c(
+      "arima_dadpl_rec",
+      "arima_dadp_rec",
+      "rf_int",
+      "var_ad2",
+      "var_paed",
+      "xgb",
+      "crps",
+      "crps_upper",
+      "crps_lower",
+      "equal"
+    ),
+    "Southmead" = c(
+      "arima_dadpl_rec",
+      "arima_dadp_rec",
+      "rf_int",
+      "var_paed",
+      "var_h",
+      "xgb",
+      "crps",
+      "crps_upper",
+      "crps_lower",
+      "equal"
+    )
   )
 
 plt_curves <- 
@@ -166,54 +184,103 @@ plt_curves <-
 
 
 # Table AUC --------------------------------------------------------------------
+# Rename models (newmap from environment.R)
+rename_fun <- function(.tbl, namecol) {
+  .tbl[, (namecol) := factor(newmap[get(namecol)], levels = newmap)]
+}
+
+lapply(list_auc, rename_fun, ".model")
+list_models_curves$BRI <- newmap[list_models_curves$BRI]
+list_models_curves$Southmead <- newmap[list_models_curves$Southmead]
+
 # Generate table
 tbl_auc <- 
-  map(list_auc, \(.tbl){
-    .groups = names(.tbl)[!grepl("nboot|auc|.model",names(.tbl))]
-    tmp = # Get mean (sd) of auc
-      .tbl[
-        , .(.mean = mean(auc), .sd = sd(auc)), by = c(.groups, ".model")
-      ][
-        order(-.mean, .sd), .SD, by = .groups
-      ][
-        , `mean (sd)` := sprintf("%.3f (%.3f)", .mean, .sd)
-      ][
-        , c(".mean", ".sd") := NULL
-      ] 
-    tmp %>% setorderv(.groups) # reorder by group
+  list_auc %>%
+  rbindlist(idcol = TRUE, fill = TRUE)
+
+tbl_auc <-
+  tbl_auc[
+    # unique names for split week risks
+    ,
+    .id := fifelse(!is.na(week_split), sprintf("%s_%s", .id, week_split), .id)
+  ][
+    # compute AUC statistics
+    ,
+    .(mean = mean(auc), sd = sd(auc)),
+    by = c("site", ".id", ".model")
+  ][ # sort by AUC
+    ,
+    {
+      lapply(unique(.id), \(.split) {
+        .SD[.id == .split & .model %in% list_models_curves[[site]]][
+          order(-mean)
+        ][,
+          sprintf("%s (%.2f-%.2f)", .model, mean, sd)
+        ]
+      }) |> 
+        set_names(unique(.id))
+    },
+    by = "site"
+  ]
+  
+tbl_auc <-
+  lapply(c("roc", "pr"), \(.curve) {
+    tbl_auc[
+      , 
+      .SD, 
+      .SDcols = grep(sprintf("site|%s", .curve), names(tbl_auc))
+    ] |>
+      gt(groupname_col = "site", row_group_as_column = T)
+  }) |> 
+  set_names(c("roc", "pr"))
+
+# tbl_auc <- 
+#   map(list_auc, \(.tbl){
+#     .groups = names(.tbl)[!grepl("nboot|auc|.model", names(.tbl))]
+#     tmp = # Get mean (sd) of auc
+#       .tbl[
+#         , .(.mean = mean(auc), .sd = sd(auc)), by = c(.groups, ".model")
+#       ][
+#         order(-.mean, .sd), .SD, by = .groups
+#       ][
+#         , `mean (sd)` := sprintf("%.3f (%.3f)", .mean, .sd)
+#       ][
+#         , c(".mean", ".sd") := NULL
+#       ] 
+#     tmp %>% setorderv(.groups) # reorder by group
     
-    if ("week_split" %in% .groups) { # prepare for table
-      dcast(tmp, ... ~ week_split, value.var = "mean (sd)")
-    }
+#     if ("week_split" %in% .groups) { # prepare for table
+#       dcast(tmp, ... ~ week_split, value.var = "mean (sd)")
+#     }
     
-    tmp %>% # generate table
-      gt(
-        rowname_col = ".model", groupname_col = "site", row_group_as_column = T
-        )  
-  })
+#     tmp %>% # generate table
+#       gt(
+#         rowname_col = ".model", groupname_col = "site", row_group_as_column = T
+#         )  
+#   })
 
 
-# Get lighter colour palette and add to table
-col_models_l <- bright_col(col_models, 0.5)
+# # Get lighter colour palette and add to table
+# col_models_l <- bright_col(col_models, 0.5)
 
-tbl_auc <-  # add raw colours by model
-  map(tbl_auc, \(.tbl) {
-  for (i in seq_along(col_models_l)) {
-    .color = col_models_l[i]
-    .models = names(col_models_l)[i]
-    .tbl =
-      .tbl %>% 
-      tab_style(
-        style = cell_fill(.color),
-        location = cells_stub(rows = .model == .models)
-      ) %>%
-      tab_style(
-        style = cell_fill(.color),
-        location = cells_body(rows = .model == .models)
-      )
-  }
-  .tbl
-})
+# tbl_auc <-  # add raw colours by model
+#   map(tbl_auc, \(.tbl) {
+#   for (i in seq_along(col_models_l)) {
+#     .color = col_models_l[i]
+#     .models = names(col_models_l)[i]
+#     .tbl =
+#       .tbl %>% 
+#       tab_style(
+#         style = cell_fill(.color),
+#         location = cells_stub(rows = .model == .models)
+#       ) %>%
+#       tab_style(
+#         style = cell_fill(.color),
+#         location = cells_body(rows = .model == .models)
+#       )
+#   }
+#   .tbl
+# })
 
 
 
@@ -272,6 +339,6 @@ iwalk(plt_curves, \(.plt, .name) {
 
 # Table auc
 iwalk(tbl_auc, \(.tbl, .name) {
-  file_name = str_glue("{save_path}table_{.name}")
-  html2pdf(.tbl, file_name)
+  file_name = str_glue("{save_path}table_{.name}.tex")
+  gtsave(.tbl, file_name)
 })

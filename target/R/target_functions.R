@@ -9,26 +9,39 @@
 load_hosp <-
   function() {
 
-    con <- switch(
-      .Platform$OS.type,
-      windows = DBI::dbConnect(odbc::odbc(), "xsw"),
-      unix = {
-        DBI::dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql_connect_string_linux_sql18"))
-      }
+local <- FALSE 
+if (local) {
+  con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
+  message("Connected to: Local SQLite")
+} else {
+  con <- switch(
+    .Platform$OS.type,
+    windows = dbConnect(odbc::odbc(), "xsw"),
+    unix = {
+      dbConnect(odbc::odbc(), .connection_string = readr::read_lines("/root/sql/sql_connect_string_linux_sql18"))
+    }
+  )
+  message("Connected to: Hosted SQL Server")
+}
+
+# 2. Define the Table Reference (ecds_tbl)
+if (local) {
+  # SQLite doesn't understand catalogs/schemas, so we point to the flat table name
+  ecds_tbl <- tbl(con, "urgent_care_daily")
+} else {
+  # Use the full path for the hosted environment
+  ecds_tbl <- tbl(
+    con, 
+    in_catalog(
+      catalog = "Analyst_SQL_Area", 
+      schema = "dbo", 
+      table = "tbl_BNSSG_Datasets_UrgentCare_Daily"
     )
+  )
+}
 
     report_end <- lubridate::today()
     report_start <- as.Date(report_end - lubridate::dyears(3))
-
-
-    ecds_tbl <- dplyr::tbl(
-      con,
-      dbplyr::in_catalog(
-        catalog = "Analyst_SQL_Area",
-        schema = "dbo",
-        table = "tbl_BNSSG_Datasets_UrgentCare_Daily"
-      )
-    )
 
     metrics <- c(
       '347334',
@@ -53,16 +66,18 @@ load_hosp <-
     )
 
     hosp_data <-
-      ecds_tbl %>%
+      ecds_tbl  %>%
+      dplyr::rename_with(.fn = stringr::str_to_lower) %>%
+        dplyr::collect() %>%
+      dplyr::mutate(report_date = lubridate::ymd(report_date)) %>%
       dplyr::filter(
-        METRIC_ID %in% metrics,
-        dplyr::between(Report_Date, report_start, report_end)
+        metric_id %in% metrics,
+        dplyr::between(report_date, report_start, report_end)
       ) %>%
-      dplyr::collect() %>%
       dplyr::mutate(
 
-        METRIC_NAME = dplyr::recode(
-          METRIC_NAME,
+        metric_name = dplyr::recode(
+          metric_name,
           !!!c(
             # "Number of Discharges",
             "General & Acute Beds - Total G&A escalation beds open" = "Escalation beds open",
@@ -83,7 +98,6 @@ load_hosp <-
           )
         )
       ) %>%
-      dplyr::rename_with(.fn = stringr::str_to_lower) %>%
       dplyr::mutate(report_date = lubridate::ymd(report_date))
 
     # Save data
@@ -100,13 +114,17 @@ load_hosp <-
 prepare_data <-
   function(df_occ) {
     df_occ <- readRDS(df_occ)
-    # Temperature data
+    today = df_occ$report_date |> max()
+    start = df_occ$report_date |> min()
+
+    # Temperature data (historical data)
     df_t <-
-      get_temp_historic()
+      get_temp(.historic = TRUE, .today = today, .start = start)
+
     df_t <-
       df_t %>%
-      melt(id.vars = "report_date", variable.name = "metric_name") %>%
-      mutate(report_date = lubridate::ymd(report_date))
+      melt(id.vars = "report_date", variable.name = "metric_name")
+
     # Join data
     df_occ <-
       df_occ %>%
@@ -125,7 +143,7 @@ prepare_data <-
       select(-metric_id) |>
       pivot_wider(names_from = metric_name, values_from = value) |>
       mutate(
-        index = as.Date(report_date, tz = "GMT"),
+        index = lubridate::ymd(report_date),
         site = case_match(
           provider,
           "BRI" ~ "BRI",
@@ -152,7 +170,6 @@ prepare_data <-
     # Covert to timeseries (tsibble object)
     ts_data <- df_occ |> as_tsibble(index = index, key = site)
 
-
     # Convert implicit gaps into explicit missing values
     ts_data <-
       ts_data |>
@@ -162,7 +179,8 @@ prepare_data <-
     impute_fun <-
       function(.dat) {
         na_seadec(
-          .dat, algorithm = "ma",
+          .dat,
+          algorithm = "ma",
           k = 3,
           weighting = "simple",
           find_frequency = TRUE
@@ -282,7 +300,6 @@ forecast_occ <-
   function(ts_data) {
     sites <- ts_data$site %>% unique()
     
-    
     # Reproducible analysis for rf and xgb
     set.seed(123) 
     
@@ -323,16 +340,6 @@ forecast_occ <-
     
     
     # Fit models
-    list_best_models <-
-      list(
-        "BRI" = 
-          c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-            "var_paed", "var_h", "xgb"),
-        "Southmead" = 
-          c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-            "var_paed", "var_los", "xgb")
-      )
-    
     # ARIMA aggregated
     fc_fable_rec <- 
       data_xpredict %>% 
@@ -370,13 +377,13 @@ forecast_occ <-
     
     
     # Vector autoregressive models
-    fc_fable_var_los <- # Length of stay (+21)
+    fc_fable_var_ad2 <- # Length of stay (+21)
       data_xpredict %>% 
       filter(type == "train", !is_aggregated(site)) %>%
       mutate(site = site %>% as.character()) %>% 
       tsibble(index = index, key = site) %>%
       model(
-        var_los = VAR(vars(occ, los) ~ season(period = "week"))
+        var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
       ) %>% 
       forecast(h = horizon)
     
@@ -405,7 +412,7 @@ forecast_occ <-
     fc_var <- # bind VAR fc
       map(
         list(
-          fc_fable_var_los, fc_fable_var_paed
+          fc_fable_var_ad2, fc_fable_var_paed
         ),
         \(.x) {
           .x %>% 
@@ -540,7 +547,7 @@ fc_combination <-
     #   lcomb_fun(.fc, .weights, .list_models, "upper", "crps")
     # fc_comb_crps_u$`.model` = "crps_upper" # rename
     fc_comb_crps <-
-      lcomb_fun(.fc, .weights, .list_models, "none", "crps")
+      lcomb_fun(.fc, .weights, .list_models, "none", "equal")
     
     dimnames(fc_comb_crps$occ) <- "occ"
     
@@ -560,7 +567,7 @@ compute_risk <-
   function(.fc, .thr) {
     # Reproducible analysis for bootstrapping splits
     set.seed(321)
-    
+        
     
     # Add alarm thresholds to fc
     fc_threshold <-
@@ -618,122 +625,9 @@ compute_risk <-
   }
 
 
-# #' Plot risk
-# #' @param risk_file Contains all elements for plot (risk prediction, fc, thr)
-# plot_risk <-
-#   function(path_data) {
-#     # Prepare for plot
-#     all_data <- readRDS(path_data)
-#     thr <- all_data$threshold
-#     risk_d <- all_data$risk$risk_d
-#     risk_ws <- all_data$risk$risk_ws
-#     risk_w <- all_data$risk$risk_w
-#     fc <- all_data$fc
-
-#     sites <- thr[, unique(site)]
-
-#     list_models = c("crps")
-
-#     # Make plot
-#     plt_risk <-
-#       map(sites, \(.site) {
-#         # Prepare data
-#         tmp_tbl = # daily risks
-#           risk_d[
-#             site == .site & .model %in% list_models
-#           ]
-
-#         tmp_thr = tmp_tbl[1, thr] # threshold (all equals)
-
-#         risk_close = # week split close risk
-#           risk_ws[
-#             site == .site & .model %in% list_models &
-#               week_split == "close"
-#           ][ # add x-axis position
-#             , x_axis := 1
-#           ]
-#         risk_far = # week split far risk
-#           risk_ws[
-#             site == .site & .model %in% list_models &
-#               week_split == "far"
-#           ][ # add x-axis position
-#             , x_axis := 2
-#           ]
-#         risk_weeks = # join close/far
-#           rbind(risk_close, risk_far)
-
-#         risk_week = # week (whole) risk
-#           risk_w[
-#             site == .site & .model %in% list_models
-#           ][ # add x-axis position
-#             , x_axis := 3
-#           ]
-
-#         tmp_fc =
-#           fc %>%
-#           filter(site == .site, .model %in% list_models)
-
-#         # Plot
-#         p1 = # predicted risk weekly (split and whole)
-#           ggplot() +
-#           geom_col(
-#             data = risk_weeks,
-#             aes(x = x_axis, y = risk_ws, fill = .model),
-#             position = "dodge"
-#           ) +
-#           geom_col(
-#             data = risk_week,
-#             aes(x = x_axis, y = risk_w, fill = .model),
-#             position = "dodge"
-#           ) +
-#           geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
-#           # ylim(0, .8) +
-#           # scale_colour_manual(name = "models", values = col_models) +
-#           scale_fill_manual(name = "models", values = col_models) +
-#           scale_x_continuous(
-#             breaks = c(1, 2, 3), labels = c("1-3", "4-7", "week")
-#           )
-
-#         p2 = # predicted risk daily
-#           tmp_tbl %>%
-#           ggplot(aes(x = index, y = risk_day, fill = .model)) +
-#           geom_col(position = "dodge", width = 0.5) +
-#           geom_hline(yintercept = 0.5, color = "red", lty = "11", linewidth = 1) +
-#           # ylim(0, .8) +
-#           # scale_colour_manual(name = "models", values = col_models) +
-#           scale_fill_manual(name = "models", values = col_models)
-
-#         p3 = # time series
-#           tmp_fc %>%
-#           autoplot() +
-#           # geom_line(
-#             # data = tmp_tbl[.model == tmp_tbl$.model[1]],
-#             # aes(x = index, y = occ_obs, group = 1), linewidth = 2
-#           # ) +
-#           geom_hline(
-#             yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2
-#           )
-#         # p3 = # time series
-#         # tmp_tbl[.model == tmp_tbl$.model[1]] %>%
-#         # ggplot(aes(x = index, y = occ_obs, group = 1)) +
-#         # geom_line(linewidth = 2) +
-#         # geom_hline(yintercept = tmp_thr, color = "red", lty = "f8", linewidth = 2)
-
-#         # Join
-#         p1 / p2 / p3 +
-#           plot_layout(
-#             ncol = 1, axes = "collect_x", guides = "collect"
-#           )
-#       }) %>%
-#       set_names(sites)
-
-#     # Return plot
-#     plt_risk
-# }
-
-#' Prepae target output
+#' Prepare target output (predictions)
 #' @param  .tables RDS file containing out tables to merge
-prepare_output <-
+prepare_output_pred <-
   function(.tables) {
   
 
@@ -753,7 +647,6 @@ prepare_output <-
       list_data$threshold,
       on = "site"
     ]
-
     list_data$risk$risk_ws <- 
       list_data$risk$risk_ws[
       list_data$threshold,
@@ -779,6 +672,26 @@ prepare_output <-
 
     target_output_path <- file.path(save_path, "output", paste0("model_out_flat", ".RDS"))
     
+    if (!file.exists(dirname(target_output_path))) {
+      dir.create(dirname(target_output_path), recursive = TRUE)
+    }
+    
+    saveRDS(output, target_output_path)
+    
+    # Return list
+    target_output_path
+  }
+
+
+#' Prepae target output (historical data)
+#' @param  .table RDS file containing historical data
+prepare_output_hist <-
+  function(.table) {
+    output <- .table
+
+    output$site <- as.character(output$site)
+    target_output_path <- file.path(save_path, "output", paste0("historic_data", ".RDS"))
+
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
     }

@@ -38,8 +38,8 @@ setup_env(amode) # define global environment variables
 
 
 # Load data -------------------------------------------------------------------
-data_path <- paste0(here(), "/data/processed/tbl_occ.RDS")
-ts_occ <- readRDS(file = data_path)
+ts_occ <- readRDS(file = here("data/processed/tbl_occ.RDS"))
+thr <- readRDS(file = here("output/fits/thresholds.RDS"))
 ts_occ <- 
   ts_occ %>% 
   filter(!is_aggregated(site)) %>% 
@@ -76,6 +76,7 @@ plot_occ <-
   ts_occ %>% 
     ggplot(aes(x = index, y = occ, colour = site)) +
     geom_line(linewidth = 1) +
+    geom_hline(data = thr, aes(yintercept = thr, colour = site)) +
     facet_wrap(
       ~site,
       nrow = 2, 

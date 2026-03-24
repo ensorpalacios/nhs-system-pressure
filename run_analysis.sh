@@ -4,9 +4,6 @@ set -euo pipefail
 echo -e "\nprepare data"
 Rscript src/prepare-data.R train
 
-echo -e "\npredictor plots"
-Rscript src/predictors-plot.R train
-
 echo -e "\npredictor test plot"
 Rscript src/xreg-prediction-test.R train
 
@@ -15,7 +12,7 @@ for mode in train test; do
 	echo "\n***fit models***"
 	Rscript src/fit-fc.R $mode
 	
-	if [[ "$mode" == "train" ]]; then 
+	if [[ "$mode" == "train" ]]; then  # run once, does not matter when
 		echo -e "\n***compute threshold***"
 		Rscript src/compute-threshold.R $mode
 	fi
@@ -34,6 +31,10 @@ for mode in train test; do
 
 	echo -e "\n***plot risk predictions***"
 	Rscript src/risk-plot.R $mode
+
+	echo -e "\n***plot feature importance***"
+	Rscript src/feature-analysis.R $mode
 done
 
-
+echo -e "\npredictor plots"
+Rscript src/predictors-plot.R train
