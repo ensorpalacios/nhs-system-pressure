@@ -9,7 +9,7 @@
 load_hosp <-
   function() {
 
-local <- TRUE 
+local <- FALSE 
 if (local) {
   con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
   message("Connected to: Local SQLite")

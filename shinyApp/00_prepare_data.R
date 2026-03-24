@@ -1,6 +1,6 @@
 library(RMySQL)
 library(dplyr)
-local <- TRUE 
+local <- FALSE 
 
 if (local) {
   conn <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_shiny_dev.sqlite"))
