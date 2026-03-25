@@ -1,0 +1,51 @@
+# Based on your history, this started from a rocker/tidyverse or similar RStudio base
+# Adjust the FROM image if you remember using a specific version
+FROM rocker/rstudio:latest 
+
+# 1. Setup Microsoft SQL Server repository and keys
+RUN apt-get update && apt-get install -y curl gpg
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-archive-keyring.gpg
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" > /etc/apt/sources.list.d/mssql-release.list
+
+# 2. Install system dependencies and Microsoft ODBC tools
+RUN apt-get update && ACCEPT_EULA=Y apt-get install -y \
+    cron \
+    cmake \
+    libmariadb-dev \
+    libnode-dev \
+    libglpk-dev \
+    libnlopt-dev \
+    libnetcdf-dev \
+    libhdf5-dev \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libxml2-dev \
+    unixodbc \
+    unixodbc-dev \
+    odbcinst \
+    msodbcsql18 \
+    mssql-tools18 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Environment setup
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/mssql-tools18/bin
+ENV ODBCSYSINI=/etc
+WORKDIR /root
+
+# 4. Copy application files
+COPY target ./target
+COPY src ./src
+COPY _targets.R ./_targets.R
+COPY renv.lock ./renv.lock
+COPY write_target_output.R ./write_target_output.R
+
+# 5. Install R packages via pak and renv
+RUN R -e "install.packages(c('pak', 'renv', 'RMySQL', 'RODBC'), repos='https://packagemanager.posit.co/cran/__linux__/noble/latest'); \
+    renv::restore(repos = c(CRAN = 'https://packagemanager.posit.co/cran/__linux__/noble/latest'))"
+
+# 6. Setup Cron
+COPY crontab /etc/cron.d/nhs-cron
+RUN chmod 0644 /etc/cron.d/nhs-cron && crontab /etc/cron.d/nhs-cron
+
+# 7. Start command
+CMD ["sh", "-c", "printenv > /etc/environment && cron -f"]
