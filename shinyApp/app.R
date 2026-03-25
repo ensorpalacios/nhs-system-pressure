@@ -11,7 +11,9 @@ library(ggplot2)
 library(here)
 library(targets)
 library(htmltools)
-source(here("shinyApp/shiny-functions.R"))
+#source(here("shinyApp/shiny-functions.R"))
+source("shiny-functions.R")
+
 
 source("00_prepare_data.R")
 # source("shinyApp/00_prepare_data.R")
