@@ -1,6 +1,6 @@
 library(targets)
 library(stringr)
-library(RMySQL)
+library(RMariaDB)
 library(dplyr)
 library(dbplyr)
 library(distributional)
@@ -36,12 +36,14 @@ password <- Sys.getenv("DB_CRED")
 port <- 3306 # Default MySQL port (change if needed)
 
 # Create the connection
-conn <- dbConnect(dbDriver("MySQL"),
-                  dbname = dbname,
-                  host = host,
-                  port = 3306,
-                  user = user,
-                  password=password)
+conn <- dbConnect(
+  RMariaDB::MariaDB(),   # Specify the driver here
+  dbname   = dbname,
+  host     = host,
+  port     = 3306,
+  user     = user,
+  password = password
+)
   message("Connected to: Hosted SQLite database")
 }
 
