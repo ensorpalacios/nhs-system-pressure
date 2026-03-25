@@ -12,6 +12,7 @@
 #' @param .site Site to display
 #' @param .hist Historical data
 plot_fc <- function(.fc, .hist, .thr, .site) {
+
   .fc <- .fc[site == .site]
   .hist <- .hist[site == .site]
   .thr <- .thr[site == .site, thr]
@@ -30,52 +31,54 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
     )
   ]
 
+  bridge <- .hist |> 
+  slice_max(index, n = 1) |> 
+  mutate(
+    `mean(occ)` = occ,
+    `10%` = occ, `90%` = occ,
+    `25%` = occ, `75%` = occ
+  )
+
+# Combine for the forecast layer
+.fc_connected <- bind_rows(bridge, .fc)
+
+
   # Plot
-  .fc |>
-    ggplot(aes(x = index, y = mean(occ))) +
-    geom_line() +
-    geom_ribbon(
-      aes(ymin = `25%`, ymax = `75%`, fill = "50%"),
-      alpha = 0.3
-    ) +
-    geom_ribbon(
-      aes(ymin = `10%`, ymax = `90%`, fill = "80%"),
-      alpha = 0.1
-    ) +
-    geom_hline(
-      aes(yintercept = .thr),
-      colour = "red",
-      linetype = "dotted",
-      linewidth = 1.5
-    ) +
-    geom_line(data = .hist, aes(x = index, y = occ)) +
-    # scale_y_continuous(name = "none") +
-    scale_x_date(
-      labels = \(x) {
-        format(x, "%a\n%d-%m")
-      },
-      breaks = "2 day",
-      name = "bed occupancy"
-    ) +
-    scale_fill_manual(
-      name = "Forecast\ninterval",
-      values = c("50%" = "steelblue", "80%" = "steelblue")
-    ) +
-    # facet_wrap(vars(site), ncol = 1, scales = "free_y") +
-    theme(
-      # axis.title.y = element_text(size = 14),
-      axis.title.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text = element_text(size = 14),
-      # strip.text = element_text(size = 24),
-      strip.text = element_blank(),
-      strip.background = element_rect(fill = "white", linewidth = 0),
-      legend.position = "none"
-      # legend.text = element_text(size = 14),
-      # legend.title = element_text(size = 14, margin = margin(b = 15)),
-      # legend.margin = margin(t = 5, r = 4, b = 5, l = 4),
-      # legend.background = element_rect(colour = "black", linewidth = 1)
-    )
+  .fc_connected |>
+    ggplot() +
+  geom_ribbon(data = .fc_connected,
+    aes(x = index, ymin = `10%`, ymax = `90%`, fill = "80%"),
+    alpha = 0.15
+  ) +
+  geom_ribbon(data = .fc_connected,
+    aes(x = index, ymin = `25%`, ymax = `75%`, fill = "50%"),
+    alpha = 0.35
+  ) +
+  geom_line(data = .fc_connected, 
+            aes(x = index, y = mean(occ)), 
+            color = "steelblue", linewidth = 1, linetype = "dashed") +
+  geom_line(data = .hist, 
+            aes(x = index, y = occ), 
+            linewidth = 1.2, color = "grey20") +
+  geom_hline(yintercept = .thr, colour = "firebrick", linetype = "dashed", linewidth = 1) +
+  annotate("text", x = min(.hist$index), y = .thr, label = str_c("Threshold (", round(.thr), ")"), 
+           vjust = -1, hjust = 0, color = "firebrick", fontface = "italic", size = 4) +
+  scale_x_date(
+    labels = \(x) format(x, "%a\n%d-%m"),
+    breaks = "2 days",
+    expand = expansion(mult = c(0, 0.05)) # Removes extra whitespace at start
+  ) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(
+    values = c("50%" = "steelblue", "80%" = "steelblue4")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_text(size = 12, color = "grey30"),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  )
 }
 
 

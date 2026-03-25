@@ -2,6 +2,7 @@ library(targets)
 library(stringr)
 library(RMySQL)
 library(dplyr)
+library(dbplyr)
 library(distributional)
 
 tar_make(callr_function = NULL)
@@ -19,7 +20,7 @@ model_out <- model_out %>%
   select(-occ)
 
 
-local <- TRUE 
+local <- FALSE 
 
 
 if (local) {
