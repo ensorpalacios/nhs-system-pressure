@@ -156,7 +156,7 @@ plot_riskd <- function(
   .type
 ) {
   # Get data
-  .risk_d <- .risk_d[site == .site]
+  .risk_d <- .risk_d[site == .site, ]
   .risk_ws_close <- .risk_ws_close[site == .site]
   .risk_ws_far <- .risk_ws_far[site == .site]
   .risk_w <- .risk_w[site == .site]

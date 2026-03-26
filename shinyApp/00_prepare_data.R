@@ -15,7 +15,7 @@ password <- Sys.getenv("DB_CRED")
 #port <- 3306 # Default MySQL port (change if needed)
 
 # Create the connection
-conn <- dbConnect(dbDriver("MySQL"),
+conn <- dbConnect(RMariaDB::MariaDB(),
                   dbname = dbname,
                   host = host,
                   port = 3306,
