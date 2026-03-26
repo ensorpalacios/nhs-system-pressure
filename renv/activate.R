@@ -3,7 +3,7 @@ local({
 
   # the requested version of renv
   version <- "1.0.11"
-  attr(version, "sha") <- NULL
+  base::attr(version, "sha") <- NULL
 
   # the project directory
   project <- Sys.getenv("RENV_PROJECT")
@@ -318,7 +318,7 @@ local({
   
   renv_bootstrap_download <- function(version) {
   
-    sha <- attr(version, "sha", exact = TRUE)
+    sha <- base::attr(version, "sha", exact = TRUE)
   
     methods <- if (!is.null(sha)) {
   
@@ -667,7 +667,7 @@ local({
     output <- renv_bootstrap_install_impl(library, tarball)
   
     # check for successful install
-    status <- attr(output, "status")
+    status <- base::attr(output, "status")
     if (is.null(status) || identical(status, 0L))
       return(status)
   
@@ -916,7 +916,7 @@ local({
     description <- description %||% packageDescription("renv")
   
     # check whether requested version 'version' matches loaded version of renv
-    sha <- attr(version, "sha", exact = TRUE)
+    sha <- base::attr(version, "sha", exact = TRUE)
     valid <- if (!is.null(sha))
       renv_bootstrap_validate_version_dev(sha, description)
     else
@@ -1125,7 +1125,7 @@ local({
   }
   
   renv_bootstrap_version_friendly <- function(version, shafmt = NULL, sha = NULL) {
-    sha <- sha %||% attr(version, "sha", exact = TRUE)
+    sha <- sha %||% base::attr(version, "sha", exact = TRUE)
     parts <- c(version, sprintf(shafmt %||% " [sha: %s]", substring(sha, 1L, 7L)))
     paste(parts, collapse = "")
   }
@@ -1208,7 +1208,7 @@ local({
   
       # get the string values
       starts <- locs
-      ends <- locs + attr(locs, "match.length") - 1L
+      ends <- locs + base::attr(locs, "match.length") - 1L
       strings <- substring(text, starts, ends)
   
       # only keep those requiring escaping

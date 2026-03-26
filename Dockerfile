@@ -16,29 +16,32 @@ ENV LANG=en_US.UTF-8
 RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     libxml2-dev \
+    libmariadb-dev \
+    libmariadb-dev-compat \
     libzstd-dev \
     libssl-dev \
     libharfbuzz-dev \
     libfribidi-dev \
-    default-libmysqlclient-dev \
     libcairo2-dev \
     libfreetype6-dev \
     libfontconfig1-dev
 
+
+
+RUN R -e "install.packages('xfun', lib = .libPaths()[length(.libPaths())], repos='https://cloud.r-project.org')"
 RUN R -e "install.packages(c('pak', 'tidyr', 'lubridate',  'bslib', 'ggtext'), repos='https://cloud.r-project.org', dependencies = TRUE, verbose = TRUE)"
-RUN R -e "pak::pkg_install('RMySQL')"
+RUN R -e "pak::pkg_install('RMariaDB')"
 RUN R -e "pak::pkg_install('RJDBC')"
 RUN R -e "pak::pkg_install('ggfx')"
 RUN R -e "pak::pkg_install('patchwork')"
 RUN R -e "pak::pkg_install('emojifont')"
-RUN r -e "pak::pkg_install('forcats')"
-RUN r -e "pak::pkg_install('distributional')"
-RUN r -e "pak::pkg_install('here')"
-RUN r -e "pak::pkg_install('targets')"
-RUN r -e "pak::pkg_install('renv')"
-RUN r -e "pak::pkg_install('htmltools')"
-
-
+RUN R -e "pak::pkg_install('forcats')"
+RUN R -e "pak::pkg_install('distributional')"
+RUN R -e "pak::pkg_install('here')"
+RUN R -e "pak::pkg_install('targets')"
+#RUN R -e "pak::pkg_install('renv')"
+RUN R -e "pak::pkg_install('htmltools')"
+RUN R -e "install.packages('shiny', repos='https://cloud.r-project.org')"
 
 
 ENV S6_VERSION="v2.1.0.2"
