@@ -40,8 +40,11 @@ COPY renv.lock ./renv.lock
 COPY write_target_output.R ./write_target_output.R
 
 # 5. Install R packages via pak and renv
-RUN R -e "install.packages(c('pak', 'renv', 'RMySQL', 'RODBC'), repos='https://packagemanager.posit.co/cran/__linux__/noble/latest'); \
-    renv::restore(repos = c(CRAN = 'https://packagemanager.posit.co/cran/__linux__/noble/latest'))"
+# Step 12 revised
+RUN R -e "install.packages('renv', repos='https://packagemanager.posit.co/cran/__linux__/noble/latest')" \
+    && R -e "renv::restore()" \
+    && R -e "install.packages('RMariaDB', repos='https://packagemanager.posit.co/cran/__linux__/noble/latest')"
+
 
 # 6. Setup Cron
 COPY crontab /etc/cron.d/nhs-cron
