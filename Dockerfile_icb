@@ -1,20 +1,18 @@
-# Based on your history, this started from a rocker/tidyverse or similar RStudio base
-# Adjust the FROM image if you remember using a specific version
-FROM rocker/rstudio:latest 
+FROM rocker/rstudio:latest
 
 # 1. Setup Microsoft SQL Server repository and keys
 RUN apt-get update && apt-get install -y curl gpg
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-archive-keyring.gpg
 RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" > /etc/apt/sources.list.d/mssql-release.list
 
-# 2. Install system dependencies and Microsoft ODBC tools
+# 2. Install system dependencies (including the missing libpng-dev)
 RUN apt-get update && ACCEPT_EULA=Y apt-get install -y \
     cron \
     cmake \
     libmariadb-dev \
+    libmariadb-dev-compat \
     libnode-dev \
-    libglpk-dev \
-    libnlopt-dev \
+    libglpk-dev libnlopt-dev \
     libnetcdf-dev \
     libhdf5-dev \
     libssl-dev \
@@ -25,6 +23,7 @@ RUN apt-get update && ACCEPT_EULA=Y apt-get install -y \
     odbcinst \
     msodbcsql18 \
     mssql-tools18 \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Environment setup
@@ -32,19 +31,19 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/mssql
 ENV ODBCSYSINI=/etc
 WORKDIR /root
 
-# 4. Copy application files
+# 4. FAST TRACK: Install R packages FIRST (using only the lockfile)
+# This layer stays cached unless you change renv.lock
+COPY renv.lock ./renv.lock
+RUN export RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/noble/latest" \
+    && R -e "install.packages('renv', repos='${RENV_CONFIG_REPOS_OVERRIDE}')" \
+    && R -e "renv::restore(exclude = 'RMariaDB')" \
+    && R -e "install.packages('RMariaDB', type='source', repos='https://cran.rstudio.com/')"
+    
+# 5. Copy application files 
 COPY target ./target
 COPY src ./src
 COPY _targets.R ./_targets.R
-COPY renv.lock ./renv.lock
 COPY write_target_output.R ./write_target_output.R
-
-# 5. Install R packages via pak and renv
-# Step 12 revised
-RUN R -e "install.packages('renv', repos='https://packagemanager.posit.co/cran/__linux__/noble/latest')" \
-    && R -e "renv::restore()" \
-    && R -e "install.packages('RMariaDB', repos='https://packagemanager.posit.co/cran/__linux__/noble/latest')"
-
 
 # 6. Setup Cron
 COPY crontab /etc/cron.d/nhs-cron
