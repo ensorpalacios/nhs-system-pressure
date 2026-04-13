@@ -7,7 +7,7 @@
 
 assign("horizon", 7, envir = .GlobalEnv) # Forecast horizon & lag
 assign("train_length", "16 weeks", envir = .GlobalEnv) # length of training data
-assign("threshold_prob", 0.9, envir = .GlobalEnv) # percentile of total occ.
+assign("threshold_prob", c(0.85, 0.9, 0.95), envir = .GlobalEnv) # percentile of total occ.
     
 # # Colour mapping
 # col_models = viridis_pal(option = "turbo")(28) # Colour mapping

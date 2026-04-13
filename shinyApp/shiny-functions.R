@@ -15,7 +15,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
 
   .fc <- .fc[site == .site]
   .hist <- .hist[site == .site]
-  .thr <- .thr[site == .site, thr]
+  .thr <- .thr[site == .site, `thr-0.9`]
 
   .hist = .hist[index >= max(index) - lubridate::dweeks(2), ]
   compute_quantiles <- function(q, .data) {
@@ -145,15 +145,21 @@ plot_ts <- function(.hist, .site, .var) {
 
 #' Daily risk plot
 #' Function for plotting aily risk predictions
-#' @param .risk_d Risk predictions
+#' @param .risk_d Daily risk predictions
+#' @param .risk_ws_close Week split risk predictions (1-3)
+#' @param .risk_ws_far Week split risk predictions (4-7)
+#' @param .risk_w Weekly risk presictions (1-7)
 #' @param .site Site to display
-plot_riskd <- function(
+#' @param .type Toggle daily risk/aggregated risk prediction plot
+#' @param .int Toggle risk interval (80-95%) or single risk prediction (%90)
+plot_risk <- function(
   .risk_d,
   .risk_ws_close,
   .risk_ws_far,
   .risk_w,
   .site,
-  .type
+  .type,
+  .int
 ) {
   # Get data
   .risk_d <- .risk_d[site == .site, ]
@@ -169,15 +175,15 @@ plot_riskd <- function(
   x_close_l <- .risk_d[2, index]
   x_far_l <- .risk_d[6, index] - 0.5
   x_week_l <- .risk_d[4, index]
-  y_close <- .risk_d[1:3, max(risk_day)] + 0.3
-  y_far <- .risk_d[4:7, max(risk_day)] + 0.3
-  y_week <- .risk_d[, max(risk_day)] + 0.5
+  y_close <- .risk_d[1:3, max(risk_day0.9)] + 0.3
+  y_far <- .risk_d[4:7, max(risk_day0.9)] + 0.3
+  y_week <- .risk_d[, max(risk_day0.9)] + 0.5
   max_y <- ifelse((y_week + 0.2) > 1, y_week + 0.2, 1)
 
   # Plot
   tmp_plot =
     .risk_d |>
-    ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
+    ggplot(aes(x = index, y = risk_day0.9, fill = risk_day0.9)) +
     geom_col() +
     scale_y_continuous(name = NULL, limits = c(0, max_y), breaks = NULL) +
     scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
@@ -187,14 +193,6 @@ plot_riskd <- function(
       high = "#132B43",
       limits = c(0, 1),
       labels = scales::percent
-    ) + # week line
-    geom_text(
-      aes(label = scales::percent(round(risk_day, 2))),
-      # linewidth = NA,
-      # fill = "white",
-      # hjust = 0.5,
-      vjust = -0.2,
-      size = 6
     ) +
     theme(
       axis.title.x = element_blank(),
@@ -207,11 +205,34 @@ plot_riskd <- function(
       panel.grid.minor = element_blank(),
       legend.position = "none"
     )
+  if (!.int) {
+    tmp_plot =
+      tmp_plot + # add lables
+      geom_text(
+        aes(label = scales::percent(round(risk_day0.9, 2))),
+        # linewidth = NA,
+        # fill = "white",
+        # hjust = 0.5,
+        vjust = -0.2,
+        size = 6
+      )
+  } else {
+    tmp_plot =
+      tmp_plot + # add 85-95% bar
+      geom_errorbar(
+        aes(ymin = risk_day0.95, ymax = risk_day0.85),
+        linewidth = 2,
+        lineend = "round",
+        width = 0.5,
+        colour = "#9aa9b8"
+      )
+  }
 
   if (.type == "daily risk") {
     tmp_plot
   } else {
-    tmp_plot +
+    tmp_plot =
+      tmp_plot +
       geom_segment(
         aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close)
       ) + # 3 days line
@@ -220,37 +241,85 @@ plot_riskd <- function(
       ) + # 4 days line
       geom_segment(
         aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week)
-      ) +
-      annotate(
-        geom = "text",
-        label = sprintf("%.0f%%", .risk_ws_close[, risk_ws] * 100),
-        x = x_close_l,
-        y = y_close,
-        vjust = -0.2,
-        # linewidth = NA,
-        # fill = "white",
-        size = 6
-      ) +
-      annotate(
-        geom = "text",
-        label = sprintf("%.0f%%", .risk_ws_far[, risk_ws] * 100),
-        x = x_far_l,
-        y = y_far,
-        vjust = -0.2,
-        # linewidth = NA,
-        # fill = "text",
-        size = 6
-      ) +
-      annotate(
-        geom = "text",
-        label = sprintf("%.0f%%", .risk_w[, risk_w] * 100),
-        x = x_week_l,
-        y = y_week,
-        vjust = -0.2,
-        # linewidth = NA,
-        # fill = "white",
-        size = 6
       )
+
+    if (!.int) { # add 90% risk prediction labels
+      tmp_plot +
+        annotate(
+          geom = "text",
+          label = sprintf("%.0f%%", .risk_ws_close[, risk_ws0.9] * 100),
+          x = x_close_l,
+          y = y_close,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "white",
+          size = 6
+        ) +
+        annotate(
+          geom = "text",
+          label = sprintf("%.0f%%", .risk_ws_far[, risk_ws0.9] * 100),
+          x = x_far_l,
+          y = y_far,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "text",
+          size = 6
+        ) +
+        annotate(
+          geom = "text",
+          label = sprintf("%.0f%%", .risk_w[, risk_w0.9] * 100),
+          x = x_week_l,
+          y = y_week,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "white",
+          size = 6
+        )
+    } else { # add 85-95% risk prediction labels
+      tmp_plot +
+        annotate(
+          geom = "text",
+          label = sprintf(
+            "%.0f-%0.f%%",
+            .risk_ws_close[, risk_ws0.95] * 100,
+            .risk_ws_close[, risk_ws0.85] * 100
+          ),
+          x = x_close_l,
+          y = y_close,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "white",
+          size = 6
+        ) +
+        annotate(
+          geom = "text",
+          label = sprintf(
+            "%.0f-%0.f%%",
+            .risk_ws_far[, risk_ws0.95] * 100,
+            .risk_ws_far[, risk_ws0.85] * 100
+          ),
+          x = x_far_l,
+          y = y_far,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "text",
+          size = 6
+        ) +
+        annotate(
+          geom = "text",
+          label = sprintf(
+            "%.0f-%0.f%%",
+            .risk_w[, risk_w0.95] * 100,
+            .risk_w[, risk_w0.85] * 100
+          ),
+          x = x_week_l,
+          y = y_week,
+          vjust = -0.2,
+          # linewidth = NA,
+          # fill = "white",
+          size = 6
+        )
+    }
   }
   # .risk_d |>
   #   ggplot(aes(x = index, y = risk_day, fill = risk_day)) +

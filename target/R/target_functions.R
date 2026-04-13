@@ -282,10 +282,14 @@ compute_threshold <-
     
     # Compute alarm threshold
     alarm_thr <- # compute threshold on (all) training data
-      ts_data %>% as.data.table() %>%
+      ts_data %>%
+      as.data.table() %>%
       .[
         site != "aggregate",
-        .(thr = quantile(occ, probs = threshold_prob)),
+        setNames(
+          lapply(threshold_prob, \(x) round(quantile(occ, probs = x))),
+          paste0("thr-", threshold_prob)
+        ),
         by = site
       ]
     
@@ -563,52 +567,69 @@ fc_combination <-
 #' Compute risk
 #' @param fc_comb Forecast ensemble
 #' @param alarm_thr Threshold for high/low system pressure
-compute_risk <- 
+compute_risk <-
   function(.fc, .thr) {
     # Reproducible analysis for bootstrapping splits
     set.seed(321)
-        
-    
+
+    # Threshold levels
+    name_thr <- sub("thr-", "", names(.thr)[-1])
+
     # Add alarm thresholds to fc
     fc_threshold <-
       .thr[
-        .fc %>% select(site, .model, index, occ, .mean, h),  on = "site"
+        .fc %>% select(site, .model, index, occ, .mean, h),
+        on = "site"
       ]
-    
-    
+
     # Compute threshold-crossing probabilities
     # Risk by days
-    risk_d <-  # compute risk
-      copy(fc_threshold)[
-        , risk_day := 1 - cdf(occ, thr), by = .(site, .model, h)
+    risk_d <- # compute risk
+      copy(fc_threshold)[,
+        paste0("risk_day", name_thr) := lapply(.SD, \(x) {
+          1 - cdf(occ, x)
+        }),
+        by = .(site, .model, h),
+        .SDcols = names(.thr)[-1]
       ]
-    
-    
+
     # Risk by week split (1-3h, 4-7h)
-    risk_d[ # split week in two
-      , week_split := ifelse(h <= 3, "close", "far")
+    risk_d[
+      # split week in two
+      ,
+      week_split := ifelse(h <= 3, "close", "far")
     ]
-    risk_ws <- 
-      risk_d[ # compute risk
-        , .(risk_ws = 1 - prod(1 - risk_day)), 
-        by = .(site, .model, week_split) 
+    risk_ws <-
+      risk_d[
+        # compute risk
+        ,
+        setNames(
+          lapply(.SD, \(x) 1 - prod(1 - x)),
+          paste0("risk_ws", name_thr)
+        ),
+        by = .(site, .model, week_split),
+        .SDcols = patterns("^risk_day") # ^ start string
       ]
-    
-    
+
     # Risk by week
-    risk_w <- 
-      risk_d[ # compute risk
-        , .(risk_w = 1 - prod(1 - risk_day)), 
-        by = .(site, .model)
+    risk_w <-
+      risk_d[,
+        # compute risk
+        setNames(
+          lapply(.SD, \(x) 1 - prod(1 - x)),
+          paste0("risk_w", name_thr)
+        ),
+        by = .(site, .model),
+        .SDcols = patterns("^risk")
       ]
-    
-    list_risk <- 
+
+    list_risk <-
       list(
         "risk_d" = risk_d,
         "risk_ws" = risk_ws,
         "risk_w" = risk_w
       )
-    
+
     # Save risk predictions, threshold and fc by dates
     adate <- lubridate::today() # analysis date
     list_data <-
@@ -618,7 +639,7 @@ compute_risk <-
         "risk" = list_risk,
         "date" = adate
       )
-    
+
     # Return list
 
     list_data
@@ -629,8 +650,6 @@ compute_risk <-
 #' @param  .tables RDS file containing out tables to merge
 prepare_output_pred <-
   function(.tables) {
-  
-
     list_data <- .tables
     list_data$fc <- as.data.table(list_data$fc)
     list_data$risk$risk_d <- as.data.table(list_data$risk$risk_d)

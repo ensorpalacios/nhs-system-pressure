@@ -39,7 +39,7 @@ ui <- page_sidebar(
 
   conditionalPanel(
     condition = "input.main_nav == 'risk'",
-   layout_columns(
+    layout_columns(
       col_widths = c(8, 4),
       titlePanel("7 days ahead risk predictions"),
       div(
@@ -48,14 +48,16 @@ ui <- page_sidebar(
           "select_risk",
           "Risk type:",
           choices = list(
-            "Daily risk" = "daily risk",
-            "Daily & aggregate risk" = "daily + aggregate"
+            "Daily risk (90%)" = "daily risk 90",
+            "Daily risk (85-95%)" = "daily risk int",
+            "Daily & aggregate risk (90%)" = "daily + aggregate 90",
+            "Daily & aggregate risk (95-85%)" = "daily + aggregate int"
           ),
           selected = "daily risk",
           width = "100%"
         )
       )
-    ), 
+    ),
 
     layout_columns(
       col_widths = c(7, 5),
@@ -64,8 +66,8 @@ ui <- page_sidebar(
         tooltip(
           bs_icon("info-circle"),
           "2 weeks bed occupancy history (black line), 1 week ahead forecast 
-        (mean, 50%, 80% prediction interval), and bed occupancy threshold 
-        (dotted line)"
+        (mean, 50%, 80% prediction interval), and 90% bed occupancy threshold 
+        computed on the past 2 years (dashed line)"
         ) #,
         # style = "margin-bottom: 10px; margin-top: 10px; font-size: 16px;"
       ),
@@ -73,9 +75,10 @@ ui <- page_sidebar(
         strong("Risk predictions"),
         tooltip(
           bs_icon("info-circle"),
-          "probability of bed occupancy forecast crossing the threshold
+          "probability of bed occupancy forecast crossing the 90% threshold
         by days and at least once for day aggregates (first 3, last 4 days, 
-        whole week ahead)"
+        whole week ahead); optionally show risk intervall computed on 95%-85% bed
+        occupancy threshold."
         ) #,
         # style = "margin-bottom: 10px; margin-top: 10px; font-size: 16px;"
       )
@@ -93,12 +96,20 @@ ui <- page_sidebar(
           div(
             style = "height: 300px;",
             conditionalPanel(
-              condition = "input.select_risk == 'daily risk'",
-              plotOutput("bri_risk_d", height = "300px")
+              condition = "input.select_risk == 'daily risk 90'",
+              plotOutput("bri_risk_d_90", height = "300px")
             ),
             conditionalPanel(
-              condition = "input.select_risk == 'daily + aggregate'",
-              plotOutput("bri_risk_a", height = "300px")
+              condition = "input.select_risk == 'daily risk int'",
+              plotOutput("bri_risk_d_int", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate 90'",
+              plotOutput("bri_risk_a_90", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate int'",
+              plotOutput("bri_risk_a_int", height = "300px")
             )
           )
         )
@@ -118,12 +129,20 @@ ui <- page_sidebar(
           div(
             style = "height: 300px;",
             conditionalPanel(
-              condition = "input.select_risk == 'daily risk'",
-              plotOutput("southmead_risk_d", height = "300px")
+              condition = "input.select_risk == 'daily risk 90'",
+              plotOutput("southmead_risk_d_90", height = "300px")
             ),
             conditionalPanel(
-              condition = "input.select_risk == 'daily + aggregate'",
-              plotOutput("southmead_risk_a", height = "300px")
+              condition = "input.select_risk == 'daily risk int'",
+              plotOutput("southmead_risk_d_int", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate 90'",
+              plotOutput("southmead_risk_a_90", height = "300px")
+            ),
+            conditionalPanel(
+              condition = "input.select_risk == 'daily + aggregate int'",
+              plotOutput("southmead_risk_a_int", height = "300px")
             )
           )
         )
@@ -134,7 +153,7 @@ ui <- page_sidebar(
   # Data Page
   conditionalPanel(
     condition = "input.main_nav == 'data'",
-   layout_columns(
+    layout_columns(
       col_widths = c(8, 4),
       titlePanel("Data View"),
       div(
@@ -153,16 +172,16 @@ ui <- page_sidebar(
           width = "100%"
         )
       )
-    ), 
+    ),
 
     card(
       card_header(strong("BRI")),
       card_body(
-          plotOutput("data_bri", height = "300px")
+        plotOutput("data_bri", height = "300px")
       ),
       card_header(strong("Southmead")),
       card_body(
-          plotOutput("data_southmead", height = "300px")
+        plotOutput("data_southmead", height = "300px")
       )
     )
   )
@@ -175,68 +194,125 @@ server <- function(input, output) {
   # Get data
   risk_d <- as.data.table(model_out)[
     type == "risk_d" & .model == model,
-    .(site, index, risk_day)
+    .SD,
+    .SDcols = patterns("site|index|risk_day")
   ]
   risk_ws_close <- as.data.table(model_out)[
     type == "risk_ws" & .model == model & week_split == "close",
-    .(site, risk_ws)
+    .SD,
+    .SDcols = patterns("site|risk_ws")
   ]
   risk_ws_far <- as.data.table(model_out)[
     type == "risk_ws" & .model == model & week_split == "far",
-    .(site, risk_ws)
+    .SD,
+    .SDcols = patterns("site|risk_ws")
   ]
   risk_w <- as.data.table(model_out)[
     type == "risk_w" & .model == model,
-    .(site, risk_w)
+    .SD,
+    .SDcols = patterns("site|risk_w0")
   ]
   fc <- as.data.table(model_out)[type == "forecast" & .model == model]
   thr <- as.data.table(model_out)[
     type == "risk_w" & .model == model,
-    .(site, thr)
+    .SD,
+    .SDcols = patterns("site|^thr")
   ]
   hist <- as.data.table(historic_data)
 
-  # Plot risk - daily
-  output$bri_risk_d <- renderPlot({
-    plot_riskd(
-      risk_d, 
-      risk_ws_close, 
-      risk_ws_far, 
-      risk_w, 
-      "BRI", 
-      "daily risk"
-    )
-  })
-  output$southmead_risk_d <- renderPlot({
-    plot_riskd(
-      risk_d,
-      risk_ws_close,
-      risk_ws_far,
-      risk_w,
-      "Southmead",
-      "daily risk"
-    )
-  })
-
-  # plot risk - daily + aggregate
-  output$bri_risk_a <- renderPlot({
-    plot_riskd(
+  # Plot risk - daily 90%
+  output$bri_risk_d_90 <- renderPlot({
+    plot_risk(
       risk_d,
       risk_ws_close,
       risk_ws_far,
       risk_w,
       "BRI",
-      "daily + aggregate"
+      "daily risk",
+      FALSE
     )
   })
-  output$southmead_risk_a <- renderPlot({
-    plot_riskd(
+  output$southmead_risk_d_90 <- renderPlot({
+    plot_risk(
       risk_d,
       risk_ws_close,
       risk_ws_far,
       risk_w,
       "Southmead",
-      "daily + aggregate"
+      "daily risk",
+      FALSE
+    )
+  })
+
+  # Plot risk - daily 85-95%
+  output$bri_risk_d_int <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "BRI",
+      "daily risk",
+      TRUE
+    )
+  })
+  output$southmead_risk_d_int <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "Southmead",
+      "daily risk",
+      TRUE
+    )
+  })
+
+  # plot risk - daily + aggregate 90%
+  output$bri_risk_a_90 <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "BRI",
+      "daily + aggregate",
+      FALSE
+    )
+  })
+  output$southmead_risk_a_90 <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "Southmead",
+      "daily + aggregate",
+      FALSE
+    )
+  })
+
+  # plot risk - daily + aggregate 85-95%
+  output$bri_risk_a_int <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "BRI",
+      "daily + aggregate",
+      TRUE
+    )
+  })
+  output$southmead_risk_a_int <- renderPlot({
+    plot_risk(
+      risk_d,
+      risk_ws_close,
+      risk_ws_far,
+      risk_w,
+      "Southmead",
+      "daily + aggregate",
+      TRUE
     )
   })
 
