@@ -52,6 +52,7 @@ import::from(xgboost, xgb.train, xgb.DMatrix, getinfo)
 import::from(Matrix, sparse.model.matrix)
 import::from(pagedown, chrome_print)
 import::from(ncdf4, nc_open, ncvar_get)
+import::from(pmcalibration, logistic_cal, pmcalibration)
 
 
 # Resolve conflicts (using conflicted package)

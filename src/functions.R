@@ -1574,3 +1574,52 @@ factorise_temp <-
         !!sym(.tmax) := NULL
       )
   }
+
+
+# Calibration functions --------------------------------------------------------
+#' Brier score
+#' 
+#' @description Compute Brier score for calibration of risk prediction classifier
+#' @param y True binary labels (threshold crossing or not)
+#' @param p Predicted probabilities of threshold crossing
+brier_fun <- function(y, p) {
+  mean((p - y) ^ 2)
+}
+
+
+#' Loop calibration
+#'
+#' @description Loop function to apply calibration function to each risk set
+#' @param .calfun Calibration function
+#' @param .nmodel Model name to calibrate
+#' @param ... Additional arguments to pass to calibration function
+cal_loop <- function(.calfun, .nmodel, ...) {
+  set.seed(111) # for reproducibility
+  lapply(list_risk, \(.risk) {
+    pred = grep("risk", names(.risk), value = TRUE)
+    lapply(c("BRI", "Southmead"), \(.site) {
+      .tbl = .risk[site == .site & .model == .nmodel]
+      if (pred != "risk_ws") {
+        plt = .calfun(
+          y = .tbl[, obs_cross],
+          p = .tbl[, .pred, env = list(.pred = pred)],
+          ...
+        )
+      } else {
+        plt = list(
+          close = .calfun(
+            y = .tbl[week_split == "close", obs_cross],
+            p = .tbl[week_split == "close", .pred, env = list(.pred = pred)],
+            ...
+          ),
+          far = .calfun(
+            y = .tbl[week_split == "far", obs_cross],
+            p = .tbl[week_split == "far", .pred, env = list(.pred = pred)],
+            ...
+          )
+        )
+      }
+      plt
+    }) |> set_names(c("BRI", "Southmead"))
+  })
+}

@@ -307,6 +307,18 @@ tbl_freq <-
   tab_stubhead(label = "Time horizon")
 
 
+# Calibration metrics ----------------------------------------------------------
+log_cal <- cal_loop(logistic_cal, "equal")
+med_cal <- cal_loop(
+  pmcalibration, "equal", 
+  smooth = "loess", 
+  transf = "logit", 
+  plot = FALSE,
+  n = 10000,
+  ci = "boot"
+)
+brier_score <- cal_loop(brier_fun, "equal")
+
 
 # Save plots -------------------------------------------------------------------
 save_path <- here(paste0("output/plots/risk_fc/" , amode, "/"))
@@ -341,4 +353,16 @@ iwalk(plt_curves, \(.plt, .name) {
 iwalk(tbl_auc, \(.tbl, .name) {
   file_name = str_glue("{save_path}table_{.name}.tex")
   gtsave(.tbl, file_name)
+})
+
+
+# Calibration data
+saveRDS(
+  list(log_cal = log_cal, med_cal = med_cal),
+  str_glue("{save_path}calibration_data.RDS")
+)
+walk(c("BRI", "Southmead"), \(.site) {
+  pdf(str_glue("{save_path}calibration_{.site}.pdf"))
+  plot(med_cal$risk_d[[.site]])
+  dev.off()
 })
