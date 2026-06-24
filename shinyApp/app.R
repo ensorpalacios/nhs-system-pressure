@@ -129,7 +129,7 @@ server <- function(input, output) {
   output$fc <- renderPlot({
     fc_bri <- plot_fc(fc, hist, thr, "BRI")
     fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
-    (fc_bri/fc_nbt) + plot_layout(axes = "collect_y")
+    (fc_bri/fc_nbt/fc_nbt) + plot_layout(axes = "collect_y")
   })
 
 
@@ -138,7 +138,7 @@ server <- function(input, output) {
   output$risk <- renderPlot({
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
-    (risk_bri/risk_nbt) + plot_layout(axes = "collect_y")
+    (risk_bri/risk_nbt/risk_nbt) + plot_layout(axes = "collect_y")
   })
 
 
