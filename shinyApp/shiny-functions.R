@@ -32,53 +32,115 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   ]
 
   bridge <- .hist |> 
-  slice_max(index, n = 1) |> 
-  mutate(
-    `mean(occ)` = occ,
-    `10%` = occ, `90%` = occ,
-    `25%` = occ, `75%` = occ
-  )
+    slice_max(index, n = 1) |> 
+    mutate(
+      `mean(occ)` = occ,
+      `10%` = occ, `90%` = occ,
+      `25%` = occ, `75%` = occ
+    )
 
-# Combine for the forecast layer
-.fc_connected <- bind_rows(bridge, .fc)
-
+  # Combine for the forecast layer
+  .fc_connected <- bind_rows(bridge, .fc)
+  
+  # --- ADDED/ENSURED: Make sure site column is a factor/character in both datasets ---
+  .fc_connected <- .fc_connected |> mutate(site = .site)
+  .hist <- .hist |> mutate(site = .site)
 
   # Plot
   .fc_connected |>
     ggplot() +
-  geom_ribbon(data = .fc_connected,
-    aes(x = index, ymin = `10%`, ymax = `90%`, fill = "80%"),
-    alpha = 0.15
-  ) +
-  geom_ribbon(data = .fc_connected,
-    aes(x = index, ymin = `25%`, ymax = `75%`, fill = "50%"),
-    alpha = 0.35
-  ) +
-  geom_line(data = .fc_connected, 
-            aes(x = index, y = mean(occ)), 
-            color = "steelblue", linewidth = 1, linetype = "dashed") +
-  geom_line(data = .hist, 
-            aes(x = index, y = occ), 
-            linewidth = 1.2, color = "grey20") +
-  geom_hline(yintercept = .thr, colour = "firebrick", linetype = "dashed", linewidth = 1) +
-  annotate("text", x = min(.hist$index), y = .thr, label = str_c("Threshold (", round(.thr), ")"), 
-           vjust = -1, hjust = 0, color = "firebrick", fontface = "italic", size = 4) +
-  scale_x_date(
-    labels = \(x) format(x, "%a\n%d-%m"),
-    breaks = "2 days",
-    expand = expansion(mult = c(0, 0.05)) # Removes extra whitespace at start
-  ) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
-  scale_fill_manual(
-    values = c("50%" = "steelblue", "80%" = "steelblue4")
-  ) +
-  theme_minimal() +
-  theme(
-    axis.title = element_blank(),
-    axis.text = element_text(size = 12, color = "grey30"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
-  )
+    # --- ADDED: Unbroken background block across the entire X-axis ---
+    annotate(
+      "rect",
+      xmin = as.Date(-Inf), # Forces compatibility with scale_x_date
+      xmax = as.Date(Inf),
+      ymin = .thr,
+      ymax = Inf,
+      fill = "firebrick",
+      alpha = 0.05 # Soft warning background tint
+    ) +
+    # Prediction Intervals
+    geom_ribbon(
+      data = .fc_connected,
+      aes(x = index, ymin = `10%`, ymax = `90%`, fill = "80%"),
+      alpha = 0.15
+    ) +
+    geom_ribbon(
+      data = .fc_connected,
+      aes(x = index, ymin = `25%`, ymax = `75%`, fill = "50%"),
+      alpha = 0.35
+    ) +
+    # Mean Forecast Line
+    geom_line(
+      data = .fc_connected,
+      aes(x = index, y = mean(occ)),
+      color = "steelblue",
+      linewidth = 1,
+      linetype = "dashed"
+    ) +
+    # Historic Data Line
+    geom_pointpath(
+      data = .hist,
+      aes(x = index, y = occ),
+      linewidth = 1.2,
+      size = 3,
+      color = "grey20"
+    ) +
+    # Solidified Threshold Boundary Line
+    geom_hline(
+      yintercept = .thr,
+      colour = "firebrick",
+      linetype = "solid",
+      linewidth = 1
+    ) +
+    annotate(
+      "text",
+      x = min(.hist$index, na.rm = TRUE),
+      y = .thr,
+      label = str_c("Threshold (", round(.thr), ")"),
+      vjust = -1,
+      hjust = 0,
+      color = "firebrick",
+      fontface = "italic",
+      size = 5
+    ) +
+    scale_x_date(
+      labels = function(x) {
+        base_lbls <- format(x, "%a %d")
+        months <- format(x, "%b")
+        month_changed <- c(TRUE, months[-1] != months[-length(months)])
+        month_changed[is.na(month_changed)] <- FALSE 
+        
+        first_valid_idx <- which(!is.na(months))[1]
+        if(!is.na(first_valid_idx)) {
+          month_changed[first_valid_idx] <- TRUE
+        }
+        
+        out_lbls <- ifelse(month_changed, paste0(months, "\n", base_lbls), base_lbls)
+        out_lbls[is.na(x)] <- ""
+        return(out_lbls)
+      },
+      breaks = "3 days",
+      expand = expansion(mult = c(0.01, 0.01))
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0.25, 0.25))) +
+    scale_fill_manual(
+      values = c("50%" = "steelblue", "80%" = "steelblue4")
+    ) +
+    labs(y = "Acute bed occupancy") +
+    facet_wrap(~site, strip.position = "left") + 
+    theme_minimal() +
+    theme(
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
+      axis.text = element_text(size = 12, color = "grey30"),
+      panel.grid.minor = element_blank(),
+      strip.placement = "outside",
+      legend.position = "none",
+      # --- ADDED: Styling the facet label block nicely ---
+      strip.text = element_text(size = 16, face = "bold", color = "grey20", hjust = 0.02),
+      strip.background = element_rect(fill = "grey95", color = NA)
+    )
 }
 
 
@@ -144,7 +206,7 @@ plot_ts <- function(.hist, .site, .var) {
 
 
 #' Daily risk plot
-#' Function for plotting aily risk predictions
+#' Function for plotting daily risk predictions
 #' @param .risk_d Risk predictions
 #' @param .site Site to display
 plot_riskd <- function(
@@ -161,6 +223,9 @@ plot_riskd <- function(
   .risk_ws_far <- .risk_ws_far[site == .site]
   .risk_w <- .risk_w[site == .site]
 
+  # --- ADDED: Ensure site column exists for faceting ---
+  .risk_d <- .risk_d |> mutate(site = .site)
+
   # Multi-day risk lines
   x_close_s <- .risk_d[1, index]
   x_close_e <- .risk_d[3, index]
@@ -175,11 +240,11 @@ plot_riskd <- function(
   max_y <- ifelse((y_week + 0.2) > 1, y_week + 0.2, 1)
 
   # Plot
-  tmp_plot =
+  tmp_plot <-
     .risk_d |>
-    ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
-    geom_col() +
-    scale_y_continuous(name = NULL, limits = c(0, max_y), breaks = NULL) +
+    ggplot(aes(x = index, y = risk_day)) +
+    geom_col(fill = "lightblue") +
+    scale_y_continuous(limits = c(0, max_y), breaks = NULL) +
     scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
     geom_hline(yintercept = 0) + # baseline
     scale_fill_gradient(
@@ -187,22 +252,27 @@ plot_riskd <- function(
       high = "#132B43",
       limits = c(0, 1),
       labels = scales::percent
-    ) + # week line
+    ) +
     geom_text(
       aes(label = scales::percent(round(risk_day, 2))),
-      # linewidth = NA,
-      # fill = "white",
-      # hjust = 0.5,
       vjust = -0.2,
       size = 6
     ) +
+    labs(y = "Risk of crossing occupancy threshold") +
+    facet_wrap(~site, strip.position = "left") +
+    theme_minimal() +
     theme(
       axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
       axis.text = element_text(size = 14),
-      strip.text = element_text(size = 24),
-      strip.background = element_rect(fill = "white", linewidth = 0),
-      panel.border = element_rect(linewidth = 0),
-      panel.background = element_rect(fill = "white"),
+      strip.text = element_text(
+        size = 16,
+        face = "bold",
+        color = "grey20",
+        hjust = 0.02
+      ),
+      strip.placement = "outside",
+      strip.background = element_rect(fill = "grey95", color = NA),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       legend.position = "none"
@@ -214,10 +284,10 @@ plot_riskd <- function(
     tmp_plot +
       geom_segment(
         aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close)
-      ) + # 3 days line
+      ) + 
       geom_segment(
         aes(x = x_far_s, xend = x_far_e, y = y_far, yend = y_far)
-      ) + # 4 days line
+      ) + 
       geom_segment(
         aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week)
       ) +
@@ -227,8 +297,6 @@ plot_riskd <- function(
         x = x_close_l,
         y = y_close,
         vjust = -0.2,
-        # linewidth = NA,
-        # fill = "white",
         size = 6
       ) +
       annotate(
@@ -237,8 +305,6 @@ plot_riskd <- function(
         x = x_far_l,
         y = y_far,
         vjust = -0.2,
-        # linewidth = NA,
-        # fill = "text",
         size = 6
       ) +
       annotate(
@@ -247,83 +313,7 @@ plot_riskd <- function(
         x = x_week_l,
         y = y_week,
         vjust = -0.2,
-        # linewidth = NA,
-        # fill = "white",
         size = 6
       )
   }
-  # .risk_d |>
-  #   ggplot(aes(x = index, y = risk_day, fill = risk_day)) +
-  #   geom_col() +
-  #   scale_y_continuous(name = NULL, limits = c(0, max_y), breaks = NULL) +
-  #   scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
-  #   geom_hline(yintercept = 0) + # baseline
-  # geom_segment(
-  #   aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close)
-  # ) + # 3 days line
-  # geom_segment(
-  #   aes(x = x_far_s, xend = x_far_e, y = y_far, yend = y_far)
-  # ) + # 4 days line
-  # geom_segment(
-  #   aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week)
-  # ) + # week line
-  # geom_text(
-  #   aes(label = scales::percent(round(risk_day, 2))),
-  #   # linewidth = NA,
-  #   # fill = "white",
-  #   # hjust = 0.5,
-  #   vjust = -0.2,
-  #   size = 6
-  # ) +
-  # annotate(
-  #   geom = "text",
-  #   label = sprintf("%.0f%%", .risk_ws_close[, risk_ws] * 100),
-  #   x = x_close_l,
-  #   y = y_close,
-  #   vjust = -0.2,
-  #   # linewidth = NA,
-  #   # fill = "white",
-  #   size = 6
-  # ) +
-  # annotate(
-  #   geom = "text",
-  #   label = sprintf("%.0f%%", .risk_ws_far[, risk_ws] * 100),
-  #   x = x_far_l,
-  #   y = y_far,
-  #   vjust = -0.2,
-  #   # linewidth = NA,
-  #   # fill = "text",
-  #   size = 6
-  # ) +
-  # annotate(
-  #   geom = "text",
-  #   label = sprintf("%.0f%%", .risk_w[, risk_w] * 100),
-  #   x = x_week_l,
-  #   y = y_week,
-  #   vjust = -0.2,
-  #   # linewidth = NA,
-  #   # fill = "white",
-  #   size = 6
-  # ) +
-  # scale_fill_gradient(
-  #   low = "#56B1F7",
-  #   high = "#132B43",
-  #   limits = c(0, 1),
-  #   labels = scales::percent
-  # ) +
-  # theme(
-  #   axis.title.x = element_blank(),
-  #   axis.text = element_text(size = 14),
-  #   strip.text = element_text(size = 24),
-  #   strip.background = element_rect(fill = "white", linewidth = 0),
-  #   panel.border = element_rect(linewidth = 0),
-  #   panel.background = element_rect(fill = "white"),
-  #   panel.grid.major = element_blank(),
-  #   panel.grid.minor = element_blank(),
-  #   legend.position = "none"
-  #   # legend.text = element_text(size = 14),
-  #   # legend.title = element_text(size = 14, margin = margin(b = 15)),
-  #   # legend.background = element_rect(colour = "black", linewidth = 1),
-  #   # legend.margin = margin(t = 5, r = 4, b = 10, l = 4)
-  # )
 }
