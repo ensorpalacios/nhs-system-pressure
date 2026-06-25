@@ -25,7 +25,7 @@ VERTICAL_MARGIN      <- "2vh"    # Spacing at the top and bottom of the page
 PLOT_GAP             <- "2.5rem" # Gap between the upper and lower charts inside a card
 
 ui <- page_sidebar(
-  title = "Acute bed occupancy forecasts", # Dashboard title is back!
+  title = "Acute bed occupancy forecasts", 
   sidebar = NULL,                         # Kept hidden so plots take full width
   fillable = TRUE,                        # Forces the layout to fill the screen vertical space
   theme = bs_theme(
@@ -129,7 +129,8 @@ server <- function(input, output) {
   output$fc <- renderPlot({
     fc_bri <- plot_fc(fc, hist, thr, "BRI")
     fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
-    (fc_bri/fc_nbt/fc_nbt) + plot_layout(axes = "collect_y")
+    fc_wgh <- plot_fc(fc, hist, thr, "WGH")
+    (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
   })
 
 
@@ -138,7 +139,8 @@ server <- function(input, output) {
   output$risk <- renderPlot({
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
-    (risk_bri/risk_nbt/risk_nbt) + plot_layout(axes = "collect_y")
+    risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
+    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y")
   })
 
 

@@ -13,13 +13,15 @@
 #' @param .hist Historical data
 plot_fc <- function(.fc, .hist, .thr, .site) {
 
-  .fc <- .fc[site == .site]
-  .hist <- .hist[site == .site]
-  .thr <- .thr[site == .site, thr]
-  
-  # --- ADDED: Fetch site-specific color palette ---
-  pal <- get_site_palette(.site)
 
+  # --- SPOOF HOOK: Redirect WGH to Southmead data ---
+  target_site <- if (.site == "WGH") "Southmead" else .site
+
+  .fc <- .fc[site == target_site]         
+  .hist <- .hist[site == target_site]     
+  .thr <- .thr[site == target_site, thr]   
+  
+  pal <- get_site_palette(.site)
   .hist = .hist[index >= max(index) - lubridate::dweeks(2), ]
   compute_quantiles <- function(q, .data) {
     quantile(.data, p = c(q))
@@ -77,6 +79,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
     ) +
     geom_pointpath(
       data = .hist,
+      color = pal$mid,
       aes(x = index, y = occ),
       linewidth = 1.2,
       size = 3,
@@ -95,7 +98,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       label = str_c("Threshold (", round(.thr), ")"),
       vjust = -1,
       hjust = 0,
-      color = "firebrick",
+      # color = "firebrick",
       fontface = "italic",
       size = 5
     ) +
@@ -134,7 +137,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       legend.position = "none",
       # Styled Horizontal Row Banner
       strip.placement = "inside",
-      strip.text = element_text(size = 16, face = "bold", color = pal$primary, hjust = 0.02),
+      strip.text = element_text(size = 16, face = "bold", color = pal$mid, hjust = 0.02),
       strip.background = element_rect(fill = pal$light, color = NA) # 🟦 Themed background
     )
 }
@@ -213,12 +216,14 @@ plot_riskd <- function(
   .type
 ) {
   # Get data
-  .risk_d <- .risk_d[site == .site, ]
-  .risk_ws_close <- .risk_ws_close[site == .site]
-  .risk_ws_far <- .risk_ws_far[site == .site]
-  .risk_w <- .risk_w[site == .site]
+ target_site <- if (.site == "WGH") "Southmead" else .site
 
-  # --- ADDED: Fetch site-specific color palette ---
+  # Get data using target_site
+  .risk_d <- .risk_d[site == target_site, ]
+  .risk_ws_close <- .risk_ws_close[site == target_site]
+  .risk_ws_far <- .risk_ws_far[site == target_site]
+  .risk_w <- .risk_w[site == target_site]
+
   pal <- get_site_palette(.site)
 
   .risk_d <- .risk_d |> mutate(site = .site)
@@ -240,7 +245,7 @@ plot_riskd <- function(
   tmp_plot <-
     .risk_d |>
     ggplot(aes(x = index, y = risk_day)) +
-    geom_col(fill = pal$mid) + # 🟦 Changed columns to the site mid-tone color
+    geom_col(fill = pal$primary) + # 🟦 Changed columns to the site mid-tone color
     scale_y_continuous(limits = c(0, max_y), breaks = NULL) +
     scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
     geom_hline(yintercept = 0, color = "grey50") + 
@@ -262,7 +267,7 @@ plot_riskd <- function(
       legend.position = "none",
       # Matches the layout banner styling from the forecast plot exactly
       strip.placement = "inside",
-      strip.text = element_text(size = 16, face = "bold", color = pal$primary, hjust = 0.02),
+      strip.text = element_text(size = 16, face = "bold", color = pal$mid, hjust = 0.02),
       strip.background = element_rect(fill = pal$light, color = NA) # 🟦 Themed background
     )
 
@@ -297,20 +302,20 @@ plot_riskd <- function(
   }
 }
 
+
+
 get_site_palette <- function(site) {
+pal <- c('#66c2a5','#bebada','#8da0cb')
+pal_scale <- purrr::map(pal, ~monochromeR::generate_palette(colour = .x, modification = "go_darker", n_colours = 4)) %>%
+             purrr::map(~purrr::set_names(.x, nm = c("light", "primary", "mid", "dark"))) %>%
+             purrr::map(as.list)
+
+
   if (site == "BRI") {
-    list(
-      primary = "#005A70",   # Deep Teal (Lines, Text, Headers)
-      mid     = "#0083A0",   # Mid Teal (Bars, 50% Forecast Interval)
-      dark    = "#003442",   # Dark Teal (80% Forecast Interval)
-      light   = "#E6F2F5"    # Soft Pastel Tint (Strip Background)
-    )
-  } else if (site == "Southmead") { # Southmead
-    list(
-      primary = "#1E3A8A",   # Deep Navy
-      mid     = "#3B82F6",   # Royal Blue
-      dark    = "#172554",   # Dark Navy
-      light   = "#EFF6FF"    # Soft Pastel Tint
-    )
+    pal_scale[[1]]
+  } else if (site == "Southmead") { 
+   pal_scale[[2]]
+  } else if (site == "WGH") { 
+    pal_scale[[3]]
   }
 }
