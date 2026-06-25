@@ -20,27 +20,26 @@ source("00_prepare_data.R")
 # ==========================================
 # 🎛️ RELATIVE LAYOUT & SCALING PARAMETERS
 # ==========================================
-DASHBOARD_MAX_WIDTH  <- "95vw"   # Max horizontal width (95% of viewport width)
+DASHBOARD_MAX_WIDTH  <- "80vw"   # Max horizontal width (95% of viewport width)
 VERTICAL_MARGIN      <- "2vh"    # Spacing at the top and bottom of the page
 PLOT_GAP             <- "2.5rem" # Gap between the upper and lower charts inside a card
 
-ui <- page_sidebar(
+ui <- page_navbar(
   title = "Acute bed occupancy forecasts", 
-  sidebar = NULL,                         # Kept hidden so plots take full width
-  fillable = TRUE,                        # Forces the layout to fill the screen vertical space
+  fillable = TRUE,                                
   theme = bs_theme(
     bg = "#FFFFFF",
     fg = "#000000"
   ),
   
-  # Injecting flexible CSS properties to force vertical expansion underneath the header
   tags$head(
     tags$style(HTML(sprintf("
-      /* Center the dashboard container, constrain width, and pad under title */
-      .bslib-page-main {
+      /* Constrain, center, and pad the layout grid directly within the navbar pane */
+      .main-dashboard-grid {
         max-width: %s !important;
         margin-left: auto !important;
         margin-right: auto !important;
+        width: 100%% !important;
         padding-top: %s !important;
         padding-bottom: %s !important;
       }
@@ -78,36 +77,55 @@ ui <- page_sidebar(
     ", DASHBOARD_MAX_WIDTH, VERTICAL_MARGIN, VERTICAL_MARGIN, PLOT_GAP)))
   ),
 
-  # Master 2-Column Layout
-  layout_columns(
-    col_widths = c(7, 5),
+  # --- TAB 1: FORECASTS & RISK ---
+  nav_panel(
+    title = "Dashboard",
+    icon = icon("chart-line"),
+    
+    # Master 2-Column Layout with custom class hooked into our styling rules
+    layout_columns(
+      class = "main-dashboard-grid", # 👈 ADDED: Maps directly to the CSS override
+      col_widths = c(7, 5),
 
-    # --- LEFT COLUMN: Bed Occupancy Forecasts (Stacked) ---
-    card(
-      # card_header(span(strong("Bed occupancy forecast"))),
-      card_body(
-        class = "custom-card-body",
-        plotOutput("fc"),
-        div(
-          class = "custom-caption",
-          tags$strong("Figure 1: "),
-          HTML("Acute bed occupancy forecast with 2 weeks bed occupancy history (black line), 1 week ahead forecast (mean, 50%, 80% prediction interval), and bed occupancy threshold (historic 90th percentile dotted line).")
+      # --- LEFT COLUMN: Bed Occupancy Forecasts (Stacked) ---
+      card(
+        card_body(
+          class = "custom-card-body",
+          plotOutput("fc"),
+          div(
+            class = "custom-caption",
+            tags$strong("Figure 1: "),
+            HTML("Acute bed occupancy forecast with 2 weeks bed occupancy history (black line), 1 week ahead forecast (mean, 50%, 80% prediction interval), and bed occupancy threshold (historic 90th percentile solid red line).")
+          )
+        )
+      ),
+
+      # --- RIGHT COLUMN: Risk Predictions (Stacked) ---
+      card(
+        card_body(
+          class = "custom-card-body",
+          plotOutput("risk"),
+          div(
+            class = "custom-caption",
+            tags$strong("Figure 2: "),
+            HTML("Risk of bed occupancy forecast crossing the threshold over the next 7-days and at least once for day aggregates (first 3, last 4 days, whole week ahead).")
+          )
         )
       )
-    ),
-
-    # --- RIGHT COLUMN: Risk Predictions (Stacked) ---
-    card(
-      # card_header(span(strong("Risk predictions"))),
-      card_body(
-        class = "custom-card-body",
-        plotOutput("risk"),
-        div(
-          class = "custom-caption",
-          tags$strong("Figure 2: "),
-          HTML("Risk of bed occupancy forecast crossing the threshold over the next 7-days and at least once for day aggregates (first 3, last 4 days, whole week ahead).")
-        )
-      )
+    )
+  ),
+  
+  # --- TAB 2: ABOUT / DOCUMENTATION ---
+  nav_panel(
+    title = "About",
+    icon = icon("info-circle"),
+    div(
+      style = "max-width: 800px; margin: 0 auto; padding: 40px 20px;",
+      tags$h3("About the System", style = "font-weight: bold; margin-bottom: 15px;"),
+      tags$p("This platform provides localized, multi-site visual intelligence for acute care bed asset demands across regional healthcare settings.", style = "font-size: 1.1rem; line-height: 1.6;"),
+      tags$hr(),
+      tags$h5("Operations & Reference", style = "font-weight: bold; margin-top: 20px;"),
+      tags$p("Data processing steps and threshold calculation profiles are managed internally via dedicated analysis schedules.")
     )
   )
 )
@@ -125,7 +143,6 @@ server <- function(input, output) {
   hist <- as.data.table(historic_data)
 
   # Plot bed occupancy fc
-
   output$fc <- renderPlot({
     fc_bri <- plot_fc(fc, hist, thr, "BRI")
     fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
@@ -133,16 +150,13 @@ server <- function(input, output) {
     (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
   })
 
-
   # Plot risk - daily + aggregate
-
   output$risk <- renderPlot({
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
     risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
-    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y")
+    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y") 
   })
-
 
   # Plot data time series
   output$data_bri <- renderPlot(plot_ts(hist, "BRI", input$data_ts))

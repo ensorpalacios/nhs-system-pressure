@@ -14,6 +14,9 @@
 plot_fc <- function(.fc, .hist, .thr, .site) {
 
 
+  # CORE stock (could update this to be live from the data?)
+  .core_stock = c(BRI = 656, Southmead = 916, WGH = 274)
+
   # --- SPOOF HOOK: Redirect WGH to Southmead data ---
   target_site <- if (.site == "WGH") "Southmead" else .site
 
@@ -49,6 +52,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
 
   .fc_connected |>
     ggplot() +
+    # Threshold region
     annotate(
       "rect",
       xmin = as.Date(-Inf),
@@ -57,6 +61,16 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       ymax = Inf,
       fill = "firebrick",
       alpha = 0.05
+    ) +
+    # Threshold region
+    annotate(
+      "rect",
+      xmin = as.Date(-Inf),
+      xmax = as.Date(Inf),
+      ymax = .core_stock[target_site],
+      ymin = -Inf,
+      fill = "lightblue",
+      alpha = 0.1
     ) +
     # Prediction Intervals
     geom_ribbon(
@@ -102,32 +116,53 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       fontface = "italic",
       size = 5
     ) +
+      geom_hline(
+    yintercept = .core_stock[target_site],
+    colour = "lightblue3",
+    linetype = "solid",
+    linewidth = 1
+  ) +
+    annotate(
+      "text",
+      x = min(.hist$index, na.rm = TRUE),
+      y = .core_stock[target_site],
+      label = str_c("Core stock open (", round(.core_stock[target_site]), ")"),
+      vjust = 1.5,
+      hjust = 0,
+      # color = "firebrick",
+      fontface = "italic",
+      size = 5
+    ) +
     scale_x_date(
       labels = function(x) {
         base_lbls <- format(x, "%a %d")
         months <- format(x, "%b")
         month_changed <- c(TRUE, months[-1] != months[-length(months)])
-        month_changed[is.na(month_changed)] <- FALSE 
-        
+        month_changed[is.na(month_changed)] <- FALSE
+
         first_valid_idx <- which(!is.na(months))[1]
-        if(!is.na(first_valid_idx)) {
+        if (!is.na(first_valid_idx)) {
           month_changed[first_valid_idx] <- TRUE
         }
-        
-        out_lbls <- ifelse(month_changed, paste0(months, "\n", base_lbls), base_lbls)
+
+        out_lbls <- ifelse(
+          month_changed,
+          paste0(months, "\n", base_lbls),
+          base_lbls
+        )
         out_lbls[is.na(x)] <- ""
         return(out_lbls)
       },
       breaks = "3 days",
       expand = expansion(mult = c(0.01, 0.01))
     ) +
-    scale_y_continuous(expand = expansion(mult = c(0.25, 0.25))) +
+    scale_y_continuous(limits = c(0.9*.core_stock[target_site], NA), expand = expansion(mult = c(0.25, 0.25))) +
     # Dynamic Interval Palette mapping
     scale_fill_manual(
       values = c("50%" = pal$mid, "80%" = pal$dark) # 🟦 Themed Ribbon intervals
     ) +
     labs(y = "Acute bed occupancy") +
-    facet_wrap(~site, strip.position = "top") + 
+    facet_wrap(~site, strip.position = "top") +
     theme_minimal() +
     theme(
       axis.title.x = element_blank(),
@@ -137,7 +172,12 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       legend.position = "none",
       # Styled Horizontal Row Banner
       strip.placement = "inside",
-      strip.text = element_text(size = 16, face = "bold", color = pal$mid, hjust = 0.02),
+      strip.text = element_text(
+        size = 16,
+        face = "bold",
+        color = pal$mid,
+        hjust = 0.02
+      ),
       strip.background = element_rect(fill = pal$light, color = NA) # 🟦 Themed background
     )
 }
