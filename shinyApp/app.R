@@ -18,7 +18,7 @@ source("shiny-functions.R")
 source("00_prepare_data.R")
 
 # ==========================================
-# 🎛️ RELATIVE LAYOUT & SCALING PARAMETERS
+# RELATIVE LAYOUT & SCALING PARAMETERS
 # ==========================================
 DASHBOARD_MAX_WIDTH  <- "80vw"   # Max horizontal width (95% of viewport width)
 VERTICAL_MARGIN      <- "2vh"    # Spacing at the top and bottom of the page
@@ -121,11 +121,14 @@ ui <- page_navbar(
     icon = icon("info-circle"),
     div(
       style = "max-width: 800px; margin: 0 auto; padding: 40px 20px;",
-      tags$h3("About the System", style = "font-weight: bold; margin-bottom: 15px;"),
-      tags$p("This platform provides localized, multi-site visual intelligence for acute care bed asset demands across regional healthcare settings.", style = "font-size: 1.1rem; line-height: 1.6;"),
+      tags$h3("About the dashboard", style = "font-weight: bold; margin-bottom: 15px;"),
+      tags$p("Periods of high bed occupancy in hospitals increase pressure on staff and resources and may impact patient care without appropriate and timely mitigations. This dashboard provides short-term forecasts of bed occupancy and estimates of the risk of an upcoming high-pressure period. Forecasts are generated using an ensemble of statistical and machine learning models trained on routinely collected hospital data. Risks are expressed as the chance that bed occupancy will exceed a hospital-specific threshold over the next week.", style = "font-size: 1.1rem; line-height: 1.6;"),
+      tags$p("The dashboard is intended to inform short-term operational decisions around capacity, staffing, and service delivery and should be interpreted alongside local knowledge. The dashboard was developed in collaboration with researchers at the Universities of Bath and Bristol. An article describing the methods is under review at The International Journal of Medical Informatics. The submitted manuscript can be viewed [add url once preprint uploaded]", style = "font-size: 1.1rem; line-height: 1.6;"),
       tags$hr(),
-      tags$h5("Operations & Reference", style = "font-weight: bold; margin-top: 20px;"),
-      tags$p("Data processing steps and threshold calculation profiles are managed internally via dedicated analysis schedules.")
+      tags$h5("Modelling summary", style = "font-weight: bold; margin-top: 20px;"),
+      tags$p("The outcome measure is the daily number of occupied beds with no distinction between ordinary and escalation beds. Forecasts are based on routinely collected, aggregated hospital-level data, including admissions and discharges, counts of patients with long stays (3+ weeks), and paediatric A&E activity, together with environmental variables such as temperature and day of the week indicators. These variables were selected to reflect key drivers of short-term variation in hospital demand and capacity. The modelling framework allows for inclusion of lagged predictors, reflecting that future bed occupancy may be driven by delayed or cumulative effects of changes in admissions, discharges, and other factors.", style = "font-size: 1.1rem; line-height: 1.6;"),
+      tags$p("Six base models are selected according to their predictive performance using cross-validation, with accuracy assessed using the continuous ranked probability score (CRPS). The ensemble forecast is then produced by averaging the outputs of the six models, which improves the stability of predictions and captures different aspects of hospital dynamics. The risk of crossing a hospital-specific capacity threshold is then derived from the full predictive distribution, rather than a point forecast, and is reported for both individual days and aggregated periods (e.g. 1-3 days and 4-7 days), allowing assessment across different operational timescales. Currently the threshold is set at the 90th percentile of observed bed occupancy over the period September 2022 to December 2024, but this can be changed to meet operational needs."), style = "font-size: 1.1rem; line-height: 1.6;",
+      tags$p("Forecasts are updated daily using a rolling training window to adapt to recent trends and potential changes in hospital dynamics. However, the accuracy of the forecasts may be affected by changes in activity, data quality, or factors not explicitly captured in the modelling framework.", style = "font-size: 1.1rem; line-height: 1.6;")
     )
   )
 )
