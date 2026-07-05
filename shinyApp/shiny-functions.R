@@ -165,6 +165,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
     facet_wrap(~site, strip.position = "top") +
     theme_minimal() +
     theme(
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
       axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
       axis.text = element_text(size = 12, color = "grey30"),
@@ -299,6 +300,7 @@ plot_riskd <- function(
     facet_wrap(~site, strip.position = "top") +
     theme_minimal() +
     theme(
+      plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
       axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
       axis.text = element_text(size = 14),
