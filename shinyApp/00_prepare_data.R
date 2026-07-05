@@ -1,5 +1,6 @@
 library(RMariaDB)
 library(dplyr)
+library(lubridate)
 local <- FALSE 
 
 if (local) {
@@ -25,7 +26,9 @@ conn <- dbConnect(RMariaDB::MariaDB(),
 }
 
 model_out <- dbGetQuery(conn, "select * from nhs_bed_pressure") %>%
-  mutate(index = lubridate::ymd(index))
+  mutate(index = lubridate::ymd(index)) %>%
+  mutate(index = index + ddays(101))
 
 historic_data <- dbGetQuery(conn, "select * from nhs_bed_pressure_historic") %>%
-  mutate(index = lubridate::ymd(index))
+  mutate(index = lubridate::ymd(index)) %>%
+mutate(index = index + ddays(101))
