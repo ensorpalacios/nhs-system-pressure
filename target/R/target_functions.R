@@ -10,6 +10,7 @@ load_hosp <-
   function() {
 
 local <- FALSE 
+# local <- TRUE
 if (local) {
   con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
   message("Connected to: Local SQLite")
@@ -114,8 +115,8 @@ if (local) {
 prepare_data <-
   function(df_occ) {
     df_occ <- readRDS(df_occ)
-    today = df_occ$report_date |> max()
-    start = df_occ$report_date |> min()
+    today <- df_occ$report_date |> max()
+    start <- df_occ$report_date |> min()
 
     # Temperature data (historical data)
     df_t <-
@@ -130,24 +131,24 @@ prepare_data <-
       df_occ %>%
       bind_rows(
         copy(df_t)[, provider := "BRI"],
-        copy(df_t)[, provider := "NBT"]
+        copy(df_t)[, provider := "NBT"],
+        copy(df_t)[, provider := "WGH"]
       )
 
     # Data wrangling:
-    # keep BRI & Southmead, generate index, rename variables
+    # Generate index, rename variables
     df_occ <-
       df_occ |>
-      filter(
-        provider == "BRI" | provider == "NBT"
-      ) |>
       select(-metric_id) |>
+      distinct(provider, report_date, metric_name, .keep_all = TRUE) |>
       pivot_wider(names_from = metric_name, values_from = value) |>
       mutate(
         index = lubridate::ymd(report_date),
         site = case_match(
           provider,
           "BRI" ~ "BRI",
-          "NBT" ~ "Southmead"
+          "NBT" ~ "Southmead",
+          "WGH" ~ "WGH"
         ),
         adm = `Number of Admissions`,
         dis = `Number of Discharges`,
@@ -178,13 +179,30 @@ prepare_data <-
     # Impute missing values (simple moving average, window=7)
     impute_fun <-
       function(.dat) {
-        na_seadec(
-          .dat,
-          algorithm = "ma",
-          k = 3,
-          weighting = "simple",
-          find_frequency = TRUE
-        )
+        if (all(is.na(.dat))) {
+          return(.dat)
+        } else {
+          withCallingHandlers(
+            na_seadec(
+              .dat,
+              algorithm = "ma",
+              k = 3,
+              weighting = "simple",
+              find_frequency = TRUE
+            ),
+            warning = function(w) {
+              if (
+                grepl(
+                  "could not detect a seasonal pattern",
+                  conditionMessage(w),
+                  fixed = TRUE
+                )
+              ) {
+                invokeRestart("muffleWarning")
+              }
+            }
+          )
+        }
       }
     ts_data <- # impute
       ts_data %>%
@@ -211,8 +229,9 @@ prepare_data <-
       ungroup()
 
     # Aggregate BRI/Southmead
-    ts_data <-
+    ts_data_bs <-
       ts_data %>%
+      filter(site != "WGH") |>
       aggregate_key(
         site,
         occ = sum(occ),
@@ -224,9 +243,41 @@ prepare_data <-
         tmin = unique(tmin), # = across sites; necessary to return 1 value
       )
 
+    # Aggregate BRI/Southmead aggregate (BS) and WGH
+    ts_data_wgh <- 
+      ts_data_bs |> 
+      filter(is_aggregated(site)) |>
+      mutate(site = "BS") |>
+      bind_rows(ts_data %>% filter(site == "WGH")) |> 
+      mutate(paed = NULL, los = NULL) |> # remove paed and los for WGH
+      aggregate_key(
+        site,
+        occ = sum(occ),
+        adm = sum(adm),
+        dis = sum(dis),
+        tmax = unique(tmax), # = across sites; necessary to return 1 value
+        tmin = unique(tmin), # = across sites; necessary to return 1 value
+      )
+
+
     # Process admissions-discharges
-    ts_data <-
-      ts_data %>%
+    ts_data_bs <- # BRI, Southmead
+      ts_data_bs %>%
+      group_by(site) %>%
+      mutate(
+        # New variables
+        ad_diff = adm - dis, # difference
+        # stabilise (-holidays/week days effect)
+        ad_diff = stabilise(ad_diff, index, .xdays = "ad-diff", .wdays = TRUE),
+        ad_diff2 = c(0, diff(ad_diff)), # rate of change of ad_diff
+        # Filter
+        ad_diff_f = slide_dbl(ad_diff, mean, .before = 2),
+        ad_diff2_f = slide_dbl(ad_diff2, mean, .before = 2)
+      ) %>%
+      ungroup()
+
+    ts_data_wgh <- # WGH
+      ts_data_wgh %>%
       group_by(site) %>%
       mutate(
         # New variables
@@ -241,8 +292,8 @@ prepare_data <-
       ungroup()
 
     # Length of stay (+21)
-    ts_data <-
-      ts_data %>%
+    ts_data_bs <- # BRI/Southmead only (no los for WGH)
+      ts_data_bs %>%
       group_by(site) %>%
       mutate(
         # Remove sudden drops from BRI (replace with moving avg)
@@ -257,8 +308,18 @@ prepare_data <-
       ungroup()
 
     # Add days of week and numeric time index
-    ts_data <-
-      ts_data %>%
+    ts_data_bs <- # BRI, Southmead
+      ts_data_bs %>%
+      mutate(
+        days_ = format(index, "%a") |>
+          factor(levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")),
+        # t_ax = rep(1:(length(days_)/2), 2)
+        t_ax = index %>% as.numeric(),
+        t_ax = t_ax - min(t_ax) + 1
+      )
+
+    ts_data_wgh <- # WGH
+      ts_data_wgh %>%
       mutate(
         days_ = format(index, "%a") |>
           factor(levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")),
@@ -268,26 +329,30 @@ prepare_data <-
       )
 
     # Return time series data
-    ts_data
+    list("bs" = ts_data_bs, "wgh" = ts_data_wgh)
   }
 
 #' Compute threshold
 #' @param ts_data Entire time series data
 compute_threshold <- 
   function(ts_data) {
-    # Recode sites
-    ts_data <- 
-      ts_data %>% filter(!is_aggregated(site)) %>%
+    # Join hospital data and recode sites
+    ts_data <- bind_rows(
+      ts_data$bs |> filter(!is_aggregated(site)), 
+      ts_data$wgh |> filter(site == "WGH")
+    ) |> 
       mutate(site = as.character(site))
     
-    # Compute alarm threshold
+    # Compute alarm threshold (last 6 months)
     alarm_thr <- # compute threshold on (all) training data
       ts_data %>%
       as.data.table() %>%
       .[
         site != "aggregate",
         setNames(
-          lapply(threshold_prob, \(x) round(quantile(occ, probs = x))),
+          lapply(threshold_prob, 
+            \(x) round(quantile(occ[.N-182:.N], probs = x))
+          ),
           paste0("thr-", threshold_prob)
         ),
         by = site
@@ -300,228 +365,430 @@ compute_threshold <-
 
 #' Forecast bed occupancy
 #' @param ts_data Entire time series data
-forecast_occ <- 
+forecast_occ <-
   function(ts_data) {
+    # Get data and sites
+    ts_data_bs <- ts_data$bs
+    ts_data_wgh <- ts_data$wgh
+
+    ts_data <- # Joint hospital data
+      bind_rows(
+        ts_data$bs |> filter(!is_aggregated(site)),
+        ts_data$wgh |> filter(site == "WGH")
+      ) |>
+      mutate(site = as.character(site))
     sites <- ts_data$site %>% unique()
-    
+
     # Reproducible analysis for rf and xgb
-    set.seed(123) 
-    
+    set.seed(123)
+
     # Select relevant variables
-    ts_data <- 
-      ts_data %>%
-      select( # exclude
-        -adm, -dis, -ad_diff, -ad_diff2
+    ts_data_bs <-
+      ts_data_bs %>%
+      select(
+        # exclude
+        -adm,
+        -dis,
+        -ad_diff,
+        -ad_diff2
       )
-    
+    ts_data_wgh <-
+      ts_data_wgh %>%
+      select(
+        # exclude
+        -adm,
+        -dis,
+        -ad_diff,
+        -ad_diff2
+      )
+
     # Get last 16 weeks for training
-    train_length <- 
-      lubridate::duration(train_length) %>% 
+    train_length <-
+      lubridate::duration(train_length) %>%
       lubridate::time_length("days")
-    start_training <- 
+    start_training <-
       max(ts_data$index) - train_length - 7 # + 7 days temporarily for lag_fun
-    ts_data <- 
-      ts_data %>% group_by(site) %>% 
-      filter(index > start_training) %>% 
+    ts_data_bs <-
+      ts_data_bs %>%
+      group_by(site) %>%
+      filter(index > start_training) %>%
       ungroup()
-    
+    ts_data_wgh <-
+      ts_data_wgh %>%
+      group_by(site) %>%
+      filter(index > start_training) %>%
+      ungroup()
+
     # Process exogenous variables
-    xpredict_method = "pull" # include tslm, arima, ets
-    data_xpredict <- 
+    xpredict_method <- "pull" # include tslm, arima, ets
+
+    data_xpredict_bs <-
       xpredict_fun(
-        ts_data,
-        c("occ", "ad_diff", "paed", "los"), 
+        ts_data_bs,
+        c("occ", "ad_diff", "paed", "los"),
         xpredict_method
-        )
-    
-    
+      )
+    data_xpredict_wgh <-
+      xpredict_fun(
+        ts_data_wgh,
+        c("occ", "ad_diff"),
+        xpredict_method
+      )
+
     # Add lags
-    data_xpredict <- lag_fun(data_xpredict, .lag = horizon)
-    
-    
+    data_xpredict_bs <- lag_fun(data_xpredict_bs, .lag = horizon)
+    data_xpredict_wgh <- lag_fun(data_xpredict_wgh, .lag = horizon)
+
     # Factorise temperature data
-    for (.lag in seq(0, 7)) data_xpredict = factorise_temp(data_xpredict, .lag)
-    
-    
+    for (.lag in seq(0, 7)) {
+      data_xpredict_bs <- factorise_temp(data_xpredict_bs, .lag)
+    }
+    for (.lag in seq(0, 7)) {
+      data_xpredict_wgh <- factorise_temp(data_xpredict_wgh, .lag)
+    }
+
     # Fit models
     # ARIMA aggregated
-    fc_fable_rec <- 
-      data_xpredict %>% 
+    fc_fable_rec_bs <- # BRI/Southmead
+      data_xpredict_bs %>%
       filter(type == "train") %>%
       tsibble(index = index, key = site) %>%
       model(
-        arima_dadp_agg = 
-          ARIMA(
-            occ ~ 
-              days_ + 
-              ad_diff_f_lag3 + ad_diff2_f_lag3 +
-              ad_diff_f_lag6 + ad_diff2_f_lag6 +
-              paed + paed_lag1
-          ),
-        arima_dadpl_agg = 
-          ARIMA(
-            occ ~ 
-              days_ + 
-              ad_diff_f_lag3 + ad_diff2_f_lag3 +
-              ad_diff_f_lag6 + ad_diff2_f_lag6 +
-              paed + paed_lag1 +
-              los + los_lag1
-          )
-      ) %>% 
+        arima_dadp_agg = ARIMA(
+          occ ~
+            days_ +
+            ad_diff_f_lag3 +
+            ad_diff2_f_lag3 +
+            ad_diff_f_lag6 +
+            ad_diff2_f_lag6 +
+            paed +
+            paed_lag1
+        ),
+        arima_dadpl_agg = ARIMA(
+          occ ~
+            days_ +
+            ad_diff_f_lag3 +
+            ad_diff2_f_lag3 +
+            ad_diff_f_lag6 +
+            ad_diff2_f_lag6 +
+            paed +
+            paed_lag1 +
+            los +
+            los_lag1
+        )
+      ) %>%
       reconcile(
         arima_dadp_rec = min_trace(arima_dadp_agg, method = "mint_shrink"),
         arima_dadpl_rec = min_trace(arima_dadpl_agg, method = "mint_shrink")
-      ) %>% 
+      ) %>%
       select(-arima_dadp_agg, -arima_dadpl_agg) %>%
       forecast(
-        new_data = data_xpredict %>% 
-          filter(type == "test") %>% 
+        new_data = data_xpredict_bs %>%
+          filter(type == "test") %>%
           tsibble(index = index, key = site)
-      ) 
-    
-    
+      )
+
+    fc_fable_rec_wgh <- # WGH
+      data_xpredict_wgh %>%
+      filter(type == "train") %>%
+      tsibble(index = index, key = site) %>%
+      model(
+        arima_dad_agg = ARIMA(
+          occ ~
+            days_ +
+            ad_diff_f_lag3 +
+            ad_diff2_f_lag3 +
+            ad_diff_f_lag6 +
+            ad_diff2_f_lag6
+        )
+      ) %>%
+      reconcile(
+        arima_dad_rec = min_trace(arima_dad_agg, method = "mint_shrink")
+      ) %>%
+      select(-arima_dad_agg) %>%
+      forecast(
+        new_data = data_xpredict_wgh %>%
+          filter(type == "test") %>%
+          tsibble(index = index, key = site)
+      )
+
     # Vector autoregressive models
-    fc_fable_var_ad2 <- # Length of stay (+21)
-      data_xpredict %>% 
+    # (BRI/Shouthmead)
+    fc_fable_var_ad2_bs <- # ad diff2 filtered
+      data_xpredict_bs %>%
       filter(type == "train", !is_aggregated(site)) %>%
-      mutate(site = site %>% as.character()) %>% 
+      mutate(site = site %>% as.character()) %>%
       tsibble(index = index, key = site) %>%
       model(
         var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
-      ) %>% 
+      ) %>%
       forecast(h = horizon)
-    
-    fc_fable_var_paed <- # A&E paed
-      data_xpredict %>% 
+
+    fc_fable_var_paed_bs <- # A&E paed
+      data_xpredict_bs %>%
       filter(type == "train", !is_aggregated(site)) %>%
-      mutate(site = site %>% as.character()) %>% 
+      mutate(site = site %>% as.character()) %>%
       tsibble(index = index, key = site) %>%
       model(
         var_paed = VAR(vars(occ, paed) ~ season(period = "week"))
-      ) %>% 
+      ) %>%
       forecast(h = horizon)
-    
-    fc_fable_var_h <- # BRI vs Southmead
-      data_xpredict %>% 
+
+    fc_fable_var_h_bs <- # BRI vs Southmead
+      data_xpredict_bs %>%
       filter(type == "train", !is_aggregated(site)) %>%
-      mutate(site = site %>% as.character()) %>% 
+      mutate(site = site %>% as.character()) %>%
       tsibble(index = index, key = site) %>%
-      select(occ) %>% 
-      pivot_wider(names_from = site, values_from = occ) %>% 
+      select(occ) %>%
+      pivot_wider(names_from = site, values_from = occ) %>%
       model(
         var_h = VAR(vars(BRI, Southmead) ~ season(period = "week"))
-      ) %>% 
+      ) %>%
       forecast(h = horizon)
-    
-    fc_var <- # bind VAR fc
+
+    # WGH
+    fc_fable_var_ad_wgh <- # ad diff filtered
+      data_xpredict_wgh %>%
+      filter(type == "train", site == "WGH") %>%
+      mutate(site = site %>% as.character()) %>%
+      tsibble(index = index, key = site) %>%
+      model(
+        var_ad = VAR(vars(occ, ad_diff_f) ~ season(period = "week"))
+      ) %>%
+      forecast(h = horizon)
+
+    fc_fable_var_ad2_wgh <- # ad diff2 filtered
+      data_xpredict_wgh %>%
+      filter(type == "train", site == "WGH") %>%
+      mutate(site = site %>% as.character()) %>%
+      tsibble(index = index, key = site) %>%
+      model(
+        var_ad2 = VAR(vars(occ, ad_diff2_f) ~ season(period = "week"))
+      ) %>%
+      forecast(h = horizon)
+
+    fc_fable_var_h_wgh <- # BS vs WGH
+      data_xpredict_wgh %>%
+      filter(type == "train", !is_aggregated(site)) %>%
+      mutate(site = site %>% as.character()) %>%
+      tsibble(index = index, key = site) %>%
+      select(occ) %>%
+      pivot_wider(names_from = site, values_from = occ) %>%
+      model(
+        var_h = VAR(vars(BS, WGH) ~ season(period = "week"))
+      ) %>%
+      forecast(h = horizon)
+
+    fc_var_bs <- # bind VAR fc (BRI/Southmead)
       map(
         list(
-          fc_fable_var_ad2, fc_fable_var_paed
+          fc_fable_var_ad2_bs,
+          fc_fable_var_paed_bs
         ),
         \(.x) {
-          .x %>% 
-            as_tibble() %>% 
+          .x %>%
+            as_tibble() %>%
             mutate(
-              occ = 
-                dist_normal(
-                  mean = .distribution %>% mean() %>% .[, "occ"],
-                  sigma = .distribution %>% variance() %>% sqrt() %>% .[, "occ"]
-                ),
+              occ = dist_normal(
+                mean = .distribution %>% mean() %>% .[, "occ"],
+                sigma = .distribution %>% variance() %>% sqrt() %>% .[, "occ"]
+              ),
               .mean = occ %>% mean(),
               .distribution = NULL
-            ) %>% 
+            ) %>%
             as_tsibble(index = index, key = c(site, .model))
         }
-      ) %>% 
-      bind_rows() %>% 
+      ) %>%
+      bind_rows() %>%
       bind_rows(
         imap(
-          fc_fable_var_h %>% pluck(".distribution") %>%  dimnames(),
+          fc_fable_var_h_bs %>% pluck(".distribution") %>% dimnames(),
           \(.x, .y) {
-            fc_fable_var_h %>% 
-              as_tibble() %>% 
+            fc_fable_var_h_bs %>%
+              as_tibble() %>%
               mutate(
-                occ = 
-                  dist_normal(
-                    mean = .distribution %>% mean() %>% .[, .x],
-                    sigma = .distribution %>% variance() %>% sqrt() %>% .[, .x]
-                  ),
+                occ = dist_normal(
+                  mean = .distribution %>% mean() %>% .[, .x],
+                  sigma = .distribution %>% variance() %>% sqrt() %>% .[, .x]
+                ),
                 site = .x,
                 .model = "var_h",
                 .mean = .mean[.y],
                 .distribution = NULL
-              ) %>% 
+              ) %>%
               as_tsibble(index = index, key = c(site, .model))
           }
-        ) %>% 
+        ) %>%
           bind_rows()
       )
-    
-    
+
+    fc_var_wgh <- # bind VAR fc (WGH)
+      map(
+        list(
+          fc_fable_var_ad_wgh,
+          fc_fable_var_ad2_wgh
+        ),
+        \(.x) {
+          .x %>%
+            as_tibble() %>%
+            mutate(
+              occ = dist_normal(
+                mean = .distribution %>% mean() %>% .[, "occ"],
+                sigma = .distribution %>% variance() %>% sqrt() %>% .[, "occ"]
+              ),
+              .mean = occ %>% mean(),
+              .distribution = NULL
+            ) %>%
+            as_tsibble(index = index, key = c(site, .model))
+        }
+      ) %>%
+      bind_rows() %>%
+      bind_rows(
+        imap(
+          fc_fable_var_h_wgh %>% pluck(".distribution") %>% dimnames(),
+          \(.x, .y) {
+            fc_fable_var_h_wgh %>%
+              as_tibble() %>%
+              mutate(
+                occ = dist_normal(
+                  mean = .distribution %>% mean() %>% .[, .x],
+                  sigma = .distribution %>% variance() %>% sqrt() %>% .[, .x]
+                ),
+                site = .x,
+                .model = "var_h",
+                .mean = .mean[.y],
+                .distribution = NULL
+              ) %>%
+              as_tsibble(index = index, key = c(site, .model))
+          }
+        ) %>%
+          bind_rows() |> 
+          filter(site == "WGH")
+      )
+
     # Random forest - interaction
-    list_var_rf <- # list predictors
-      data_xpredict %>%
+    # Bri/Southmead
+    list_var_rf_bs <- # list predictors (BRI/Southmead)
+      data_xpredict_bs %>%
       select(
         contains("occ"),
-        contains("paed"), -paed,
-        contains("los"), -los,
-        contains("tvar"), -tvar,
-        matches("ad_diff.*_f"), -ad_diff_f, -ad_diff2_f,
-        contains("days_"), -days_) %>%
+        contains("paed"),
+        -paed,
+        contains("los"),
+        -los,
+        contains("tvar"),
+        -tvar,
+        matches("ad_diff.*_f"),
+        -ad_diff_f,
+        -ad_diff2_f,
+        contains("days_"),
+        -days_
+      ) %>%
       names()
-    
-    data_xpredict_int <- # long format data with lag column
-      data_xpredict %>%
-      select(type, site, index, all_of(list_var_rf)) %>%
-      rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>% 
+
+    data_xpredict_int_bs <- # long format data with lag column (BRI/Southmead)
+      data_xpredict_bs %>%
+      select(type, site, index, all_of(list_var_rf_bs)) %>%
+      rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>%
       rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>%
       pivot_longer(
         cols = c(contains("lag")),
         names_to = c(".value", "lag"),
         names_sep = "-"
       )
-    
-    rf_int_par <- # forecast (returns distribution parameters) ...
+
+    rf_int_par_bs <- # forecast (returns distribution parameters) ...
       rf_reg_int(
-        data_xpredict_int %>% filter(!is_aggregated(site)), horizon
+        data_xpredict_int_bs %>% filter(!is_aggregated(site)),
+        horizon
       )
-    
-    fc_rf_int <- # harmonise fc to fable ...
-      harmonise_fc_par(rf_int_par, data_xpredict, "rf_int") %>% 
+
+    fc_rf_int_bs <- # harmonise fc to fable ...
+      harmonise_fc_par(rf_int_par_bs, data_xpredict_bs, "rf_int") %>%
       as_tsibble(index = index, key = c("site", ".model"))
-      
     
+    # WGH
+    list_var_rf_wgh <- # list predictors (WGH)
+      grep("paed|los", list_var_rf_bs, value = TRUE, invert = TRUE)
+
+    data_xpredict_int_wgh <- # long format data with lag column (WGH)
+      data_xpredict_wgh %>%
+      select(type, site, index, all_of(list_var_rf_wgh)) %>%
+      rename_with(~ sub("occ_lag", "occ_same_lag", .x)) %>%
+      rename_with(~ sub("_lag", "-lag", .x, fixed = TRUE)) %>%
+      pivot_longer(
+        cols = c(contains("lag")),
+        names_to = c(".value", "lag"),
+        names_sep = "-"
+      )
+
+    rf_int_par_wgh <- # forecast (returns distribution parameters) ...
+      rf_reg_int(
+        data_xpredict_int_wgh %>% filter(!is_aggregated(site)),
+        horizon
+      )
+
+    fc_rf_int_wgh <- # harmonise fc to fable ...
+      harmonise_fc_par(rf_int_par_wgh, data_xpredict_wgh, "rf_int") %>%
+      as_tsibble(index = index, key = c("site", ".model")) |> 
+      filter(site == "WGH")
+
+    
+
     # XGBoosting - interaction
     # Same predictors as rf interaction but without paed and los
-    data_xpredict_int_xgb <- 
-      data_xpredict_int %>% select(-c(paed, los))
-    
-    xgb_par <- # forecast (returns distribution parameters)...
+    # BRI/Southmead
+    data_xpredict_int_xgb_bs <-
+      data_xpredict_int_bs %>% select(-c(paed, los))
+
+    xgb_par_bs <- # forecast (returns distribution parameters)...
       xgb_reg_int(
-        data_xpredict_int_xgb %>% filter(!is_aggregated(site)), horizon
-        )
-    
-    fc_xgb <-  # harmonise fc to fable ...
-      harmonise_fc_par(xgb_par, data_xpredict, "xgb") %>% 
+        data_xpredict_int_xgb_bs %>% filter(!is_aggregated(site)),
+        horizon
+      )
+
+    fc_xgb_bs <- # harmonise fc to fable ...
+      harmonise_fc_par(xgb_par_bs, data_xpredict_bs, "xgb") %>%
       as_tsibble(index = index, key = c("site", ".model"))
+  
+    # WGH
+    data_xpredict_int_xgb_wgh <- data_xpredict_int_wgh
+
+    xgb_par_wgh <- # forecast (returns distribution parameters)...
+      xgb_reg_int(
+        data_xpredict_int_xgb_wgh %>% filter(!is_aggregated(site)),
+        horizon
+      )
+
+    fc_xgb_wgh <- # harmonise fc to fable ...
+      harmonise_fc_par(xgb_par_wgh, data_xpredict_wgh, "xgb") %>%
+      as_tsibble(index = index, key = c("site", ".model")) |> 
+      filter(site == "WGH")
     
-    
+
     # Join fc
-    dimnames(fc_var$occ) <- "occ" # add name to column to match fc_fable
-    dimnames(fc_rf_int$occ) <- "occ"
-    dimnames(fc_xgb$occ) <- "occ"
-    fc_all <- 
-      list(fc_fable_rec, fc_var, fc_rf_int, fc_xgb) %>% 
-      reduce(bind_rows) %>% 
+    dimnames(fc_var_bs$occ) <- "occ" # add name to column to match fc_fable
+    dimnames(fc_var_wgh$occ) <- "occ" # add name to column to match fc_fable
+    dimnames(fc_rf_int_bs$occ) <- "occ"
+    dimnames(fc_rf_int_wgh$occ) <- "occ"
+    dimnames(fc_xgb_bs$occ) <- "occ"
+    dimnames(fc_xgb_wgh$occ) <- "occ"
+    fc_all <-
+      list(
+        fc_fable_rec_bs, filter(fc_fable_rec_wgh, site == "WGH"), 
+        fc_var_bs, fc_var_wgh, 
+        fc_rf_int_bs, fc_rf_int_wgh,
+        fc_xgb_bs, fc_xgb_wgh
+      ) %>%
+      reduce(bind_rows) %>%
       select(site, .model, index, occ, .mean)
-    
-    
+
     # Remove aggregated fc
-    fc_all <- 
-      fc_all %>% filter(!is_aggregated(site)) %>%
+    fc_all <-
+      fc_all %>%
+      filter(!is_aggregated(site)) %>%
       mutate(site = as.character(site))
-    
-    
+
     # Return forecasts
     fc_all
   }
@@ -544,12 +811,6 @@ fc_combination <-
       ) %>% 
       ungroup()
     
-    # fc_comb_lp <-
-    #   lcomb_fun(.fc, .weights, .list_models, "none", "equal")
-    # 
-    # fc_comb_crps_u <-
-    #   lcomb_fun(.fc, .weights, .list_models, "upper", "crps")
-    # fc_comb_crps_u$`.model` = "crps_upper" # rename
     fc_comb_crps <-
       lcomb_fun(.fc, .weights, .list_models, "none", "equal")
     
@@ -702,21 +963,33 @@ prepare_output_pred <-
   }
 
 
-#' Prepae target output (historical data)
+#' Prepare target output (historical data)
 #' @param  .table RDS file containing historical data
 prepare_output_hist <-
   function(.table) {
+    # Join hospital data
+    .table <-
+      bind_rows(
+        .table$bs |> filter(!is_aggregated(site)),
+        .table$wgh |> filter(site == "WGH")
+      ) |>
+      mutate(site = as.character(site))
+
     output <- .table
 
     output$site <- as.character(output$site)
-    target_output_path <- file.path(save_path, "output", paste0("historic_data", ".RDS"))
+    target_output_path <- file.path(
+      save_path,
+      "output",
+      paste0("historic_data", ".RDS")
+    )
 
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
     }
-    
+
     saveRDS(output, target_output_path)
-    
+
     # Return list
     target_output_path
   }

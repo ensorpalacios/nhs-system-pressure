@@ -240,13 +240,14 @@ xpredict_fun <-
     # Add temperature forecasts
     temp_fc <- 
       get_temp(.historic = FALSE, .today = new_index[1] - 1)
+      # get_temp(.historic = FALSE, .today = as.Date("2026-04-05"))
     
 
     # Replace missing temp with forecasts
     .data %>% 
       left_join(
         temp_fc %>%
-        rename_with(.fn = \(x) str_c(x, "_api")),
+        rename_with(.fn = \(x) stringr::str_c(x, "_api")),
          by = join_by(index == report_date_api)) %>%
       mutate(tmax = coalesce(tmax, tmax_api)) %>%
       mutate(tmin = coalesce(tmin, tmin_api)) %>%
@@ -315,7 +316,9 @@ rf_reg_int <-
       
       
       # Group by lag
-      tmp_fc_individuals = tmp_fc$individual %>% as_tibble()
+      tmp_fc_individuals = 
+        tmp_fc$individual %>% 
+        as_tibble(.name_repair = \(x) paste0("V", seq_along(x)))
       max_lag = data_test$lag %>% parse_number() %>% max()
       tmp_fc_individuals$lag = rep(seq(.horizon), each = max_lag)
       tmp_fc_individuals = 

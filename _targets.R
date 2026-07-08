@@ -59,7 +59,7 @@ if (!file.exists(save_path)) {
 
 
 # Data paths
-path_weight <- 
+path_weight <- # not needed; using equal weights for ensembles
   "target/data/weights_training.RDS"
 ls_model_comb <-
   list(
@@ -68,7 +68,10 @@ ls_model_comb <-
         "var_paed", "var_ad2", "xgb"),
     "Southmead" = 
       c("arima_dadpl_rec", "arima_dadp_rec", "rf_int", 
-        "var_paed", "var_h", "xgb")
+        "var_paed", "var_h", "xgb"),
+    "WGH" = 
+      c("arima_dad_rec", "rf_int", 
+        "var_ad", "var_ad2", "var_h", "xgb")
   )
 
 
