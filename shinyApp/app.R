@@ -208,18 +208,18 @@ server <- function(input, output) {
   output$fc <- renderPlot({
     fc_bri <- plot_fc(fc, hist, thr, "BRI")
     fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
-    # fc_wgh <- plot_fc(fc, hist, thr, "WGH")
-    # (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
-     (fc_nbt/fc_bri) + plot_layout(axes = "collect_y")
+    fc_wgh <- plot_fc(fc, hist, thr, "WGH")
+    (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
+     # (fc_nbt/fc_bri) + plot_layout(axes = "collect_y")
   })
 
   # Plot risk - daily + aggregate
   output$risk <- renderPlot({
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
-    # risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
-    # (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y") 
-    (risk_nbt/risk_bri) + plot_layout(axes = "collect_y") 
+    risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
+    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y")
+    # (risk_nbt/risk_bri) + plot_layout(axes = "collect_y") 
   })
 
   # Plot data time series

@@ -18,7 +18,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   .core_stock = c(BRI = 656, Southmead = 916, WGH = 274)
 
   # --- SPOOF HOOK: Redirect WGH to Southmead data ---
-  target_site <- if (.site == "WGH") "Southmead" else .site
+  target_site <- .site
 
   .fc <- .fc[site == target_site]         
   .hist <- .hist[site == target_site]     
@@ -255,7 +255,7 @@ plot_riskd <- function(
   
   # browser()
   # Get data
-  target_site <- if (.site == "WGH") "Southmead" else .site
+  target_site <- .site
   
   # Get data using target_site
   .risk_d <- .risk_d[site == target_site, ]
