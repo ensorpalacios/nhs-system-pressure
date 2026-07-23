@@ -13,6 +13,7 @@ library(targets)
 library(htmltools)
 library(ggh4x)
 library(patchwork)
+library(ggiraph)
 
 source("shiny-functions.R")
 source("00_prepare_data.R")
