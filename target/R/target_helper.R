@@ -179,6 +179,7 @@ stabilise <-
 #' @param .type choose model for x-predictions
 xpredict_fun <- 
   function(.data, .var, .type) {
+    
     new_index = seq(max(.data$index) + 1 , max(.data$index) + horizon)
     .data = # add rows for future data with index and type
       .data %>%

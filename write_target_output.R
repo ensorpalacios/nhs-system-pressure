@@ -5,7 +5,7 @@ library(dplyr)
 library(dbplyr)
 library(distributional)
 
-tar_make(callr_function = NULL)
+tar_make(callr_function = NULL, use_crew = FALSE, as_job = FALSE)
 
 model_out <- readRDS("target/data/output/model_out_flat.RDS")
 historic_data <- readRDS("target/data/output/historic_data.RDS")

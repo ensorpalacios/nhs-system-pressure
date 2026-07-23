@@ -8,7 +8,6 @@
 #' Load hospital data
 load_hosp <-
   function() {
-
 local <- FALSE 
 # local <- TRUE
 if (local) {
@@ -100,9 +99,11 @@ if (local) {
         )
       ) %>%
       dplyr::mutate(report_date = lubridate::ymd(report_date))
-
     # Save data
     file_path = file.path(save_path, "hosp_data.RDS")
+    if (file.exists(file_path)) {
+      file.remove(file_path)
+    }
     saveRDS(hosp_data, file = file_path)
 
     # Return path
@@ -367,6 +368,7 @@ compute_threshold <-
 #' @param ts_data Entire time series data
 forecast_occ <-
   function(ts_data) {
+    
     # Get data and sites
     ts_data_bs <- ts_data$bs
     ts_data_wgh <- ts_data$wgh
@@ -421,7 +423,6 @@ forecast_occ <-
 
     # Process exogenous variables
     xpredict_method <- "pull" # include tslm, arima, ets
-
     data_xpredict_bs <-
       xpredict_fun(
         ts_data_bs,

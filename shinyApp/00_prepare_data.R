@@ -27,8 +27,24 @@ conn <- dbConnect(RMariaDB::MariaDB(),
 
 model_out <- dbGetQuery(conn, "select * from nhs_bed_pressure") %>%
   mutate(index = lubridate::ymd(index)) %>%
-  mutate(index = index + ddays(101))
+  mutate(index = index) %>%
+  rename(
+    risk_day = risk_day0.9,
+    risk_w = risk_w0.9,
+    risk_ws = risk_ws0.9,
+    thr = `thr-0.9`
+    ) %>%
+  select(-c(
+    risk_day0.85,
+    risk_day0.95,
+    risk_w0.85,
+    risk_w0.95,
+    risk_ws0.85,
+    risk_ws0.95,
+    `thr-0.85`,
+    `thr-0.95`
+    ))
 
 historic_data <- dbGetQuery(conn, "select * from nhs_bed_pressure_historic") %>%
   mutate(index = lubridate::ymd(index)) %>%
-mutate(index = index + ddays(101))
+mutate(index = index)
