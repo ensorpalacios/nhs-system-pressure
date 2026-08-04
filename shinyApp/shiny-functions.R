@@ -12,14 +12,18 @@
 #' @param .site Site to display
 #' @param .hist Historical data
 plot_fc <- function(.fc, .hist, .thr, .site) {
-
-
+  
+  # --- GLOBAL SCALING FACTOR ---
+  # Change this ONE number to scale the entire plot up or down
+  # 1 = Default size, 0.7 = 70% of original size, etc.
+  sf <- 0.6  
+  
   # CORE stock (could update this to be live from the data?)
   .core_stock = c(BRI = 656, Southmead = 916, WGH = 274)
-
+  
   # --- SPOOF HOOK: Redirect WGH to Southmead data ---
   target_site <- .site
-
+  
   .fc <- .fc[site == target_site]         
   .hist <- .hist[site == target_site]     
   .thr <- .thr[site == target_site, thr]   
@@ -31,13 +35,13 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   }
   .fc[, occ := dist_normal(occ_mean, sqrt(occ_var))]
   .fc[,
-    c("10%", "25%", "75%", "90%") := lapply(
-      c(0.1, 0.25, 0.75, .9),
-      compute_quantiles,
-      .data = .SD[, occ]
-    )
+      c("10%", "25%", "75%", "90%") := lapply(
+        c(0.1, 0.25, 0.75, .9),
+        compute_quantiles,
+        .data = .SD[, occ]
+      )
   ]
-
+  
   bridge <- .hist |> 
     slice_max(index, n = 1) |> 
     mutate(
@@ -45,11 +49,11 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       `10%` = occ, `90%` = occ,
       `25%` = occ, `75%` = occ
     )
-
-  .fc_connected <- bind_rows(bridge, .fc)
+  
+  .fc_connected <- bind_rows(bridge, .fc) %>% mutate(occ_display = mean(if_else(is.na(.mean), occ, .mean)), .by = index)
   .fc_connected <- .fc_connected |> mutate(site = .site)
   .hist <- .hist |> mutate(site = .site)
-
+  
   .fc_connected |>
     ggplot() +
     # Threshold region
@@ -72,6 +76,40 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       fill = "lightblue",
       alpha = 0.1
     ) +
+    geom_hline(
+      yintercept = .thr,
+      colour = "firebrick",
+      linetype = "solid",
+      linewidth = 1 * sf     # SCALED
+    ) +
+    annotate(
+      "text",
+      x = min(.hist$index, na.rm = TRUE),
+      y = .thr,
+      label = str_c("Threshold (", round(.thr), ")"),
+      vjust = -1,
+      hjust = 0,
+      # color = "firebrick",
+      fontface = "italic",
+      size = 5 * sf          # SCALED
+    ) +
+    geom_hline(
+      yintercept = .core_stock[target_site],
+      colour = "lightblue3",
+      linetype = "solid",
+      linewidth = 1 * sf       # SCALED
+    ) +
+    annotate(
+      "text",
+      x = min(.hist$index, na.rm = TRUE),
+      y = .core_stock[target_site],
+      label = str_c("Core stock open (", round(.core_stock[target_site]), ")"),
+      vjust = 1.5,
+      hjust = 0,
+      # color = "firebrick",
+      fontface = "italic",
+      size = 5 * sf          # SCALED
+    ) +
     # Prediction Intervals
     geom_ribbon(
       data = .fc_connected,
@@ -84,67 +122,60 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
       alpha = 0.35
     ) +
     # Mean Forecast Line (Themed)
-    geom_line(
+    geom_pointpath(
       data = .fc_connected,
-      aes(x = index, y = mean(occ)),
-      color = pal$primary, # 🟦 Changed to site primary color
-      linewidth = 1,
-      linetype = "dashed"
+      aes(x = index, y = occ_display),
+      color = pal$primary,
+      size = 1.5 * sf,         # SCALED
+      shape = NA,
+      linewidth = 1 * sf     # SCALED
+    ) +
+    geom_point_interactive(
+      # Drop the first 'bridge' row so the cross doesn't render on top of the historical point
+      data = .fc_connected |> slice(-1), 
+      aes(
+        x = index, 
+        y = occ_display,
+        tooltip = str_c(target_site, ", ", format(index, "%b %d"),
+                        "\n",
+                        "Forecasted occupancy: ", round(occ_display))
+      ),
+      shape = 4,           # 4 is an 'X' cross, 3 is a '+' cross
+      color = pal$primary,
+      size = 2.5 * sf,       # SCALED: Controls the overall diameter of the cross
+      stroke = 2 * sf        # SCALED: Controls the thickness of the lines making up the cross
     ) +
     geom_pointpath(
       data = .hist,
       color = pal$mid,
       aes(x = index, y = occ),
-      linewidth = 1.2,
-      size = 3,
+      linewidth = 1.2 * sf,  # SCALED
+      size = 1.5 * sf,         # SCALED
+      shape = NA,
       color = "grey20"
     ) +
-    geom_hline(
-      yintercept = .thr,
-      colour = "firebrick",
-      linetype = "solid",
-      linewidth = 1
-    ) +
-    annotate(
-      "text",
-      x = min(.hist$index, na.rm = TRUE),
-      y = .thr,
-      label = str_c("Threshold (", round(.thr), ")"),
-      vjust = -1,
-      hjust = 0,
-      # color = "firebrick",
-      fontface = "italic",
-      size = 5
-    ) +
-      geom_hline(
-    yintercept = .core_stock[target_site],
-    colour = "lightblue3",
-    linetype = "solid",
-    linewidth = 1
-  ) +
-    annotate(
-      "text",
-      x = min(.hist$index, na.rm = TRUE),
-      y = .core_stock[target_site],
-      label = str_c("Core stock open (", round(.core_stock[target_site]), ")"),
-      vjust = 1.5,
-      hjust = 0,
-      # color = "firebrick",
-      fontface = "italic",
-      size = 5
-    ) +
+    geom_point_interactive(data = .hist,
+                           aes(x = index, y = occ, tooltip = str_c(
+                             target_site,
+                             ", ",
+                             format(index, "%b %d"),
+                             "\n",
+                             "Bed occupancy: ",
+                             scales::comma(round(occ), big.mark = ","))),
+                           color = pal$mid,
+                           size = 3 * sf) + # SCALED
     scale_x_date(
       labels = function(x) {
         base_lbls <- format(x, "%a %d")
         months <- format(x, "%b")
         month_changed <- c(TRUE, months[-1] != months[-length(months)])
         month_changed[is.na(month_changed)] <- FALSE
-
+        
         first_valid_idx <- which(!is.na(months))[1]
         if (!is.na(first_valid_idx)) {
           month_changed[first_valid_idx] <- TRUE
         }
-
+        
         out_lbls <- ifelse(
           month_changed,
           paste0(months, "\n", base_lbls),
@@ -163,18 +194,18 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
     ) +
     labs(y = "Acute bed occupancy") +
     facet_wrap(~site, strip.position = "top") +
-    theme_minimal() +
+    theme_minimal(base_size = 11 * sf) + # SCALED BASE SIZE
     theme(
       plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
-      axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
-      axis.text = element_text(size = 12, color = "grey30"),
+      axis.title.y = element_text(size = 20 * sf, color = "grey30", face = "bold"), # SCALED
+      axis.text = element_text(size = 12 * sf, color = "grey30"),                   # SCALED
       panel.grid.minor = element_blank(),
       legend.position = "none",
       # Styled Horizontal Row Banner
       strip.placement = "inside",
       strip.text = element_text(
-        size = 16,
+        size = 16 * sf,                                                             # SCALED
         face = "bold",
         color = pal$mid,
         hjust = 0.02

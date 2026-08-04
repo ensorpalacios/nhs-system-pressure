@@ -833,7 +833,6 @@ compute_risk <-
   function(.fc, .thr) {
     # Reproducible analysis for bootstrapping splits
     set.seed(321)
-
     # Threshold levels
     name_thr <- sub("thr-", "", names(.thr)[-1])
 
@@ -984,12 +983,12 @@ prepare_output_hist <-
       "output",
       paste0("historic_data", ".RDS")
     )
-
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
-    }
-
+    } else if (!file.exists(dirname(target_output_path))) {
+    file.remove(target_output_path)  
     saveRDS(output, target_output_path)
+    }
 
     # Return list
     target_output_path
