@@ -138,7 +138,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
         y = occ_display,
         tooltip = str_c(target_site, ", ", format(index, "%b %d"),
                         "\n",
-                        "Forecasted occupancy: ", round(occ_display))
+                        "Forecasted occupancy: ", scales::comma(round(occ_display)))
       ),
       shape = 4,           # 4 is an 'X' cross, 3 is a '+' cross
       color = pal$primary,
@@ -196,7 +196,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
     facet_wrap(~site, strip.position = "top") +
     theme_minimal(base_size = 11 * sf) + # SCALED BASE SIZE
     theme(
-      plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
+      plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
       axis.title.y = element_text(size = 20 * sf, color = "grey30", face = "bold"), # SCALED
       axis.text = element_text(size = 12 * sf, color = "grey30"),                   # SCALED
@@ -284,7 +284,10 @@ plot_riskd <- function(
     .type
 ) {
   
-  # browser()
+  # --- GLOBAL SCALING FACTOR ---
+  # Keep this consistent with your forecast plot
+  sf <- 0.7  
+  
   # Get data
   target_site <- .site
   
@@ -315,31 +318,40 @@ plot_riskd <- function(
   tmp_plot <-
     .risk_d |>
     ggplot(aes(x = index, y = risk_day)) +
-    geom_col(fill = pal$primary) + # 🟦 Changed columns to the site mid-tone color
+    geom_col_interactive(
+      fill = pal$primary,
+      aes(tooltip = str_c(target_site, ", ", format(index, "%b %d"),
+                          "\n",
+                          "Risk: ", scales::percent(risk_day)))
+    ) + 
     scale_y_continuous(limits = c(0, max_y), breaks = NULL) +
     scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
-    geom_hline(yintercept = 0, color = "grey50") + 
+    geom_hline(yintercept = 0, color = "grey50", linewidth = 1 * sf) +  # SCALED
     geom_text(
       aes(label = scales::percent(round(risk_day, 2))),
       vjust = -0.2,
-      size = 6,
+      size = 5 * sf,  # SCALED
       color = "grey20"
     ) +
     labs(y = "Risk of crossing occupancy threshold") +
     facet_wrap(~site, strip.position = "top") +
-    theme_minimal() +
+    theme_minimal(base_size = 11 * sf) +  # SCALED BASE SIZE
     theme(
       plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
-      axis.title.y = element_text(size = 20, color = "grey30", face = "bold"),
-      axis.text = element_text(size = 14),
+      axis.title.y = element_text(size = 20 * sf, color = "grey30", face = "bold"),  # SCALED
+      axis.text = element_text(size = 12 * sf, color = "grey30"),                     # SCALED
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       legend.position = "none",
-      # Matches the layout banner styling from the forecast plot exactly
       strip.placement = "inside",
-      strip.text = element_text(size = 16, face = "bold", color = pal$mid, hjust = 0.02),
-      strip.background = element_rect(fill = pal$light, color = NA) # 🟦 Themed background
+      strip.text = element_text(
+        size = 16 * sf,  # SCALED
+        face = "bold", 
+        color = pal$mid, 
+        hjust = 0.02
+      ),
+      strip.background = element_rect(fill = pal$light, color = NA)
     )
   
   if (.type == "daily risk") {
@@ -347,28 +359,40 @@ plot_riskd <- function(
   } else {
     tmp_plot +
       geom_segment(
-        aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close), color = pal$primary
-      ) + 
+        aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close), 
+        color = pal$primary, 
+        linewidth = 1 * sf  # SCALED
+      ) +  
       geom_segment(
-        aes(x = x_far_s, xend = x_far_e, y = y_far, yend = y_far), color = pal$primary
-      ) + 
+        aes(x = x_far_s, xend = x_far_e, y = y_far, yend = y_far), 
+        color = pal$primary, 
+        linewidth = 1 * sf  # SCALED
+      ) +  
       geom_segment(
-        aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week), color = pal$primary
+        aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week), 
+        color = pal$primary, 
+        linewidth = 1 * sf  # SCALED
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_ws_close[, risk_ws] * 100),
-        x = x_close_l, y = y_close, vjust = -0.2, size = 6, fontface = "bold"
+        x = x_close_l, y = y_close, vjust = -0.2, 
+        size = 5 * sf,  # SCALED
+        fontface = "bold"
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_ws_far[, risk_ws] * 100),
-        x = x_far_l, y = y_far, vjust = -0.2, size = 6, fontface = "bold"
+        x = x_far_l, y = y_far, vjust = -0.2, 
+        size = 5 * sf,  # SCALED
+        fontface = "bold"
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_w[, risk_w] * 100),
-        x = x_week_l, y = y_week, vjust = -0.2, size = 6, fontface = "bold"
+        x = x_week_l, y = y_week, vjust = -0.2, 
+        size = 5 * sf,  # SCALED
+        fontface = "bold"
       )
   }
 }

@@ -59,15 +59,13 @@ ui <- page_navbar(
       height: 100%% !important;
     }
     
-    /* Turn card bodies into true flex columns and add inner padding */
+    /* Turn card bodies into true flex columns */
     .custom-card-body {
       display: flex !important;
       flex-direction: column !important;
       gap: %s !important;
       flex: 1 1 auto !important; 
       overflow: hidden !important;
-      /* PADDING: 12px top/bottom, 8px left/right (adjust as needed) */
-      padding: 24px 8px !important; 
     }
     
     /* Allow standard plots AND ggiraph widgets to perfectly absorb space */
@@ -153,7 +151,7 @@ ui <- page_navbar(
       # --- RIGHT COLUMN: Risk Predictions (Stacked) ---
       card(card_body(
         class = "custom-card-body",
-        plotOutput("risk") #,
+        girafeOutput("risk") #,
         # div(
         #   class = "custom-caption",
         #   tags$strong("Figure 2: "),
@@ -225,47 +223,35 @@ server <- function(input, output) {
     
     girafe(
       ggobj = p,
-      # width_svg = 12.0,
-      # height_svg = 10,
+      width_svg = 10,
+      height_svg = 9,
       options = list(
         opts_tooltip(css = tooltip_css),
         opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
-        opts_toolbar(
-          hidden = c(
-            'lasso_select',
-            'lasso_deselect',
-            'zoom_onoff',
-            'zoom_rect',
-            'zoom_reset',
-            'fullscreen'
-          )
-        ),
-        opts_sizing(rescale = FALSE)
+        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
+        opts_sizing(rescale = TRUE, width = 1) 
       )
     )
   })
   
   # Plot risk - daily + aggregate
-  output$risk <- renderPlot({
-    risk_bri <- plot_riskd(risk_d,
-                           risk_ws_close,
-                           risk_ws_far,
-                           risk_w,
-                           "BRI",
-                           "daily + aggregate")
-    risk_nbt <- plot_riskd(risk_d,
-                           risk_ws_close,
-                           risk_ws_far,
-                           risk_w,
-                           "Southmead",
-                           "daily + aggregate")
-    risk_wgh <- plot_riskd(risk_d,
-                           risk_ws_close,
-                           risk_ws_far,
-                           risk_w,
-                           "WGH",
-                           "daily + aggregate")
-    (risk_bri / risk_nbt / risk_wgh) + plot_layout(axes = "collect_y")
+  output$risk <- renderGirafe({
+    risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
+    risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
+    risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
+    p <- (risk_bri / risk_nbt / risk_wgh) + plot_layout(axes = "collect_y")
+    
+    girafe(
+      ggobj = p,
+      width_svg = 7,
+      height_svg = 9,
+      options = list(
+        opts_tooltip(css = tooltip_css),
+        opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
+        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
+        opts_sizing(rescale = TRUE, width = 1) 
+      )
+    )
   })
   
   # Plot data time series
