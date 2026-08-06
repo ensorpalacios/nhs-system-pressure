@@ -16,7 +16,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   # --- GLOBAL SCALING FACTOR ---
   # Change this ONE number to scale the entire plot up or down
   # 1 = Default size, 0.7 = 70% of original size, etc.
-  sf <- 0.6  
+  sf <- 0.9  
   
   # CORE stock (could update this to be live from the data?)
   .core_stock = c(BRI = 656, Southmead = 916, WGH = 274)
@@ -286,7 +286,7 @@ plot_riskd <- function(
   
   # --- GLOBAL SCALING FACTOR ---
   # Keep this consistent with your forecast plot
-  sf <- 0.7  
+  sf <- 0.9  
   
   # Get data
   target_site <- .site
