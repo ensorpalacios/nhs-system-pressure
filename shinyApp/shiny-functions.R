@@ -54,6 +54,17 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   .fc_connected <- .fc_connected |> mutate(site = .site)
   .hist <- .hist |> mutate(site = .site)
   
+  # --- CALCULATE CUSTOM X-AXIS BREAKS ---
+  # Anchor the 3-day sequence on the final day of historical data
+  anchor_date <- max(.hist$index, na.rm = TRUE)
+  min_date <- min(.hist$index, na.rm = TRUE)
+  max_date <- max(.fc_connected$index, na.rm = TRUE)
+  
+  custom_breaks <- sort(unique(c(
+    seq(anchor_date, min_date, by = "-3 days"),
+    seq(anchor_date, max_date, by = "3 days")
+  )))
+  
   .fc_connected |>
     ggplot() +
     # Threshold region
@@ -184,7 +195,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
         out_lbls[is.na(x)] <- ""
         return(out_lbls)
       },
-      breaks = "3 days",
+      breaks = custom_breaks,
       expand = expansion(mult = c(0.01, 0.01))
     ) +
     scale_y_continuous(limits = c(0.9*.core_stock[target_site], NA), expand = expansion(mult = c(0.25, 0.25))) +
@@ -285,13 +296,16 @@ plot_riskd <- function(
 ) {
   
   # --- GLOBAL SCALING FACTOR ---
-  # Keep this consistent with your forecast plot
   sf <- 0.9  
+  
+  # --- BAR EXTENSION ---
+  # 0 = center of the bar. 0.45 = touches the very edge of the bar.
+  # 0.35 extends nicely past the center without touching the sides.
+  bar_ext <- 0.35 
   
   # Get data
   target_site <- .site
   
-  # Get data using target_site
   .risk_d <- .risk_d[site == target_site, ]
   .risk_ws_close <- .risk_ws_close[site == target_site]
   .risk_ws_far <- .risk_ws_far[site == target_site]
@@ -301,14 +315,17 @@ plot_riskd <- function(
   
   .risk_d <- .risk_d |> mutate(site = .site)
   
-  # Multi-day risk lines
-  x_close_s <- .risk_d[1, index]
-  x_close_e <- .risk_d[3, index]
-  x_far_s <- .risk_d[4, index]
-  x_far_e <- .risk_d[7, index]
+  # Multi-day risk lines (with fractional offset applied to stretch the segments)
+  x_close_s <- .risk_d[1, index] - bar_ext
+  x_close_e <- .risk_d[3, index] + bar_ext
+  x_far_s <- .risk_d[4, index] - bar_ext
+  x_far_e <- .risk_d[7, index] + bar_ext
+  
+  # Label positions stay anchored to the centers
   x_close_l <- .risk_d[2, index]
   x_far_l <- .risk_d[6, index] - 0.5
   x_week_l <- .risk_d[4, index]
+  
   y_close <- .risk_d[1:3, max(risk_day)] + 0.3
   y_far <- .risk_d[4:7, max(risk_day)] + 0.3
   y_week <- .risk_d[, max(risk_day)] + 0.5
@@ -326,27 +343,27 @@ plot_riskd <- function(
     ) + 
     scale_y_continuous(limits = c(0, max_y), breaks = NULL) +
     scale_x_date(labels = \(x) format(x, "%a\n%d-%m"), breaks = "day") +
-    geom_hline(yintercept = 0, color = "grey50", linewidth = 1 * sf) +  # SCALED
+    geom_hline(yintercept = 0, color = "grey50", linewidth = 1 * sf) +  
     geom_text(
       aes(label = scales::percent(round(risk_day, 2))),
       vjust = -0.2,
-      size = 5 * sf,  # SCALED
+      size = 5 * sf, 
       color = "grey20"
     ) +
     labs(y = "Risk of crossing occupancy threshold") +
     facet_wrap(~site, strip.position = "top") +
-    theme_minimal(base_size = 11 * sf) +  # SCALED BASE SIZE
+    theme_minimal(base_size = 11 * sf) + 
     theme(
       plot.margin = margin(t = 5, r = 10, b = 5, l = 10, unit = "pt"),
       axis.title.x = element_blank(),
-      axis.title.y = element_text(size = 20 * sf, color = "grey30", face = "bold"),  # SCALED
-      axis.text = element_text(size = 12 * sf, color = "grey30"),                     # SCALED
+      axis.title.y = element_text(size = 20 * sf, color = "grey30", face = "bold"), 
+      axis.text = element_text(size = 12 * sf, color = "grey30"),                     
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       legend.position = "none",
       strip.placement = "inside",
       strip.text = element_text(
-        size = 16 * sf,  # SCALED
+        size = 16 * sf, 
         face = "bold", 
         color = pal$mid, 
         hjust = 0.02
@@ -361,37 +378,38 @@ plot_riskd <- function(
       geom_segment(
         aes(x = x_close_s, xend = x_close_e, y = y_close, yend = y_close), 
         color = pal$primary, 
-        linewidth = 1 * sf  # SCALED
+        linewidth = 1 * sf 
       ) +  
       geom_segment(
         aes(x = x_far_s, xend = x_far_e, y = y_far, yend = y_far), 
         color = pal$primary, 
-        linewidth = 1 * sf  # SCALED
+        linewidth = 1 * sf 
       ) +  
+      # Week line naturally adopts the start of 'close' and end of 'far' offsets
       geom_segment(
         aes(x = x_close_s, xend = x_far_e, y = y_week, yend = y_week), 
         color = pal$primary, 
-        linewidth = 1 * sf  # SCALED
+        linewidth = 1 * sf 
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_ws_close[, risk_ws] * 100),
         x = x_close_l, y = y_close, vjust = -0.2, 
-        size = 5 * sf,  # SCALED
+        size = 5 * sf, 
         fontface = "bold"
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_ws_far[, risk_ws] * 100),
         x = x_far_l, y = y_far, vjust = -0.2, 
-        size = 5 * sf,  # SCALED
+        size = 5 * sf, 
         fontface = "bold"
       ) +
       annotate(
         geom = "text",
         label = sprintf("%.0f%%", .risk_w[, risk_w] * 100),
         x = x_week_l, y = y_week, vjust = -0.2, 
-        size = 5 * sf,  # SCALED
+        size = 5 * sf, 
         fontface = "bold"
       )
   }
