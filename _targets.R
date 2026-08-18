@@ -78,8 +78,13 @@ ls_model_comb <-
 # Target list
 list(
   tar_target(
+    new_date,
+    Sys.Date(),
+    cue = tar_cue(mode = "always")
+  ),
+  tar_target(
     data_hosp,
-    load_hosp(),
+    load_hosp(new_date),
     format = "file"
   ),
   tar_target(

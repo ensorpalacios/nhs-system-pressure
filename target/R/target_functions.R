@@ -1,14 +1,15 @@
 #' Target functions
 #'
 #' Functions used within target workflow, evoked within list of tar_target()
+#' @param .new_date Dummy variable needed to make tar aware of new date
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-12-10
 #' -----------------------------------------------------------------------------
 
 #' Load hospital data
 load_hosp <-
-  function() {
-local <- FALSE 
+  function(.new_date) {
+local <- FALSE
 # local <- TRUE
 if (local) {
   con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
@@ -352,7 +353,7 @@ compute_threshold <-
         site != "aggregate",
         setNames(
           lapply(threshold_prob, 
-            \(x) round(quantile(occ[.N-182:.N], probs = x))
+            \(x) round(quantile(occ[(.N-182):.N], probs = x))
           ),
           paste0("thr-", threshold_prob)
         ),
