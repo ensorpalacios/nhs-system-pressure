@@ -5,6 +5,53 @@
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2026-03-09
 
+#' Default occupancy threshold
+#' Suggests a starting per-site threshold value to pre-fill the user-editable
+#' threshold inputs: the .prob percentile of occupancy over the last ~6
+#' months (183 days) of historic data. Ported from the pipeline's old
+#' compute_threshold() (target/R/target_functions.R) so it runs client-side
+#' against the historic_data already loaded in the app, instead of a value
+#' transported from target -- the user can freely override the suggestion.
+#' @param .hist Historical data (data.table with site, index, occ)
+#' @param .prob Percentile used for the suggested default
+compute_threshold_default <- function(.hist, .prob = 0.9) {
+  as.data.table(.hist)[
+    order(index),
+    .(thr = round(quantile(tail(occ, 183), probs = .prob))),
+    by = site
+  ]
+}
+
+#' Compute risk of threshold crossing
+#' Reconstructs the forecast distribution from occ_mean/occ_var -- the
+#' summary stats persisted to the database, using the same Gaussian
+#' approximation plot_fc() already relies on for its prediction ribbons --
+#' and computes the probability of crossing a user-supplied, per-site
+#' occupancy threshold. Ported from the pipeline's old compute_risk()
+#' (target/R/target_functions.R), now run client-side against a live
+#' threshold instead of fixed historical percentiles computed in the
+#' pipeline.
+#' @param .fc Forecast (data.table with site, .model, index, h, occ_mean, occ_var)
+#' @param .thr Per-site threshold (data.table with site, thr)
+compute_risk <- function(.fc, .thr) {
+  .fc <- as.data.table(.fc)
+  .fc <- .fc[.thr, on = "site"]
+  .fc[, occ := dist_normal(occ_mean, sqrt(occ_var))]
+
+  # Risk by day
+  risk_d <- copy(.fc)[, risk_day := 1 - cdf(occ, thr), by = .(site, .model, h)]
+  risk_d[, week_split := ifelse(h <= 3, "close", "far")]
+
+  # Risk by week split (1-3h, 4-7h)
+  risk_ws <- risk_d[, .(risk_ws = 1 - prod(1 - risk_day)), by = .(site, .model, week_split)]
+
+  # Risk by week
+  risk_w <- risk_d[, .(risk_w = 1 - prod(1 - risk_day)), by = .(site, .model)]
+
+  list("risk_d" = risk_d, "risk_ws" = risk_ws, "risk_w" = risk_w)
+}
+
+
 #' Forecast plot
 #' Function for plotting bed occupancy historical data (2 weeks) and forecasts (1 week)
 #' @param .fc Forecasts

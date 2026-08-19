@@ -101,10 +101,6 @@ list(
     prepare_data(data_hosp)
   ),
   tar_target(
-    thr_file,
-    compute_threshold(ts_file)
-  ),
-  tar_target(
     fc_file,
     forecast_occ(ts_file)
   ),
@@ -113,12 +109,8 @@ list(
     fc_combination(fc_file, weights, ls_model_comb)
   ),
   tar_target(
-    risk_file,
-    compute_risk(fcc_file, thr_file)
-  ),
-  tar_target(
     output_file_pred,
-    prepare_output_pred(risk_file),
+    prepare_output_pred(fcc_file),
     format = "file"
   ),
   tar_target(
