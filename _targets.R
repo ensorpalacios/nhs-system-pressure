@@ -74,12 +74,16 @@ ls_model_comb <-
         "var_ad", "var_ad2", "var_h", "xgb")
   )
 
-
 # Target list
 list(
   tar_target(
+    new_date,
+    Sys.Date(),
+    cue = tar_cue(mode = "always")
+  ),
+  tar_target(
     data_hosp,
-    load_hosp(),
+    load_hosp(new_date),
     format = "file"
   ),
   tar_target(

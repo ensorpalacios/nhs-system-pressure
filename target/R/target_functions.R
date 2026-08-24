@@ -7,7 +7,7 @@
 
 #' Load hospital data
 load_hosp <-
-  function() {
+  function(.new_date) { # .new_date not used, just needed to create dependency
 local <- FALSE 
 # local <- TRUE
 if (local) {
