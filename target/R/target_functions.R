@@ -1,14 +1,15 @@
 #' Target functions
 #'
 #' Functions used within target workflow, evoked within list of tar_target()
+#' @param .new_date Dummy variable needed to make tar aware of new date
 #' @author Ensor Palacios, email{erp65@bath.ac.uk}
 #' @date 2025-12-10
 #' -----------------------------------------------------------------------------
 
 #' Load hospital data
 load_hosp <-
-  function(.new_date) { # .new_date not used, just needed to create dependency
-local <- FALSE 
+  function(.new_date) {
+local <- FALSE
 # local <- TRUE
 if (local) {
   con <- dbConnect(RSQLite::SQLite(), here("target/data/local_db/local_dev.sqlite"))
@@ -333,35 +334,8 @@ prepare_data <-
     list("bs" = ts_data_bs, "wgh" = ts_data_wgh)
   }
 
-#' Compute threshold
-#' @param ts_data Entire time series data
-compute_threshold <- 
-  function(ts_data) {
-    # Join hospital data and recode sites
-    ts_data <- bind_rows(
-      ts_data$bs |> filter(!is_aggregated(site)), 
-      ts_data$wgh |> filter(site == "WGH")
-    ) |> 
-      mutate(site = as.character(site))
-    
-    # Compute alarm threshold (last 6 months)
-    alarm_thr <- # compute threshold on (all) training data
-      ts_data %>%
-      as.data.table() %>%
-      .[
-        site != "aggregate",
-        setNames(
-          lapply(threshold_prob, 
-            \(x) round(quantile(occ[.N-182:.N], probs = x))
-          ),
-          paste0("thr-", threshold_prob)
-        ),
-        by = site
-      ]
-    
-    # Return value
-    alarm_thr
-  }
+
+
 
 
 #' Forecast bed occupancy
@@ -826,139 +800,29 @@ fc_combination <-
   }
 
 
-#' Compute risk
-#' @param fc_comb Forecast ensemble
-#' @param alarm_thr Threshold for high/low system pressure
-compute_risk <-
-  function(.fc, .thr) {
-    # Reproducible analysis for bootstrapping splits
-    set.seed(321)
-    # Threshold levels
-    name_thr <- sub("thr-", "", names(.thr)[-1])
-
-    # Add alarm thresholds to fc
-    fc_threshold <-
-      .thr[
-        .fc %>% select(site, .model, index, occ, .mean, h),
-        on = "site"
-      ]
-
-    # Compute threshold-crossing probabilities
-    # Risk by days
-    risk_d <- # compute risk
-      copy(fc_threshold)[,
-        paste0("risk_day", name_thr) := lapply(.SD, \(x) {
-          1 - cdf(occ, x)
-        }),
-        by = .(site, .model, h),
-        .SDcols = names(.thr)[-1]
-      ]
-
-    # Risk by week split (1-3h, 4-7h)
-    risk_d[
-      # split week in two
-      ,
-      week_split := ifelse(h <= 3, "close", "far")
-    ]
-    risk_ws <-
-      risk_d[
-        # compute risk
-        ,
-        setNames(
-          lapply(.SD, \(x) 1 - prod(1 - x)),
-          paste0("risk_ws", name_thr)
-        ),
-        by = .(site, .model, week_split),
-        .SDcols = patterns("^risk_day") # ^ start string
-      ]
-
-    # Risk by week
-    risk_w <-
-      risk_d[,
-        # compute risk
-        setNames(
-          lapply(.SD, \(x) 1 - prod(1 - x)),
-          paste0("risk_w", name_thr)
-        ),
-        by = .(site, .model),
-        .SDcols = patterns("^risk")
-      ]
-
-    list_risk <-
-      list(
-        "risk_d" = risk_d,
-        "risk_ws" = risk_ws,
-        "risk_w" = risk_w
-      )
-
-    # Save risk predictions, threshold and fc by dates
-    adate <- lubridate::today() # analysis date
-    list_data <-
-      list(
-        "fc" = .fc,
-        "threshold" = .thr,
-        "risk" = list_risk,
-        "date" = adate
-      )
-
-    # Return list
-
-    list_data
-  }
-
-
 #' Prepare target output (predictions)
-#' @param  .tables RDS file containing out tables to merge
+#' Tag and save the forecast ensemble. Threshold and risk-of-crossing are
+#' intentionally *not* computed here -- the threshold is a value the Shiny
+#' user types in, so it is computed client-side (see shinyApp/shiny-
+#' functions.R: compute_threshold_default() and compute_risk()) from the
+#' occ_mean/occ_var summary stats written to the database. The target
+#' output only needs to carry the forecast itself.
+#' @param .fc Forecast ensemble (fcc_file)
 prepare_output_pred <-
-  function(.tables) {
-    list_data <- .tables
-    list_data$fc <- as.data.table(list_data$fc)
-    list_data$risk$risk_d <- as.data.table(list_data$risk$risk_d)
-    list_data$risk$risk_ws <- as.data.table(list_data$risk$risk_ws)
-    list_data$risk$risk_w <- as.data.table(list_data$risk$risk_w)
-
-    list_data$fc[, type := "forecast"]
-    list_data$risk$risk_d[, type := "risk_d"]
-    list_data$risk$risk_ws[, type := "risk_ws"]
-    list_data$risk$risk_w[, type := "risk_w"]
-  
-    list_data$fc <- 
-      list_data$fc[
-      list_data$threshold,
-      on = "site"
-    ]
-    list_data$risk$risk_ws <- 
-      list_data$risk$risk_ws[
-      list_data$threshold,
-      on = "site"
-    ]
-    list_data$risk$risk_w <- 
-      list_data$risk$risk_w[
-      list_data$threshold,
-      on = "site"
-    ]
-
-    output <-
-      rbindlist(
-        list(
-          list_data$fc,
-          list_data$risk$risk_d,
-          list_data$risk$risk_ws,
-          list_data$risk$risk_w
-        ),
-        fill = TRUE
-      )
-    output$date_fc <- list_data$date
+  function(.fc) {
+    .fc <- as.data.table(.fc)
+    .fc[, type := "forecast"]
+    .fc[, date_fc := lubridate::today()]
 
     target_output_path <- file.path(save_path, "output", paste0("model_out_flat", ".RDS"))
-    
+
     if (!file.exists(dirname(target_output_path))) {
       dir.create(dirname(target_output_path), recursive = TRUE)
     }
-    
-    saveRDS(output, target_output_path)
-    
-    # Return list
+
+    saveRDS(.fc, target_output_path)
+
+    # Return path
     target_output_path
   }
 

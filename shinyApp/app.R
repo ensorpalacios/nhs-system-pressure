@@ -75,7 +75,7 @@ ui <- page_navbar(
         tags$p(
           style = "margin: 0; font-size: 14px; color: #334155; line-height: 1.5;",
           tags$strong("Acute bed occupancy:"),
-          " features a 2-week history (solid line with points), a 1-week ahead forecast (mean, 50% and 80% prediction intervals shown via dashed line and ribbons), and a high-occupancy threshold (historic 90th percentile, solid red line) and the current core bed-stock open (solid blue line)."
+          " features a 2-week history (solid line with points), a 1-week ahead forecast (mean, 50% and 80% prediction intervals shown via dashed line and ribbons), and a high-occupancy threshold (editable below, defaults to the historic 90th percentile, solid red line) and the current core bed-stock open (solid blue line)."
         ),
         tags$p(
           style = "margin: 0; font-size: 14px; color: #334155; line-height: 1.5; margin-top: 5px;",
@@ -84,8 +84,24 @@ ui <- page_navbar(
         )
       )
     ),
-    
-    # Main grid wrapping the charts
+
+    # High-occupancy threshold: editable per site, pre-filled from history
+    card(
+      fill = FALSE,
+      style = "background-color: #F4F6F9; box-shadow: none; flex: 0 0 auto !important;",
+      card_body(
+        fill = FALSE,
+        style = "padding: 0.5rem 1rem;",
+        layout_columns(
+          col_widths = c(4, 4, 4),
+          numericInput("thr_bri", "BRI threshold", value = thr_default[site == "BRI", thr]),
+          numericInput("thr_nbt", "Southmead threshold", value = thr_default[site == "Southmead", thr]),
+          numericInput("thr_wgh", "WGH threshold", value = thr_default[site == "WGH", thr])
+        )
+      )
+    ),
+
+    # Master 2-Column Layout with custom class hooked into our styling rules
     layout_columns(
       col_widths = c(7, 5),
       
@@ -128,56 +144,46 @@ ui <- page_navbar(
 
 server <- function(input, output) {
   model <- "equal"
-  
-  # Get data (using your existing variables)
-  risk_d <- as.data.table(model_out)[type == "risk_d" & .model == model, .(site, index, risk_day)]
-  risk_ws_close <- as.data.table(model_out)[type == "risk_ws" & .model == model & week_split == "close", .(site, risk_ws)]
-  risk_ws_far <- as.data.table(model_out)[type == "risk_ws" & .model == model & week_split == "far", .(site, risk_ws)]
-  risk_w <- as.data.table(model_out)[type == "risk_w" & .model == model, .(site, risk_w)]
-  fc <- as.data.table(model_out)[type == "forecast" & .model == model]
-  thr <- as.data.table(model_out)[type == "risk_w" & .model == model, .(site, thr)]
+
+  # Forecast for the selected ensemble model. Independent of the threshold,
+  # so it's plain data, not reactive.
+  fc <- as.data.table(model_out)[.model == model]
   hist <- as.data.table(historic_data)
-  
-  # Plot bed occupancy fc
-  output$fc <- renderGirafe({
-    fc_bri <- plot_fc(fc, hist, thr, "BRI")
-    fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
-    fc_wgh <- plot_fc(fc, hist, thr, "WGH")
-    p <- (fc_bri / fc_nbt / fc_wgh) + plot_layout(axes = "collect_y")
-    
-    girafe(
-      ggobj = p,
-      # You can tweak these SVG dimensions to change the internal rendering aspect ratio. 
-      # The CSS object-fit: contain will handle fitting it to the screen cleanly.
-      width_svg = 12,
-      height_svg = 9, 
-      options = list(
-        opts_tooltip(css = tooltip_css),
-        opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
-        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
-        opts_sizing(rescale = TRUE, width = 1) 
-      )
+
+  # Per-site threshold: starts pre-filled from compute_threshold_default()
+  # (00_prepare_data.R) and is reactive to the user-editable inputs.
+  thr <- reactive({
+    data.table(
+      site = c("BRI", "Southmead", "WGH"),
+      thr = c(input$thr_bri, input$thr_nbt, input$thr_wgh)
     )
+  })
+
+  # Risk of crossing the live threshold, computed client-side from the
+  # forecast's occ_mean/occ_var (see shiny-functions.R: compute_risk()).
+  risk <- reactive(compute_risk(fc, thr()))
+
+  # Plot bed occupancy fc
+  output$fc <- renderPlot({
+    fc_bri <- plot_fc(fc, hist, thr(), "BRI")
+    fc_nbt <- plot_fc(fc, hist, thr(), "Southmead")
+    fc_wgh <- plot_fc(fc, hist, thr(), "WGH")
+    (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
+     # (fc_nbt/fc_bri) + plot_layout(axes = "collect_y")
   })
   
   # Plot risk - daily + aggregate
-  output$risk <- renderGirafe({
+  output$risk <- renderPlot({
+    risk_d <- risk()$risk_d[, .(site, index, risk_day)]
+    risk_ws_close <- risk()$risk_ws[week_split == "close", .(site, risk_ws)]
+    risk_ws_far <- risk()$risk_ws[week_split == "far", .(site, risk_ws)]
+    risk_w <- risk()$risk_w[, .(site, risk_w)]
+
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
     risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
-    p <- (risk_bri / risk_nbt / risk_wgh) + plot_layout(axes = "collect_y")
-    
-    girafe(
-      ggobj = p,
-      width_svg = 8,
-      height_svg = 9,
-      options = list(
-        opts_tooltip(css = tooltip_css),
-        opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
-        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
-        opts_sizing(rescale = TRUE, width = 1) 
-      )
-    )
+    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y")
+    # (risk_nbt/risk_bri) + plot_layout(axes = "collect_y")
   })
 }
 

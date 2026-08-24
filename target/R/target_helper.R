@@ -105,7 +105,7 @@ stabilise <-
         mutate(
           christmus = 
             case_when(index %in% christmus_period ~ 1, .default = 0) %>%
-            ksmooth(index, ., kernel = "normal", bandwidth = 5) %>% .$y
+            ksmooth(index, ., kernel = "normal", bandwidth = 5, x.points = index) %>% .$y
         )
       
       if (.xdays == "ad-diff") { # kernel 1st derivative for ad difference
