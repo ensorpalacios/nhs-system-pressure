@@ -58,15 +58,12 @@ compute_risk <- function(.fc, .thr) {
 #' @param .thr Threshold for high system pressure
 #' @param .site Site to display
 #' @param .hist Historical data
-plot_fc <- function(.fc, .hist, .thr, .site) {
+plot_fc <- function(.fc, .hist, .core_stock, .thr, .site) {
   
   # --- GLOBAL SCALING FACTOR ---
   # Change this ONE number to scale the entire plot up or down
   # 1 = Default size, 0.7 = 70% of original size, etc.
   sf <- 0.9  
-  
-  # CORE stock (could update this to be live from the data?)
-  .core_stock = c(BRI = 656, Southmead = 916, WGH = 274)
   
   # --- SPOOF HOOK: Redirect WGH to Southmead data ---
   target_site <- .site

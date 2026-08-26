@@ -166,9 +166,9 @@ server <- function(input, output) {
   # Plot bed occupancy fc
   # Plot bed occupancy fc
   output$fc <- renderGirafe({
-    fc_bri <- plot_fc(fc, hist, thr, "BRI")
-    fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
-    fc_wgh <- plot_fc(fc, hist, thr, "WGH")
+    fc_bri <- plot_fc(fc, hist, core_stock, thr, "BRI")
+    fc_nbt <- plot_fc(fc, hist, core_stock, thr, "Southmead")
+    fc_wgh <- plot_fc(fc, hist, core_stock, thr, "WGH")
     p <- (fc_bri / fc_nbt / fc_wgh) + plot_layout(axes = "collect_y")
     
     girafe(

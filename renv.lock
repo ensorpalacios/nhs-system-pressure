@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.5.2",
+    "Version": "4.5.1",
     "Repositories": [
       {
         "Name": "CRAN",
@@ -80,7 +80,7 @@
     },
     "Hmisc": {
       "Package": "Hmisc",
-      "Version": "5.2-5",
+      "Version": "5.2-6",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -104,7 +104,7 @@
         "rpart",
         "viridisLite"
       ],
-      "Hash": "883b941aee155e7d7d6cdf35b17080d1"
+      "Hash": "30eba6d0597b6af63edeb31056fdbab1"
     },
     "KernSmooth": {
       "Package": "KernSmooth",
@@ -207,14 +207,15 @@
     },
     "Rcpp": {
       "Package": "Rcpp",
-      "Version": "1.0.13-1",
+      "Version": "1.1.2",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
+        "R",
         "methods",
         "utils"
       ],
-      "Hash": "6b868847b365672d6c1677b1608da9ed"
+      "Hash": "f481f89daa906a34eab8ef8658c8a89c"
     },
     "RcppArmadillo": {
       "Package": "RcppArmadillo",
@@ -892,6 +893,26 @@
       ],
       "Hash": "276b81269ccbe43e7ad23fe8d4b4cadd"
     },
+    "fontBitstreamVera": {
+      "Package": "fontBitstreamVera",
+      "Version": "0.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "f6068021eff4aba735a9b2353516636c"
+    },
+    "fontLiberation": {
+      "Package": "fontLiberation",
+      "Version": "0.1.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "f918c5e723f86f409912104d5b7a71d6"
+    },
     "fontawesome": {
       "Package": "fontawesome",
       "Version": "0.5.3",
@@ -903,6 +924,18 @@
         "rlang"
       ],
       "Hash": "bd1297f9b5b1fc1372d19e2c4cd82215"
+    },
+    "fontquiver": {
+      "Package": "fontquiver",
+      "Version": "0.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "fontBitstreamVera",
+        "fontLiberation"
+      ],
+      "Hash": "fc0f4226379e451057d55419fd31761e"
     },
     "forcats": {
       "Package": "forcats",
@@ -1027,6 +1060,21 @@
       ],
       "Hash": "42eb18487138fa2683ff92149e4bd01a"
     },
+    "gdtools": {
+      "Package": "gdtools",
+      "Version": "0.5.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "Rcpp",
+        "fontquiver",
+        "htmltools",
+        "systemfonts",
+        "tools"
+      ],
+      "Hash": "bca589967c4b7360ced3c08c69a96787"
+    },
     "generics": {
       "Package": "generics",
       "Version": "0.1.3",
@@ -1061,6 +1109,49 @@
         "withr"
       ],
       "Hash": "997ab23a7565f43091b12825e9892704"
+    },
+    "ggh4x": {
+      "Package": "ggh4x",
+      "Version": "0.3.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "S7",
+        "cli",
+        "ggplot2",
+        "grid",
+        "gtable",
+        "lifecycle",
+        "rlang",
+        "scales",
+        "stats",
+        "vctrs"
+      ],
+      "Hash": "024c1c1d5894bf313a1625b167984f2e"
+    },
+    "ggiraph": {
+      "Package": "ggiraph",
+      "Version": "0.9.6",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "MASS",
+        "Rcpp",
+        "S7",
+        "cli",
+        "dplyr",
+        "gdtools",
+        "ggplot2",
+        "grid",
+        "htmltools",
+        "htmlwidgets",
+        "purrr",
+        "rlang",
+        "stats",
+        "systemfonts",
+        "vctrs"
+      ],
+      "Hash": "93c68b119a15767021200cffc7b98b7d"
     },
     "ggplot2": {
       "Package": "ggplot2",
@@ -1683,7 +1774,7 @@
     },
     "mgcv": {
       "Package": "mgcv",
-      "Version": "1.9-1",
+      "Version": "1.9-4",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -1696,7 +1787,7 @@
         "stats",
         "utils"
       ],
-      "Hash": "110ee9d83b496279960e162ac97764ce"
+      "Hash": "347e906be9f134c45ee8ed36430cad5a"
     },
     "mime": {
       "Package": "mime",
@@ -1720,6 +1811,17 @@
         "stats"
       ],
       "Hash": "83c63607a4dce7666698b541841ce090"
+    },
+    "monochromeR": {
+      "Package": "monochromeR",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "ggplot2",
+        "magrittr"
+      ],
+      "Hash": "198da01771c08adf72e5e0f904c110d0"
     },
     "ncdf4": {
       "Package": "ncdf4",
@@ -2569,7 +2671,7 @@
     },
     "survival": {
       "Package": "survival",
-      "Version": "3.8-6",
+      "Version": "3.8-9",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -2581,7 +2683,7 @@
         "stats",
         "utils"
       ],
-      "Hash": "663dbb3b41554b751ae90fe58f72decf"
+      "Hash": "163cf9c62560d8431d2715d9b94f2a45"
     },
     "svglite": {
       "Package": "svglite",

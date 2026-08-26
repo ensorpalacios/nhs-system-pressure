@@ -51,3 +51,4 @@ dbWriteTable(conn, "nhs_bed_pressure", value = model_out, overwrite = TRUE, row.
 dbWriteTable(conn, "nhs_bed_pressure_historic", value = historic_data, overwrite = TRUE, row.names = FALSE)
 
 DBI::dbDisconnect(conn)
+
