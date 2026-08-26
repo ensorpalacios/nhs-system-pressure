@@ -73,7 +73,7 @@ plot_fc <- function(.fc, .hist, .thr, .site) {
   
   .fc <- .fc[site == target_site]         
   .hist <- .hist[site == target_site]     
-  .thr <- .thr[site == target_site, thr]   
+  .thr <- .thr()[site == target_site, thr]   
   
   pal <- get_site_palette(.site)
   .hist = .hist[index >= max(index) - lubridate::dweeks(2), ]

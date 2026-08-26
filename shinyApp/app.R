@@ -164,25 +164,52 @@ server <- function(input, output) {
   risk <- reactive(compute_risk(fc, thr()))
 
   # Plot bed occupancy fc
-  output$fc <- renderPlot({
-    fc_bri <- plot_fc(fc, hist, thr(), "BRI")
-    fc_nbt <- plot_fc(fc, hist, thr(), "Southmead")
-    fc_wgh <- plot_fc(fc, hist, thr(), "WGH")
-    (fc_bri/fc_nbt/fc_wgh) + plot_layout(axes = "collect_y")
-     # (fc_nbt/fc_bri) + plot_layout(axes = "collect_y")
+  # Plot bed occupancy fc
+  output$fc <- renderGirafe({
+    fc_bri <- plot_fc(fc, hist, thr, "BRI")
+    fc_nbt <- plot_fc(fc, hist, thr, "Southmead")
+    fc_wgh <- plot_fc(fc, hist, thr, "WGH")
+    p <- (fc_bri / fc_nbt / fc_wgh) + plot_layout(axes = "collect_y")
+    
+    girafe(
+      ggobj = p,
+      # You can tweak these SVG dimensions to change the internal rendering aspect ratio. 
+      # The CSS object-fit: contain will handle fitting it to the screen cleanly.
+      width_svg = 12,
+      height_svg = 9, 
+      options = list(
+        opts_tooltip(css = tooltip_css),
+        opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
+        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
+        opts_sizing(rescale = TRUE, width = 1) 
+      )
+    )
   })
   
   # Plot risk - daily + aggregate
-  output$risk <- renderPlot({
+  output$risk <- renderGirafe({
     risk_d <- risk()$risk_d[, .(site, index, risk_day)]
     risk_ws_close <- risk()$risk_ws[week_split == "close", .(site, risk_ws)]
     risk_ws_far <- risk()$risk_ws[week_split == "far", .(site, risk_ws)]
     risk_w <- risk()$risk_w[, .(site, risk_w)]
-
+    
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
     risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
-    (risk_bri/risk_nbt/risk_wgh) + plot_layout(axes = "collect_y")
+
+    p <- (risk_bri / risk_nbt / risk_wgh) + plot_layout(axes = "collect_y")
+    
+    girafe(
+      ggobj = p,
+      width_svg = 8,
+      height_svg = 9,
+      options = list(
+        opts_tooltip(css = tooltip_css),
+        opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
+        opts_toolbar(hidden = c('lasso_select', 'lasso_deselect', 'zoom_onoff', 'zoom_rect', 'zoom_reset', 'fullscreen')),
+        opts_sizing(rescale = TRUE, width = 1) 
+      )
+    )
     # (risk_nbt/risk_bri) + plot_layout(axes = "collect_y")
   })
 }
