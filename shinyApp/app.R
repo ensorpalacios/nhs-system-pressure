@@ -41,67 +41,80 @@ ui <- page_navbar(
   tags$head(
     tags$style(HTML("
       /* 1. Force full-height flex column with zero wasted internal space */
-      .content-card-body {
-          padding: 0 !important; 
-          display: flex !important; 
-          flex-direction: column !important; 
-          justify-content: center !important; 
-          overflow: hidden !important; 
-          height: 100% !important;
-      }
+.content-card-body {
+    padding: 0 !important; 
+    display: flex !important; 
+    flex-direction: column !important; 
+    justify-content: center !important; 
+    overflow: hidden !important; 
+    height: 100% !important;
+    min-width: 0;
+}
 
-      /* 2. CRITICAL GGIRAPH GRAPHIC SCALE OVERRIDES */
-      .html-widget.girafe > div {
-          padding-top: 0 !important;
-          height: 100% !important;
-          width: 100% !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-      }
+/* 2. CRITICAL GGIRAPH GRAPHIC SCALE OVERRIDES */
+.html-widget.girafe > div {
+    padding-top: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.html-widget.girafe svg {
+    max-width: 100% !important;
+    max-height: 100% !important; 
+    width: 100% !important;
+    height: auto !important;
+    object-fit: contain !important; 
+}
 
-      .html-widget.girafe svg {
-          max-width: 100% !important;
-          max-height: 100% !important; 
-          width: 100% !important;
-          height: auto !important;
-          object-fit: contain !important; 
-      }
-      
-      /* 3. Ultra-slim Slider Column tightly nested between equal-width charts */
-      .slider-column {
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-evenly !important; 
-          align-items: center !important; 
-          height: 100% !important;
-          padding: 2rem 0 3rem 0 !important; 
-          flex: 0 0 40px !important;        /* Fixed slim width */
-          margin: 0 -18px !important;       /* Negative margins pull it tightly between charts */
-          z-index: 10;                      /* Keeps sliders above chart boundaries */
-      }
-      
-      .slider-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          width: 100%;
-      }
+/* 3. Grid layout: charts get equal 1fr columns, slider gets a fixed
+      lane with real breathing room either side */
+.dashboard-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 70px 1fr;
+    column-gap: 1.5rem;
+    height: 100%;
+    width: 100%;
+    align-items: stretch;
+}
 
-      /* 4. Style slider tooltips: Red color matching threshold line, positioned on the RIGHT */
-      .noUi-vertical .noUi-tooltip {
-          left: 140% !important;
-          top: 50% !important;
-          transform: translateY(-50%) !important;
-          right: auto !important;
-          background-color: transparent !important;
-          border: none !important;
-          color: #dc2626 !important;
-          font-weight: 700 !important;
-          font-size: 0.95rem !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-      }
+/* 4. Slider column: fixed-size sliders, spaced evenly, not stretched
+      to fill the whole column height */
+.slider-column {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-evenly !important;
+    align-items: center !important;
+    height: 100% !important;
+    padding: 1.5rem 0 !important;
+    background: #F8F9FB;
+    border: 1px solid #ECEFF3;
+    border-radius: 8px;
+}
+
+.slider-wrapper {
+    flex: 0 0 auto;      /* fixed size, no stretching */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* 5. Style slider tooltips: Red color matching threshold line, positioned on the RIGHT */
+.noUi-vertical .noUi-tooltip {
+    /*left: 150% !important;*/
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    right: auto !important;
+    background-color: transparent !important;
+    border: none !important;
+    color: #dc2626 !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
     "))
   ),
   
@@ -134,41 +147,45 @@ ui <- page_navbar(
     card(
       fill = TRUE,
       full_screen = TRUE,
-      style = "padding: 0.25rem; margin-bottom: 0;",
+      style = "padding: 0.6rem 0.9rem; margin-bottom: 0;",  # pleasing outer margin
       
       div(
-        style = "display: flex; flex-direction: row; height: 100%; width: 100%; gap: 0rem; align-items: stretch;",
+        class = "dashboard-grid",
         
-        # Column 1: Forecasts (Exact equal width flex: 1)
+        # Column 1: Forecasts
         div(
-          style = "flex: 1; min-width: 0; display: flex; flex-direction: column;",
+          style = "min-width: 0; display: flex; flex-direction: column;",
           class = "content-card-body",
           girafeOutput("fc", width = "100%", height = "100%")
         ),
         
-        # Column 2: Sliders (Squeezed cleanly between the two charts)
+        # Column 2: Sliders
         div(
           class = "slider-column",
           
           div(
             class = "slider-wrapper",
-            shinyWidgets::noUiSliderInput("thr_bri", label = NULL, min = 620, max = 740, step = 1, value = thr_default[site == "BRI", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
+            shinyWidgets::noUiSliderInput("thr_bri", label = NULL, min = 620, max = 740, step = 1,
+                                          value = thr_default[site == "BRI", thr], orientation = "vertical", direction = "rtl",
+                                          tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "12vh")
           ),
-          
           div(
             class = "slider-wrapper",
-            shinyWidgets::noUiSliderInput("thr_nbt", label = NULL, min = 900, max = 1060, step = 1, value = thr_default[site == "Southmead", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
+            shinyWidgets::noUiSliderInput("thr_nbt", label = NULL, min = 900, max = 1060, step = 1,
+                                          value = thr_default[site == "Southmead", thr], orientation = "vertical", direction = "rtl",
+                                          tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "12vh")
           ),
-          
           div(
             class = "slider-wrapper",
-            shinyWidgets::noUiSliderInput("thr_wgh", label = NULL, min = 240, max = 300, step = 1, value = thr_default[site == "WGH", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
+            shinyWidgets::noUiSliderInput("thr_wgh", label = NULL, min = 240, max = 300, step = 1,
+                                          value = thr_default[site == "WGH", thr], orientation = "vertical", direction = "rtl",
+                                          tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "12vh")
           )
         ),
         
-        # Column 3: Risk (Exact equal width flex: 1 to guarantee matching scale)
+        # Column 3: Risk
         div(
-          style = "flex: 1; min-width: 0; display: flex; flex-direction: column;",
+          style = "min-width: 0; display: flex; flex-direction: column;",
           class = "content-card-body",
           girafeOutput("risk", width = "100%", height = "100%")
         )
