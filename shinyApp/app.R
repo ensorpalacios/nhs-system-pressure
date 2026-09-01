@@ -16,13 +16,21 @@ library(htmltools)
 library(ggh4x)
 library(patchwork)
 library(ggiraph)
+library(shinyWidgets) # Required for vertical sliders
 
 source("shiny-functions.R")
 source("00_prepare_data.R")
 
 # ==========================================
-# CONSTANTS
+# GLOBAL THEME & CONSTANTS
 # ==========================================
+theme_set(theme_minimal(base_size = 13) + 
+            theme(
+              axis.text = element_text(size = 12),
+              axis.title = element_text(size = 13, face = "bold"),
+              strip.text = element_text(size = 13, face = "bold")
+            ))
+
 tooltip_css <- "background-color:white;color:black;padding:8px 12px;border-radius:4px;font-family:Inter,sans-serif;font-size:1rem;box-shadow:0 2px 8px rgba(0,0,0,0.15);border:1px solid #e9ecef;"
 
 ui <- page_navbar(
@@ -32,9 +40,9 @@ ui <- page_navbar(
   
   tags$head(
     tags$style(HTML("
-      /* 1. Force the card body to be a full-height flex column with no internal scrolling */
+      /* 1. Force full-height flex column with zero wasted internal space */
       .content-card-body {
-          padding: 1rem !important; 
+          padding: 0 !important; 
           display: flex !important; 
           flex-direction: column !important; 
           justify-content: center !important; 
@@ -54,10 +62,45 @@ ui <- page_navbar(
 
       .html-widget.girafe svg {
           max-width: 100% !important;
-          max-height: 100% !important; /* Scale safely into remaining flexbox space */
+          max-height: 100% !important; 
           width: 100% !important;
           height: auto !important;
-          object-fit: contain !important; /* Protects layout aspect ratio safely */
+          object-fit: contain !important; 
+      }
+      
+      /* 3. Ultra-slim Slider Column tightly nested between equal-width charts */
+      .slider-column {
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-evenly !important; 
+          align-items: center !important; 
+          height: 100% !important;
+          padding: 2rem 0 3rem 0 !important; 
+          flex: 0 0 40px !important;        /* Fixed slim width */
+          margin: 0 -18px !important;       /* Negative margins pull it tightly between charts */
+          z-index: 10;                      /* Keeps sliders above chart boundaries */
+      }
+      
+      .slider-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 100%;
+      }
+
+      /* 4. Style slider tooltips: Red color matching threshold line, positioned on the RIGHT */
+      .noUi-vertical .noUi-tooltip {
+          left: 140% !important;
+          top: 50% !important;
+          transform: translateY(-50%) !important;
+          right: auto !important;
+          background-color: transparent !important;
+          border: none !important;
+          color: #dc2626 !important;
+          font-weight: 700 !important;
+          font-size: 0.95rem !important;
+          box-shadow: none !important;
+          padding: 0 !important;
       }
     "))
   ),
@@ -70,67 +113,64 @@ ui <- page_navbar(
     # Header Info Card
     card(
       fill = FALSE,
-      style = "background-color: #F4F6F9; box-shadow: none; flex-shrink: 0; margin-bottom: 0.5rem;",
+      style = "background-color: #F4F6F9; box-shadow: none; flex-shrink: 0; margin-bottom: 0.25rem;",
       card_body(
         fill = FALSE,
-        style = "padding: 0.75rem 1rem;", 
+        style = "padding: 0.4rem 0.75rem;", 
         tags$p(
-          style = "margin: 0; font-size: 14px; color: #334155; line-height: 1.5;",
+          style = "margin: 0; font-size: 13px; color: #334155; line-height: 1.4;",
           tags$strong("Acute bed occupancy:"),
-          " features a 2-week history (solid line with points), a 1-week ahead forecast (mean, 50% and 80% prediction intervals shown via dashed line and ribbons), and a high-occupancy threshold (editable below, defaults to the historic 90th percentile, solid red line) and the current core bed-stock open (solid blue line)."
+          " features a 2-week history (solid line with points), a 1-week ahead forecast (mean, 50% and 80% prediction intervals), and a high-occupancy threshold (editable below, historic 90th percentile default, solid red line) alongside core bed-stock open (solid blue line)."
         ),
         tags$p(
-          style = "margin: 0; font-size: 14px; color: #334155; line-height: 1.5; margin-top: 5px;",
+          style = "margin: 0; font-size: 13px; color: #334155; line-height: 1.4; margin-top: 2px;",
           tags$strong("Risk of high bed occupancy threshold crossing:"),
-          " indicate the probability of the bed occupancy forecast crossing the threshold over the next 7 days, as well as day aggregates (the first 3 days, the last 4 days, and the full week ahead)."
+          " indicates the probability of crossing the threshold over the next 7 days, plus day aggregates (first 3 days, last 4 days, full week ahead)."
         )
       )
     ),
-
-    # High-occupancy threshold: editable per site, pre-filled from history
+    
+    # Master Layout: Single Card with Equal-Width Chart Columns & Squeezed Sliders
     card(
-      fill = FALSE,
-      style = "background-color: #F4F6F9; box-shadow: none; flex: 0 0 auto !important;",
-      card_body(
-        fill = FALSE,
-        style = "padding: 0.5rem 1rem;",
-        layout_columns(
-          col_widths = c(4, 4, 4),
-          numericInput("thr_bri", "BRI threshold", value = thr_default[site == "BRI", thr]),
-          numericInput("thr_nbt", "Southmead threshold", value = thr_default[site == "Southmead", thr]),
-          numericInput("thr_wgh", "WGH threshold", value = thr_default[site == "WGH", thr])
-        )
-      )
-    ),
-
-    # Master 2-Column Layout with custom class hooked into our styling rules
-    layout_columns(
-      col_widths = c(7, 5),
+      fill = TRUE,
+      full_screen = TRUE,
+      style = "padding: 0.25rem; margin-bottom: 0;",
       
-      # CARD 1: FORECASTS
-      card(
-        full_screen = TRUE,
-        card_body(
-          class = "d-flex flex-column align-items-stretch content-card-body",
-          style = "overflow: hidden !important; padding: 0.5rem; min-height: 0 !important;",
+      div(
+        style = "display: flex; flex-direction: row; height: 100%; width: 100%; gap: 0rem; align-items: stretch;",
+        
+        # Column 1: Forecasts (Exact equal width flex: 1)
+        div(
+          style = "flex: 1; min-width: 0; display: flex; flex-direction: column;",
+          class = "content-card-body",
+          girafeOutput("fc", width = "100%", height = "100%")
+        ),
+        
+        # Column 2: Sliders (Squeezed cleanly between the two charts)
+        div(
+          class = "slider-column",
+          
           div(
-            # Using flex 1 1 auto to let it consume space, but overflow hidden prevents breaking the card bounds
-            style = "flex: 1 1 auto; width: 100%; height: 100%; overflow: hidden; display: flex;",
-            girafeOutput("fc", width = "100%", height = "100%")
-          )
-        )
-      ),
-      
-      # CARD 2: RISK
-      card(
-        full_screen = TRUE,
-        card_body(
-          class = "d-flex flex-column align-items-stretch content-card-body",
-          style = "overflow: hidden !important; padding: 0.5rem; min-height: 0 !important;",
+            class = "slider-wrapper",
+            shinyWidgets::noUiSliderInput("thr_bri", label = NULL, min = 620, max = 740, step = 1, value = thr_default[site == "BRI", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
+          ),
+          
           div(
-            style = "flex: 1 1 auto; width: 100%; height: 100%; overflow: hidden; display: flex;",
-            girafeOutput("risk", width = "100%", height = "100%")
+            class = "slider-wrapper",
+            shinyWidgets::noUiSliderInput("thr_nbt", label = NULL, min = 900, max = 1060, step = 1, value = thr_default[site == "Southmead", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
+          ),
+          
+          div(
+            class = "slider-wrapper",
+            shinyWidgets::noUiSliderInput("thr_wgh", label = NULL, min = 240, max = 300, step = 1, value = thr_default[site == "WGH", thr], orientation = "vertical", direction = "rtl", tooltips = TRUE, format = wNumbFormat(decimals = 0), height = "130px")
           )
+        ),
+        
+        # Column 3: Risk (Exact equal width flex: 1 to guarantee matching scale)
+        div(
+          style = "flex: 1; min-width: 0; display: flex; flex-direction: column;",
+          class = "content-card-body",
+          girafeOutput("risk", width = "100%", height = "100%")
         )
       )
     )
@@ -140,33 +180,30 @@ ui <- page_navbar(
   nav_panel(
     title = "About",
     icon = icon("info-circle")
-    # Content left as original ...
   )
 )
 
 server <- function(input, output) {
   model <- "equal"
-
-  # Forecast for the selected ensemble model. Independent of the threshold,
-  # so it's plain data, not reactive.
+  
+  # Forecast for the selected ensemble model.
   fc <- as.data.table(model_out)[.model == model]
   hist <- as.data.table(historic_data)
-
-  # Per-site threshold: starts pre-filled from compute_threshold_default()
-  # (00_prepare_data.R) and is reactive to the user-editable inputs.
+  
+  # Per-site threshold: reactive to the vertical sliders
   thr <- reactive({
     data.table(
       site = c("BRI", "Southmead", "WGH"),
       thr = c(input$thr_bri, input$thr_nbt, input$thr_wgh)
     )
   })
-
-  # Risk of crossing the live threshold, computed client-side from the
-  # forecast's occ_mean/occ_var (see shiny-functions.R: compute_risk()).
-  risk <- reactive(compute_risk(fc, thr()))
-
-  # Plot bed occupancy fc
-  # Plot bed occupancy fc
+  
+  # Risk computation
+  risk <- reactive({
+    compute_risk(fc, thr())
+  })
+  
+  # Forecast plot output (Matched dimensions width_svg = 12, height_svg = 10)
   output$fc <- renderGirafe({
     fc_bri <- plot_fc(fc, hist, core_stock, thr, "BRI")
     fc_nbt <- plot_fc(fc, hist, core_stock, thr, "Southmead")
@@ -175,10 +212,7 @@ server <- function(input, output) {
     
     girafe(
       ggobj = p,
-      # You can tweak these SVG dimensions to change the internal rendering aspect ratio. 
-      # The CSS object-fit: contain will handle fitting it to the screen cleanly.
-      width_svg = 12,
-      height_svg = 9, 
+      width_svg = 12, height_svg = 10, 
       options = list(
         opts_tooltip(css = tooltip_css),
         opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
@@ -188,8 +222,9 @@ server <- function(input, output) {
     )
   })
   
-  # Plot risk - daily + aggregate
+  # Risk plot output (Matched dimensions width_svg = 12, height_svg = 10 for perfect vertical synchronization)
   output$risk <- renderGirafe({
+    req(risk())
     risk_d <- risk()$risk_d[, .(site, index, risk_day)]
     risk_ws_close <- risk()$risk_ws[week_split == "close", .(site, risk_ws)]
     risk_ws_far <- risk()$risk_ws[week_split == "far", .(site, risk_ws)]
@@ -198,13 +233,12 @@ server <- function(input, output) {
     risk_bri <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "BRI", "daily + aggregate")
     risk_nbt <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "Southmead", "daily + aggregate")
     risk_wgh <- plot_riskd(risk_d, risk_ws_close, risk_ws_far, risk_w, "WGH", "daily + aggregate")
-
+    
     p <- (risk_bri / risk_nbt / risk_wgh) + plot_layout(axes = "collect_y")
     
     girafe(
       ggobj = p,
-      width_svg = 8,
-      height_svg = 9,
+      width_svg = 12, height_svg = 10,
       options = list(
         opts_tooltip(css = tooltip_css),
         opts_hover(css = "fill: #93c5fd; cursor: pointer;"),
@@ -212,7 +246,6 @@ server <- function(input, output) {
         opts_sizing(rescale = TRUE, width = 1) 
       )
     )
-    # (risk_nbt/risk_bri) + plot_layout(axes = "collect_y")
   })
 }
 
