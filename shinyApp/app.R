@@ -117,27 +117,67 @@ ui <- page_navbar(
           width: 100%;
       }
 
-      /* 5. Custom Visuals for Sliders: Red styling to match the threshold line */
-      .noUi-handle {
-          box-shadow: none !important;
-          border: 2px solid #dc2626 !important;
-          cursor: pointer;
-      }
+    /* 5. Custom Visuals for Sliders: flat red bar on a slim slate-gray track */
 
-      /* Tooltip positioned on the right */
-      .noUi-vertical .noUi-tooltip {
-          left: 115% !important; 
-          top: 50% !important;
-          transform: translateY(-50%) !important;
-          right: auto !important;
-          background-color: transparent !important;
-          border: none !important;
-          color: #dc2626 !important;
-          font-weight: 700 !important;
-          font-size: 1rem !important;
-          box-shadow: none !important;
-          padding: 0 !important;
-      }
+/* Track: slim, slate-gray, no default shadow/border chrome */
+.noUi-vertical.noUi-target {
+    width: 6px !important;
+    background: #cbd5e1 !important;
+    border: none !important;
+    border-radius: 3px !important;
+    box-shadow: none !important;
+    position: relative !important;
+    left: -6px;   /* nudge track left to re-center under the handle */
+}
+
+/* Muted connect fill — same tone as the track */
+.noUi-connect {
+    background: #cbd5e1 !important;
+    box-shadow: none !important;
+}
+
+/* Handle: keep noUiSlider's default box size/position untouched so its
+   internal centering offsets (top/right) stay correct — just make the
+   box itself invisible and draw the red bar as a centered pseudo-element */
+.noUi-vertical .noUi-handle {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+
+.noUi-vertical .noUi-handle::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 26px;
+    height: 6px;
+    background: #dc2626;
+    border-radius: 3px;
+    transform: translate(-30%, -50%);  /* shifted left from -50% to re-center on track */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+/* Remove noUiSlider's default grip-line pseudo-element */
+.noUi-handle:after {
+    display: none !important;
+}
+
+/* Tooltip positioned on the right */
+.noUi-vertical .noUi-tooltip {
+    left: 135% !important; 
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    right: auto !important;
+    background-color: transparent !important;
+    border: none !important;
+    color: #dc2626 !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
     "))
   ),
   
