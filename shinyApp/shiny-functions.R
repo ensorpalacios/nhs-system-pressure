@@ -63,7 +63,7 @@ plot_fc <- function(.fc, .hist, .core_stock, .thr, .site) {
   # --- GLOBAL SCALING FACTOR ---
   # Change this ONE number to scale the entire plot up or down
   # 1 = Default size, 0.7 = 70% of original size, etc.
-  sf <- 0.9  
+  sf <- 1.2  
   
   # --- SPOOF HOOK: Redirect WGH to Southmead data ---
   target_site <- .site
@@ -340,7 +340,7 @@ plot_riskd <- function(
 ) {
   
   # --- GLOBAL SCALING FACTOR ---
-  sf <- 0.9  
+  sf <- 1.2  
   
   # --- BAR EXTENSION ---
   # 0 = center of the bar. 0.45 = touches the very edge of the bar.
