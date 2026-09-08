@@ -42,3 +42,4 @@ core_stock <- historic_data %>%
   filter(index == max(index), .by = site) %>%
   select(site, stock) %>% 
   deframe()
+
