@@ -44,7 +44,7 @@ con <- switch(.Platform$OS.type,
               unix = {
                 dbConnect(
                   odbc::odbc(),
-                  .connection_string = readr::read_lines("/root/sql/sql_connect_string_linux_sql18")
+                  .connection_string = readr::read_lines("/sql/sql_connect_string_linux_sql18")
                 )
               })
 
