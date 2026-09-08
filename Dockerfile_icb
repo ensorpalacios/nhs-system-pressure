@@ -1,4 +1,4 @@
-FROM rocker/rstudio:latest
+FROM rocker/rstudio:4.5.1
 
 # 1. Setup Microsoft SQL Server repository and keys
 RUN apt-get update && apt-get install -y curl gpg
@@ -32,14 +32,13 @@ ENV ODBCSYSINI=/etc
 WORKDIR /root
 
 # 4. FAST TRACK: Install R packages FIRST (using only the lockfile)
-# This layer stays cached unless you change renv.lock
 COPY renv.lock ./renv.lock
 RUN export RENV_CONFIG_REPOS_OVERRIDE="https://packagemanager.posit.co/cran/__linux__/noble/latest" \
     && R -e "install.packages('renv', repos='${RENV_CONFIG_REPOS_OVERRIDE}')" \
     && R -e "renv::restore(exclude = 'RMariaDB')" \
     && R -e "install.packages('RMariaDB', type='source', repos='https://cran.rstudio.com/')"
-    
-# 5. Copy application files 
+
+# 5. Copy application files
 COPY target ./target
 COPY src ./src
 COPY _targets.R ./_targets.R
