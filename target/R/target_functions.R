@@ -154,6 +154,7 @@ prepare_data <-
         ),
         adm = `Number of Admissions`,
         dis = `Number of Discharges`,
+        stock = `Core stock open`,
         occ = `Bed occupancy`,
         paed = `A&E attends - paediatrics`,
         los = `Beds with 21+ days LOS`,
@@ -213,6 +214,7 @@ prepare_data <-
         occ = occ %>% impute_fun(),
         dis = dis %>% impute_fun(),
         adm = adm %>% impute_fun(),
+        stock = stock %>% impute_fun(),
         paed = paed %>% impute_fun(),
         los = los %>% impute_fun(),
         tmin = tmin %>% impute_fun(), # shouldn't be necessary
@@ -239,6 +241,7 @@ prepare_data <-
         occ = sum(occ),
         adm = sum(adm),
         dis = sum(dis),
+        stock = sum(stock),
         paed = sum(paed),
         los = sum(los),
         tmax = unique(tmax), # = across sites; necessary to return 1 value
@@ -257,6 +260,7 @@ prepare_data <-
         occ = sum(occ),
         adm = sum(adm),
         dis = sum(dis),
+        stock = sum(stock),
         tmax = unique(tmax), # = across sites; necessary to return 1 value
         tmin = unique(tmin), # = across sites; necessary to return 1 value
       )
