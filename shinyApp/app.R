@@ -178,7 +178,27 @@ ui <- page_navbar(
     box-shadow: none !important;
     padding: 0 !important;
 }
-    "))
+
+.slider-column-master {
+    transition: opacity 0.25s ease-in;
+}
+.slider-column-master.sliders-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+    ")),
+    tags$script(HTML("
+  var fcLoaded = false, riskLoaded = false;
+  function checkAndReveal() {
+    if (fcLoaded && riskLoaded) {
+      $('.slider-column-master').removeClass('sliders-hidden');
+    }
+  }
+  $(document).on('shiny:value', function(event) {
+    if (event.name === 'fc')   { fcLoaded = true;   checkAndReveal(); }
+    if (event.name === 'risk') { riskLoaded = true; checkAndReveal(); }
+  });
+"))
   ),
   
   # --- TAB 1: FORECASTS & RISK ---
@@ -224,7 +244,7 @@ ui <- page_navbar(
         
         # Column 2: Sliders
         div(
-          class = "slider-column-master",
+          class = "slider-column-master sliders-hidden",
           
           # Title is now absolutely positioned, escaping the flex layout
           div(class = "slider-title", "Adjust", tags$br(), "Threshold"),
