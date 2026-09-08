@@ -42,6 +42,11 @@ RUN R -e "pak::pkg_install('targets')"
 #RUN R -e "pak::pkg_install('renv')"
 RUN R -e "pak::pkg_install('htmltools')"
 RUN R -e "install.packages('shiny', repos='https://cloud.r-project.org')"
+RUN R -e "install.packages('distributional', repos='https://cloud.r-project.org')"
+RUN R -e "install.packages('ggh4x', repos='https://cloud.r-project.org')"
+RUN R -e "install.packages('monochromeR', repos='https://cloud.r-project.org')"
+
+
 
 
 ENV S6_VERSION="v2.1.0.2"
