@@ -214,12 +214,12 @@ ui <- page_navbar(
         fill = FALSE,
         style = "padding: 0.4rem 0.75rem;", 
         tags$p(
-          style = "margin: 0; font-size: 13px; color: #334155; line-height: 1.4;",
+          style = "margin: 0; font-size: 16px; color: #334155; line-height: 1.4;",
           tags$strong("Acute bed occupancy:"),
           " features a 2-week history (solid line with points), a 1-week ahead forecast (mean, 50% and 80% prediction intervals), and a high-occupancy threshold (editable below, historic 90th percentile default, solid red line) alongside core bed-stock open (solid blue line)."
         ),
         tags$p(
-          style = "margin: 0; font-size: 13px; color: #334155; line-height: 1.4; margin-top: 2px;",
+          style = "margin: 0; font-size: 16px; color: #334155; line-height: 1.4; margin-top: 2px;",
           tags$strong("Risk of high bed occupancy threshold crossing:"),
           " indicates the probability of crossing the threshold over the next 7 days, plus day aggregates (first 3 days, last 4 days, full week ahead)."
         )

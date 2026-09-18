@@ -242,7 +242,7 @@ plot_fc <- function(.fc, .hist, .core_stock, .thr, .site) {
       breaks = custom_breaks,
       expand = expansion(mult = c(0.01, 0.01))
     ) +
-    scale_y_continuous(limits = c(min(min(.hist$occ), 0.9*.core_stock[target_site]), NA), expand = expansion(mult = c(0.25, 0.25))) +
+    scale_y_continuous(limits = c(min(min(.hist$occ), min(.fc$`10%`), 0.9*.core_stock[target_site]), NA), expand = expansion(mult = c(0.25, 0.25))) +
     # Dynamic Interval Palette mapping
     scale_fill_manual(
       values = c("50%" = pal$mid, "80%" = pal$dark) # 🟦 Themed Ribbon intervals
